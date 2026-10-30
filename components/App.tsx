@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Command, Compass, FileUp, Moon, PanelLeftClose, PanelLeftOpen, RotateCcw, ShieldCheck, Sparkles, Sun } from "lucide-react";
-import { PERSONA, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
+import { PERSONA, cashDesk, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
 import { CCY, Currency, shortDate } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
 import type { Role } from "@/lib/types";
+import { AccountantView } from "./AccountantView";
 import { ActivityStrip } from "./ActivityStrip";
 import { BuyerView, LeadView } from "./BuyerLeadViews";
 import { CloserView } from "./CloserView";
@@ -25,7 +26,7 @@ import { RulesStrip } from "./RulesStrip";
 import { StockBook } from "./StockBook";
 import { Avatar, Card, Fig, useMoney, useTableColumnResize } from "./ui";
 
-const ROLE_ORDER: Role[] = ["founder", "closer", "buyer", "lead", "stock"];
+const ROLE_ORDER: Role[] = ["founder", "closer", "buyer", "lead", "accountant", "stock"];
 const SCHEME_KEY = "kova-color-scheme";
 const SIDE_KEY = "kova-side-collapsed";
 
@@ -129,6 +130,7 @@ export function App() {
   const open = openCycle(data);
   const pnl = computePnl(data);
   const stockAlerts = needsAttention(data).length;
+  const cashOwed = cashDesk(data).outstanding.length;
   const activePerson = personOf(data, PERSONA[role]);
 
   function switchRoleWithTransition(nextRole: Role) {
@@ -236,6 +238,11 @@ export function App() {
                     <b>{p.name}</b>
                     <span>{p.title}</span>
                   </div>
+                  {r === "accountant" && cashOwed > 0 && (
+                    <span className="badge" title={`${cashOwed} delivered orders with cash still with the courier`}>
+                      {cashOwed}
+                    </span>
+                  )}
                   {r === "stock" && stockAlerts > 0 && (
                     <span className="badge" title={`${stockAlerts} SKUs need reorder`}>
                       {stockAlerts}
@@ -391,6 +398,7 @@ export function App() {
                 {role === "closer" && "Closer Phone Console & Personal Earnings"}
                 {role === "buyer" && "Media Buyer Results & Sales per ₦1 of Ads"}
                 {role === "lead" && "Sales Team Lead Bonus & Quality Scorecard"}
+                {role === "accountant" && "Courier Cash, Payouts & the Bank File"}
                 {role === "stock" && "Warehouse Stock Book, Reservations & PO Loop"}
               </h1>
               <p>
@@ -466,13 +474,20 @@ export function App() {
           )}
 
           {/* Rules Strip (always visible, gated by role === 'founder') */}
-          <RulesStrip />
+          {role !== "accountant" && <RulesStrip />}
 
           {/* Role-specific primary view */}
           {role === "founder" && <FounderView />}
           {role === "closer" && <CloserView />}
           {role === "buyer" && <BuyerView />}
           {role === "lead" && <LeadView />}
+          {role === "accountant" && (
+            <>
+              <AccountantView />
+              {/* The accountant's own work comes first; the pay rules are read-only for them. */}
+              <RulesStrip />
+            </>
+          )}
           {role === "stock" && <StockBook />}
 
           {/* Cycle Lifecycle Bar */}

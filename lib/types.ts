@@ -3,7 +3,7 @@
 
 export type Stage = "new" | "confirmed" | "dispatched" | "delivered" | "returned" | "cancelled";
 
-export type Role = "closer" | "buyer" | "lead" | "stock" | "founder";
+export type Role = "closer" | "buyer" | "lead" | "stock" | "founder" | "accountant";
 
 /** When a sale earns commission. */
 export type CreditOn = "lead" | "delivered" | "cash";

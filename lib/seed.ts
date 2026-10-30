@@ -1,7 +1,7 @@
 import type { DemoState, Order, Person, Product, Rules, RuleKey, Stamp } from "./types.ts";
 import { closeCycle, lockCycle, log, markPaid } from "./engine.ts";
 
-export const SEED_VERSION = 8;
+export const SEED_VERSION = 9;
 export const DEFAULT_MAX_COST_PER_ORDER = 4000;
 
 const people: Person[] = [
@@ -11,6 +11,7 @@ const people: Person[] = [
   { id: "zainab", name: "Zainab Bello", role: "buyer", title: "Media buyer", monthlyBase: 120000 },
   { id: "ngozi", name: "Ngozi Eze", role: "lead", title: "Team lead · Sales", monthlyBase: 150000 },
   { id: "dayo", name: "Dayo Aremu", role: "stock", title: "Inventory · Lagos warehouse", monthlyBase: 0 },
+  { id: "bisi", name: "Bisi Adeyemi", role: "accountant", title: "Accountant · Finance", monthlyBase: 0 },
   { id: "chidinma", name: "Chidinma Okoro", role: "founder", title: "Founder & CEO", monthlyBase: 0 },
 ];
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, FileUp, ShieldCheck, X } from "lucide-react";
 import { MAX_FILE_BYTES, MAX_ROWS, MAX_WEEKS, TEMPLATES, importData, type ImportIssue, type ImportResult } from "@/lib/importer";
+import { downloadText as download } from "@/lib/download";
 import { useStore } from "@/lib/store";
 import { useMoney } from "./ui";
 
@@ -12,15 +13,6 @@ interface Picked {
 }
 
 const SHOWN_ERRORS = 40;
-
-function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8;" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const where = (i: ImportIssue) => `${i.file} file${i.line ? `, line ${i.line}` : ""}${i.column ? `, ${i.column}` : ""}`;
 

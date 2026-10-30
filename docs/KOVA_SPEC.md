@@ -46,7 +46,7 @@ The interface is built around a high-contrast **Yellow + Carbon Black + Crisp Wh
 >
 > **• Multi-Currency Display Switcher:** Located in the sidebar footer. Converts all displayed figures live between **NGN (\`₦\`, rate \`1:1\`)**, **USD (\`\$\`, \`₦1,600 = \$1\`)**, and **GBP (\`£\`, \`₦2,050 = £1\`)**.
 >
-> **• Automatic State Persistence:** All rule changes, order transitions, price changes, returns, purchase orders, and cycle closures persist automatically in localStorage under kova-payout-engine (with SEED_VERSION = 8). Clicking **Reset demo state** restores the clean factory seed.
+> **• Automatic State Persistence:** All rule changes, order transitions, price changes, returns, purchase orders, and cycle closures persist automatically in localStorage under kova-payout-engine (with SEED_VERSION = 9). Clicking **Reset demo state** restores the clean factory seed.
 
 ## **1.4 Plain-Language Glossary (`lib/labels.ts`)**
 
@@ -83,6 +83,7 @@ A critical flaw in naive operations dashboards is giving every user 'God Mode.' 
 | tobi     | **Tobi Ade**       | buyer        | Media Buyer                     | ₦120,000         | ₦27,692 / wk             |
 | zainab   | **Zainab Bello**   | buyer        | Media Buyer                     | ₦120,000         | ₦27,692 / wk             |
 | ngozi    | **Ngozi Eze**      | lead         | Sales Team Lead (1.0% team bonus) | ₦150,000         | ₦34,615 / wk             |
+| bisi     | **Bisi Adeyemi**   | accountant   | Accountant · Finance            | ₦0               | ₦0 (Finance payroll)     |
 | dayo     | **Dayo Aremu**     | stock        | Inventory · Lagos Warehouse     | ₦0               | ₦0 (Ops payroll)         |
 
 **Weekly Pro-Rata Formula:** weeklyBase = Math.round((monthlyBase \* 12) / 52). Across the 5 sales staff members (Amaka, Chidi, Tobi, Zainab, Ngozi), total weekly fixed base pay under the Base + variable model is ₦16,154 + ₦16,154 + ₦27,692 + ₦27,692 + ₦34,615 = ₦122,307.
@@ -91,21 +92,22 @@ A critical flaw in naive operations dashboards is giving every user 'God Mode.' 
 
 To prevent commission fraud (such as a closer marking their own order 'Delivered' to trigger a payout before goods leave the warehouse), Kova enforces strict role-based permissions:
 
-| **Operation / Action**                                 | **Founder (Chidinma)** | **Closer (Amaka)**        | **Media Buyer (Tobi)** | **Team Lead (Ngozi)** | **Inventory (Dayo)** |
-|--------------------------------------------------------|------------------------|---------------------------|------------------------|-----------------------|----------------------|
-| **Edit Pay rules**                      | YES (Full authority)   | NO (Locked + Stamp)       | NO (Locked + Stamp)    | NO (Locked + Stamp)   | NO (Locked + Stamp)  |
-| **Change Company Prices (new orders only)**            | YES                    | NO                        | NO                     | NO                    | NO                   |
-| **Close, Pay & Lock Cycles**                           | YES                    | NO                        | NO                     | NO                    | NO                   |
-| **Create New Customer Lead**                           | YES                    | YES                       | NO                     | YES                   | NO                   |
-| **Confirm Order (\`new → confirmed\`)**                | YES (If stock \> 0)    | YES (Own, if stock \> 0)  | NO                     | YES (If stock \> 0)   | NO                   |
-| **Cancel Unshipped Order (\`new\`/\`confirmed\`)**     | YES                    | YES (Own orders)          | NO                     | YES                   | NO                   |
-| **Dispatch Parcel (\`confirmed → dispatched\`)**       | YES                    | NO (Warehouse only)       | NO                     | NO                    | YES                  |
-| **Mark Delivered (\`dispatched → delivered\`)**        | YES                    | NO (Blocked: Fraud guard) | NO                     | NO                    | YES                  |
-| **Mark Failed Delivery (\`dispatched → cancelled\`)**  | YES                    | NO (Warehouse only)       | NO                     | NO                    | YES                  |
-| **Record COD Cash Remitted (\`cashIn = true\`)**       | YES                    | NO                        | NO                     | NO                    | YES                  |
-| **Process Customer Return (\`delivered → returned\`)** | YES                    | NO (Warehouse only)       | NO                     | YES                   | YES                  |
-| **Raise & Receive Purchase Orders (POs)**              | YES                    | NO                        | NO                     | NO                    | YES                  |
-| **Load Your Own Data (CSV) / Back to Demo Data**       | YES                    | NO                        | NO                     | NO                    | NO                   |
+| **Operation / Action** | **Founder (Chidinma)** | **Closer (Amaka)** | **Media Buyer (Tobi)** | **Team Lead (Ngozi)** | **Accountant (Bisi)** | **Inventory (Dayo)** |
+|---|---|---|---|---|---|---|
+| **Edit Pay rules** | YES (Full authority) | NO (Locked + Stamp) | NO (Locked + Stamp) | NO (Locked + Stamp) | NO (Locked + Stamp) | NO (Locked + Stamp) |
+| **Change Company Prices (new orders only)** | YES | NO | NO | NO | NO | NO |
+| **Close & Approve the Week's Pay** | YES | NO | NO | NO | NO (She pays what the founder approves) | NO |
+| **Mark Paid, Lock a Cycle & Export the Bank File** | YES (Override) | NO | NO | NO | YES | NO |
+| **Create New Customer Lead** | YES | YES | NO | YES | NO | NO |
+| **Confirm Order (\`new → confirmed\`)** | YES (If stock \> 0) | YES (Own, if stock \> 0) | NO | YES (If stock \> 0) | NO | NO |
+| **Cancel Unshipped Order (\`new\`/\`confirmed\`)** | YES | YES (Own orders) | NO | YES | NO | NO |
+| **Dispatch Parcel (\`confirmed → dispatched\`)** | YES | NO (Warehouse only) | NO | NO | NO | YES |
+| **Mark Delivered (\`dispatched → delivered\`)** | YES | NO (Blocked: Fraud guard) | NO | NO | NO | YES |
+| **Mark Failed Delivery (\`dispatched → cancelled\`)** | YES | NO (Warehouse only) | NO | NO | NO | YES |
+| **Record COD Cash Remitted (\`cashIn = true\`)** | YES | NO | NO | NO | YES | NO (Whoever handles parcels does not record the cash) |
+| **Process Customer Return (\`delivered → returned\`)** | YES | NO (Warehouse only) | NO | NO (Warehouse only) | NO | YES |
+| **Raise & Receive Purchase Orders (POs)** | YES | NO | NO | NO | NO | YES |
+| **Load Your Own Data (CSV) / Back to Demo Data** | YES | NO | NO | NO | NO | NO |
 
 **What the live activity strip reveals (`impactFor()`):** Founder: everyone's pay change, delivered revenue, real profit, cash with the courier, and stock. Team lead: their own pay and their closers' pay, plus stock. Closer and media buyer: their own pay plus stock. Warehouse: stock only. Nobody sees another team member's pay unless they supervise them.
 
@@ -169,7 +171,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 ## **5.2 One-Click Bank Payout CSV Export**
 
-> **•** Every cycle card (W42, W43, W44) has a **Bank CSV** button that generates and downloads kova-payouts-\<cycleId\>.csv with columns: Cycle, Status, Staff ID, Name, Role, Base (NGN), Sales pay (NGN), Pay taken back (NGN), Prior Carry (NGN), Net Payable (NGN), Carry To Next Cycle (NGN).
+> **•** Every cycle card (W42, W43, W44) has a **Bank CSV** button (founder and accountant only; other roles never see it) that generates and downloads kova-payouts-\<cycleId\>.csv with columns: Cycle, Status, Staff ID, Name, Role, Base (NGN), Sales pay (NGN), Pay taken back (NGN), Prior Carry (NGN), Net Payable (NGN), Carry To Next Cycle (NGN).
 
 ## **5.3 Try It With Your Orders (CSV Import)**
 
@@ -240,6 +242,20 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 >
 > **• SKU Unit Economics & Return Bleed Table:** Audits all 5 SKUs across all cycles (Landed qty, Return rate, Delivered rev., Product cost, Courier & write-offs, Commission, and clickable Net SKU profit).
 
+## **6.6 Accountant View (`Bisi Adeyemi`)**
+
+> **• Job:** record the cash the couriers hand over, and execute the pay the founder has approved. The accountant has **no sales, warehouse or approval buttons**: she cannot confirm, dispatch, deliver, return or cancel an order, change a price or a rule, or close and approve the week. The pay rules are shown read-only, below her work. Her work comes first on screen.
+>
+> **• 4 Tiles:** Cash still with couriers (₦185,500, 2 orders, oldest this week), Approved awaiting payment (₦0 until the founder approves a week), Paid ready to lock (1: W43), and Delivered revenue (₦532,500). The persona tab carries a badge counting delivered orders still owed cash.
+>
+> **• Cash Reconciliation (`cashDesk()`):** per week, what was delivered, what cash has arrived, what is still owed and how old it is (an order delivered a week or more ago and still owed shows a red *Overdue* pill with an icon). Below it, each owed order with a **Cash received** button, a **Record all as received** bulk button (one audit entry for the batch), and the amount owed by city (the courier's patch). The week totals, the city totals and the courier-cash tile all add up to the same ₦185,500. On a phone the owed orders stack so the button is always visible.
+>
+> **• Payout Desk (`payoutQueue()`):** a one-line next step ("W43 is paid. Lock it once its return window has closed", or "W44 is approved. Export the bank file, pay it, then mark it paid"), a week picker, and the payslip table for the chosen week: fixed salary, sales pay, pay taken back, carried over, net payable and the total to pay. Negative balances are never paid; they carry into the next week. **Bank file** exports the CSV; **Mark paid** appears on an approved week and **Lock cycle** on a paid one.
+>
+> **• The handoff:** the founder closes and approves the week; the accountant then sees it awaiting payment, exports the file, marks it paid and later locks it. The person who approves pay never moves it, and the founder can still override. Each step is in the audit log under the person who did it.
+>
+> **• Also on this view:** the stuck-or-leaking panel, because courier cash is one of its rows. The live activity strip shows the accountant every person's pay change plus company revenue, profit and courier cash, but not stock.
+
 # **7. Complete Seed Data Reference (SKUs & Orders)**
 
 ## **7.1 All 5 Product SKUs (\`products\`)**
@@ -290,9 +306,11 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/AdBudget.tsx        | Profit per order, simulated Meta feed label, and each media buyer's ad cost per delivered order against the founder's max.                                |
 | components/RevenueFlow.tsx     | Founder-view revenue flow funnel ("Where every order is") and the stuck-or-leaking panel, both drillable. Engine: `revenueFlow()` and `leaks()` in lib/engine.ts. |
 | components/ActivityStrip.tsx   | Live activity strip pinned under the top bar on every tab, with per-role chips and an Earlier list. Engine: `impactOf()` and `impactFor()`; events carry an `impact` recorded in the audit log. |
+| components/AccountantView.tsx  | Accountant persona: cash reconciliation, owed-orders list with bulk cash recording, payout desk with payslips, bank file, mark paid and lock. Engine: `cashDesk()`, `payoutQueue()`, `canSettle()`, `canApprove()`, `canRecordCash()`. |
+| lib/download.ts                | Hands the user a text file built in the browser (bank file, import templates). |
 | components/PriceBook.tsx       | Company prices per SKU. Founder-editable, closers read-only; a price change only applies to new orders (each order stores its own unit price). |
 | components/ImportDialog.tsx    | Founder-only dialog: template downloads, three file pickers, live validation, summary, and "Show my dashboard". |
-| lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 8) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
+| lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 9) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
 | lib/rules.ts                   | Metadata and dynamic explanations for the 6 payout and operating rules.                                                                                       |
 | lib/importer.ts                | Pure CSV reader, validator and state builder for "Try it with your orders" (templates, line/column errors, weekly cycles replayed through the engine). |
 | lib/store.ts                   | Zustand reactive store with localStorage persistence (kova-payout-engine) and action dispatchers.                                                          |
@@ -307,5 +325,5 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
 | components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray.                                                       |
-| scripts/verify.ts              | Automated 26-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
+| scripts/verify.ts              | Automated 27-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
 | scripts/e2e.mjs                | Automated 10-scenario headless Chrome E2E test suite verifying DOM, 390px mobile layout, modals, and persistence.                                             |

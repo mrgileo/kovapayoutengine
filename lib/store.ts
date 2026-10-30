@@ -8,6 +8,9 @@ import {
   ActionKey,
   PERSONA,
   canEditRules,
+  canRecordCash,
+  canSettle,
+  actionsFor,
   closeCycle as closeCycleFx,
   computePnl,
   cycleById,
@@ -76,6 +79,7 @@ interface Store {
   }) => void;
   closeCycle: () => void;
   markPaid: (cycleId: string) => void;
+  settleCash: (orderIds: number[]) => void;
   lockCycle: (cycleId: string) => void;
   raisePO: (sku: string, qty: number) => void;
   receivePO: (poId: string) => void;
@@ -205,6 +209,8 @@ export const useStore = create<Store>()(
         act: (orderId, action, opts = {}) => {
           const res = mutate((d) => {
             const o = d.orders.find((x) => x.id === orderId)!;
+            // Enforced here as well as in the UI: a role can only do what actionsFor allows it on this order.
+            if (!actionsFor(get().data, get().role, o).includes(action)) return "You do not have permission to do that on this order.";
             const credited = o.creditedCycle ? cycleById(d, o.creditedCycle) : undefined;
             const err = transition(d, orderId, action, opts);
             if (err) return err;
@@ -263,15 +269,36 @@ export const useStore = create<Store>()(
           });
           get().toast("ok", `${id} approved. ${openCycle(get().data).id} is now open.`);
         },
+        settleCash: (orderIds) => {
+          if (!canRecordCash(get().role)) {
+            get().toast("err", "Only the accountant or the founder can record courier cash.");
+            return;
+          }
+          let total = 0;
+          let done = 0;
+          const res = mutate((d) => {
+            const before = structuredClone(d);
+            for (const id of orderIds) {
+              const o = d.orders.find((x) => x.id === id);
+              if (!o || o.stage !== "delivered" || o.cashIn) continue;
+              total += o.unitPrice * o.qty;
+              done++;
+              transition(d, id, "cash");
+            }
+            if (done === 0) return "Nothing to record: those orders are already settled.";
+            log(d, { at: now(), actor: actor(), kind: "order", text: `Courier remitted cash for ${done} order${done === 1 ? "" : "s"} (₦${total.toLocaleString()})`, impact: impactOf(before, d) });
+          });
+          if (res) get().toast("ok", `Recorded ₦${total.toLocaleString()} from the courier across ${done} order${done === 1 ? "" : "s"}.`);
+        },
         markPaid: (cycleId) => {
-          if (get().role !== "founder") return;
+          if (!canSettle(get().role)) return;
           mutate((d) => {
             markPaidFx(d, cycleId, actor(), now());
             log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Marked ${cycleId} paid · bank file exported` });
           });
         },
         lockCycle: (cycleId) => {
-          if (get().role !== "founder") return;
+          if (!canSettle(get().role)) return;
           mutate((d) => {
             lockFx(d, cycleId, actor(), now());
             log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, sales pay is final` });

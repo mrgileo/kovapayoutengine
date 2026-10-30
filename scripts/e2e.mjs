@@ -359,6 +359,51 @@ try {
   await sleep(200);
   console.log("✓ [7d] Live activity strip: one delivery shows pay, profit, cash and stock moves, filtered per role");
 
+  // 7e. Accountant: cash desk and role limits (the warehouse no longer records cash; the accountant does)
+  const gotoTab = async (tab, needle) => {
+    await evaluate(`document.querySelector('#tab-${tab}').click();`);
+    for (let i = 0; i < 30 && !(await evaluate(`return (document.querySelector("h1")?.innerText || "").includes(${JSON.stringify(needle)});`)); i++) await sleep(150);
+  };
+  const rowButtons = (id) => evaluate(`
+    const row = Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#${id}") && tr.querySelectorAll("button").length);
+    return row ? Array.from(row.querySelectorAll("button")).map(b => b.innerText.trim()) : null;
+  `);
+  // owed orders at this point: #1043 (delivered in 7d), #1047, #1050
+  await gotoTab("stock", "Reservations & PO Loop");
+  const whBtns = await evaluate(`return Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim());`);
+  assert.ok(!whBtns.some((t) => /Cash received/.test(t)), "The warehouse must not be offered Cash received");
+  assert.ok(whBtns.some((t) => /Process return/.test(t)), "The warehouse still processes returns");
+  await gotoTab("founder", "Weekly Close");
+  assert.ok((await rowButtons(1047))?.some((t) => /Cash received/.test(t)), "The founder can still record cash");
+
+  await gotoTab("accountant", "Courier Cash");
+  const acc = await evaluate(`
+    return {
+      locked: document.querySelectorAll(".seg.locked").length,
+      buttons: Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim()),
+      title: document.querySelector("h1")?.innerText || "",
+      tiles: document.querySelectorAll(".tile").length,
+    };
+  `);
+  assert.equal(acc.locked, 5, "Rules are locked for the accountant");
+  assert.ok(acc.title.includes("Courier Cash"), "Accountant heading: " + acc.title);
+  const forbidden = /^(Confirm|Dispatch|Mark delivered|Failed delivery|Process return|Cancel|\+? ?New lead|Close & approve)/;
+  assert.deepEqual(acc.buttons.filter((t) => forbidden.test(t)), [], "The accountant has no sales, warehouse or approval buttons");
+  assert.ok(acc.buttons.some((t) => /Bank CSV/.test(t)), "The accountant can export the bank file");
+  assert.ok(acc.buttons.some((t) => /Record all as received \(3/.test(t)), "Bulk cash button shows three owed orders: " + acc.buttons.filter((t) => /Record/.test(t)));
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(b => /Record all as received/.test(b.innerText)).click();`);
+  for (let i = 0; i < 30 && !(await stripText()).includes("Cash with courier"); i++) await sleep(150);
+  const accStrip = await stripText();
+  assert.ok(/Cash with courier\s*−₦397,500/.test(accStrip), "Strip shows the courier cash cleared: " + accStrip);
+  const after = await evaluate(`return Array.from(document.querySelectorAll(".tile")).find(t => t.innerText.includes("Cash still with couriers"))?.innerText || "";`);
+  assert.ok(/₦0/.test(after), "Cash still with couriers is ₦0 after recording it: " + after);
+  // non-settlers cannot export the bank file
+  await gotoTab("closer", "Closer Phone Console");
+  const closerBtns = await evaluate(`return Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim());`);
+  assert.ok(!closerBtns.some((t) => /Bank CSV|Mark paid|Lock cycle|Record all/.test(t)), "A closer cannot export the bank file or settle cycles");
+  await gotoTab("founder", "Weekly Close");
+  console.log("✓ [7e] Accountant: cash desk records courier cash, warehouse no longer can, role limits hold");
+
   // 8. No discounts anywhere; five rules visible; founder price change applies to new orders only
   await evaluate(`document.querySelector('#tab-founder').click();`);
   await sleep(200);
@@ -419,6 +464,23 @@ try {
   await sleep(200);
   const newOpenCycle = await evaluate(`return document.querySelector(".side-cycle .pill")?.innerText;`);
   assert.ok(newOpenCycle.includes("W45"), `Closing W44 should open W45, got: ${newOpenCycle}`);
+
+  // 9b. Payout handoff: the founder approved W44 above; the accountant pays it and cannot approve
+  await gotoTab("accountant", "Courier Cash");
+  const desk1 = await evaluate(`
+    const card = Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Payout desk"));
+    return { text: card?.innerText || "", buttons: Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim()) };
+  `);
+  assert.ok(/W44 is approved/.test(desk1.text), "Payout desk tells the accountant W44 awaits payment: " + desk1.text.slice(0, 200));
+  assert.ok(desk1.buttons.some((t) => /Mark paid/.test(t)), "The accountant can mark the approved week paid");
+  assert.ok(!desk1.buttons.some((t) => /Close & approve/.test(t)), "The accountant cannot approve pay");
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(b => /Mark paid/.test(b.innerText)).click();`);
+  for (let i = 0; i < 30 && !/W43 is paid/.test(await evaluate(`return Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Payout desk"))?.innerText || "";`)); i++) await sleep(150);
+  const desk2 = await evaluate(`return Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Payout desk"))?.innerText || "";`);
+  assert.ok(/W43 is paid/.test(desk2), "After paying W44 the next job is locking W43: " + desk2.slice(0, 200));
+  const audited = await evaluate(`return document.body.innerText.includes("Marked W44 paid");`);
+  assert.equal(audited, true, "The payment is in the audit log");
+  console.log("✓ [9b] Payout handoff: founder approves, accountant pays; the accountant cannot approve");
 
   // 10. Reload page & verify localStorage persistence
   await send("Page.reload");

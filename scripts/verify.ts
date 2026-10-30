@@ -6,7 +6,14 @@ import { RULE_DEFS } from "../lib/rules.ts";
 import {
   actionsFor,
   adCost,
+  PERSONA,
+  canApprove,
+  canRecordCash,
+  canSettle,
+  cashDesk,
   cashWithCourier,
+  payoutQueue,
+  salesPeople,
   impactFor,
   impactIsEmpty,
   impactOf,
@@ -412,5 +419,69 @@ ruleAfter.rules.creditOn = "lead";
 const ruleImpact = impactOf(s, ruleAfter);
 assert.equal(ruleImpact.pay.length > 0 && ruleImpact.profit !== undefined && ruleImpact.profit < 0, true, "Switching to pay on lead raises pay and lowers profit");
 
-console.log("ALL 26 ENGINE INVARIANTS PASSED.");
+// 27. Accountant persona: segregation of duties around money, cash desk and payout queue
+const acct = s.people.find((p) => p.id === "bisi")!;
+assert.equal(acct.role, "accountant");
+assert.equal(PERSONA.accountant, "bisi");
+assert.equal(salesPeople(s).some((p) => p.id === "bisi"), false, "The accountant is not on the sales payroll");
+const roles = ["founder", "closer", "buyer", "lead", "accountant", "stock"] as const;
+const truth = (fn: (r: (typeof roles)[number]) => boolean) => roles.filter(fn);
+assert.deepEqual(truth(canEditRules), ["founder"], "Only the founder edits rules");
+assert.deepEqual(truth(canApprove), ["founder"], "Only the founder approves (closes) the week's pay");
+assert.deepEqual(truth(canSettle), ["founder", "accountant"], "The founder and accountant pay, lock and export the bank file");
+assert.deepEqual(truth(canRecordCash), ["founder", "accountant"], "Courier cash is recorded by the founder or accountant, never the warehouse");
+for (const o of s.orders) {
+  const acc = actionsFor(s, "accountant", o) as string[];
+  const owed = o.stage === "delivered" && !o.cashIn;
+  assert.deepEqual(acc, owed ? ["cash"] : [], "The accountant can only record cash, and only on delivered orders still owed (#" + o.id + ")");
+  assert.equal((actionsFor(s, "stock", o) as string[]).includes("cash"), false, "The warehouse cannot record cash (#" + o.id + ")");
+  for (const role of ["closer", "buyer", "lead"] as const) assert.equal((actionsFor(s, role, o) as string[]).includes("cash"), false);
+  assert.equal((actionsFor(s, "founder", o) as string[]).includes("cash"), owed, "The founder can record cash when it is owed");
+}
+
+// the spec matrix and the engine agree: returns are processed by the warehouse and the founder only
+for (const o of s.orders.filter((x) => x.stage === "delivered")) {
+  const who = roles.filter((r) => (actionsFor(s, r, o) as string[]).includes("return"));
+  assert.deepEqual(who, ["founder", "stock"], "Only the founder and warehouse process returns (#" + o.id + ")");
+}
+
+const cd = cashDesk(s);
+assert.equal(cd.total, cashWithCourier(s).total, "Cash desk ties to the courier-cash figure");
+assert.deepEqual(cd.outstanding.map((o) => o.id), [1047, 1050]);
+assert.equal(cd.oldestWeeks, 0);
+assert.deepEqual(
+  cd.rows.map((r) => [r.cycleId, r.delivered, r.received, r.outstanding]),
+  [
+    ["W42", 417500, 417500, 0],
+    ["W43", 487500, 487500, 0],
+    ["W44", 532500, 347000, 185500],
+  ],
+);
+assert.equal(sum(cd.rows.map((r) => r.outstanding)), cd.total, "By-week rows add up to the total owed");
+assert.equal(sum(cd.byCity.map((c) => c.amount)), cd.total, "By-city rows add up to the total owed");
+const aged = structuredClone(s);
+aged.orders.find((o) => o.id === 1047)!.deliveredCycle = "W43";
+assert.equal(cashDesk(aged).oldestWeeks, 1, "Cash owed from last week is one week old");
+const settled = structuredClone(s);
+for (const o of cd.outstanding) transition(settled, o.id, "cash");
+assert.equal(cashDesk(settled).total, 0, "Recording the cash clears the desk");
+assert.equal(leaks(settled).find((l) => l.key === "cash")!.amount, 0, "…and the stuck-cash leak");
+
+const q0 = payoutQueue(s);
+assert.deepEqual(q0.awaitingPayment, []);
+assert.deepEqual(q0.readyToLock.map((x) => x.cycleId), ["W43"]);
+assert.deepEqual(q0.next, { kind: "lock", cycleId: "W43" });
+const closedW44 = structuredClone(s);
+closeCycle(closedW44, "chidinma", "2026-11-02T09:00:00Z");
+const q1 = payoutQueue(closedW44);
+assert.deepEqual(q1.awaitingPayment.map((x) => x.cycleId), ["W44"], "After the founder approves, the accountant has a payment to make");
+assert.deepEqual(q1.next, { kind: "pay", cycleId: "W44" });
+assert.equal(Math.round(q1.awaitingPayment[0].payable), Math.round(sum(salesPeople(s).map((p) => payslip(openLines(s), p.id).payable))), "Awaiting payment equals the payable total");
+
+const acctSees = impactFor(s, imp1043, "accountant");
+assert.equal(acctSees.pay.length, 3, "The accountant sees every pay line");
+assert.equal(acctSees.revenue !== undefined && acctSees.profit !== undefined && acctSees.stuckCash !== undefined, true, "…and the company figures");
+assert.equal(acctSees.stock.length, 0, "…but not stock");
+
+console.log("ALL 27 ENGINE INVARIANTS PASSED.");
 

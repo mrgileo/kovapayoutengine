@@ -389,7 +389,7 @@ export function CommandPalette({
   if (!open) return null;
 
   const editable = canEditRules(role);
-  const roles: Role[] = ["founder", "closer", "buyer", "lead", "stock"];
+  const roles: Role[] = ["founder", "closer", "buyer", "lead", "accountant", "stock"];
 
   const items: { label: string; tag: string; run: () => void }[] = [
     ...(onSelectTheme

@@ -44,6 +44,7 @@ export const PERSONA: Record<Role, string> = {
   lead: "ngozi",
   stock: "dayo",
   founder: "chidinma",
+  accountant: "bisi",
 };
 /** Ad spend is a demo figure, never a live Meta connection. */
 export const SIM_FEED_NOTE = "Simulated Meta feed (demo figures, not a live connection)";
@@ -819,6 +820,8 @@ export function impactFor(s: DemoState, impact: Impact, role: Role): Impact {
     case "closer":
     case "buyer":
       return { pay: impact.pay.filter((p) => p.personId === me), stock: impact.stock };
+    case "accountant":
+      return { ...impact, stock: [] };
     case "stock":
       return { pay: [], stock: impact.stock };
   }
@@ -826,6 +829,106 @@ export function impactFor(s: DemoState, impact: Impact, role: Role): Impact {
 
 export const impactIsEmpty = (i: Impact) =>
   i.pay.length === 0 && i.stock.length === 0 && i.revenue === undefined && i.profit === undefined && i.stuckCash === undefined;
+
+/* ------------------------------------------------------------------ accountant: cash desk & payout queue */
+
+/** Mark paid, lock a cycle, and export the bank file. The founder approves pay (closes the week);
+ *  the accountant executes it, so the person who approves money never moves it. The founder can still override. */
+export function canSettle(role: Role) {
+  return role === "founder" || role === "accountant";
+}
+
+/** Close & approve the week's pay. Founder only. */
+export function canApprove(role: Role) {
+  return role === "founder";
+}
+
+/** Record that the courier has handed over COD cash. Whoever handles the parcels does not record the money. */
+export function canRecordCash(role: Role) {
+  return role === "founder" || role === "accountant";
+}
+
+export interface CashRow {
+  cycleId: string;
+  orders: number;
+  /** Value of orders delivered (and kept) in this week. */
+  delivered: number;
+  received: number;
+  outstanding: number;
+  /** How many weeks ago the oldest outstanding order was delivered. 0 = this week. */
+  ageWeeks: number;
+}
+
+export interface CashDesk {
+  /** Delivered orders whose cash has not arrived, oldest first. */
+  outstanding: Order[];
+  total: number;
+  oldestWeeks: number;
+  rows: CashRow[];
+  byCity: { city: string; orders: number; amount: number }[];
+  drill: Drill;
+}
+
+/** Cash reconciliation: what the courier owes, by week and by city (the courier's patch), and how long it has been owed. */
+export function cashDesk(s: DemoState): CashDesk {
+  const index = (id: string | undefined) => s.cycles.findIndex((c) => c.id === id);
+  const openIdx = index(openCycle(s).id);
+  const age = (o: Order) => Math.max(0, openIdx - index(o.deliveredCycle));
+  const outstanding = s.orders
+    .filter((o) => o.stage === "delivered" && !o.cashIn)
+    .sort((a, b) => index(a.deliveredCycle) - index(b.deliveredCycle) || a.id - b.id);
+
+  const rows: CashRow[] = [];
+  for (const c of s.cycles) {
+    const landed = s.orders.filter((o) => o.stage === "delivered" && o.deliveredCycle === c.id);
+    if (landed.length === 0) continue;
+    const open = landed.filter((o) => !o.cashIn);
+    rows.push({
+      cycleId: c.id,
+      orders: landed.length,
+      delivered: sum(landed.map(orderValue)),
+      received: sum(landed.filter((o) => o.cashIn).map(orderValue)),
+      outstanding: sum(open.map(orderValue)),
+      ageWeeks: open.length ? Math.max(...open.map(age)) : 0,
+    });
+  }
+
+  const cities = new Map<string, { orders: number; amount: number }>();
+  for (const o of outstanding) {
+    const cur = cities.get(o.city) ?? { orders: 0, amount: 0 };
+    cities.set(o.city, { orders: cur.orders + 1, amount: cur.amount + orderValue(o) });
+  }
+
+  return {
+    outstanding,
+    total: sum(outstanding.map(orderValue)),
+    oldestWeeks: outstanding.length ? Math.max(...outstanding.map(age)) : 0,
+    rows,
+    byCity: [...cities.entries()].map(([city, v]) => ({ city, ...v })).sort((a, b) => b.amount - a.amount),
+    drill: cashWithCourier(s),
+  };
+}
+
+export interface PayoutQueue {
+  /** Approved by the founder, waiting for the accountant to pay. */
+  awaitingPayment: { cycleId: string; payable: number }[];
+  /** Paid, still inside the return window; the accountant locks these. */
+  readyToLock: { cycleId: string; payable: number }[];
+  next: { kind: "pay" | "lock" | "wait"; cycleId: string };
+}
+
+const cyclePayable = (s: DemoState, id: string) => sum(salesPeople(s).map((p) => payslip(cycleLines(s, id), p.id).payable));
+
+export function payoutQueue(s: DemoState): PayoutQueue {
+  const awaitingPayment = s.cycles.filter((c) => c.status === "approved").map((c) => ({ cycleId: c.id, payable: cyclePayable(s, c.id) }));
+  const readyToLock = s.cycles.filter((c) => c.status === "paid").map((c) => ({ cycleId: c.id, payable: cyclePayable(s, c.id) }));
+  const next: PayoutQueue["next"] = awaitingPayment.length
+    ? { kind: "pay", cycleId: awaitingPayment[0].cycleId }
+    : readyToLock.length
+      ? { kind: "lock", cycleId: readyToLock[0].cycleId }
+      : { kind: "wait", cycleId: openCycle(s).id };
+  return { awaitingPayment, readyToLock, next };
+}
 
 export interface SkuEconomics {
   sku: string;
@@ -975,7 +1078,7 @@ export function actionsFor(s: DemoState, role: Role, o: Order): ActionKey[] {
       if (ops) out.push("deliver", "fail");
       break;
     case "delivered":
-      if (role === "founder" && !o.cashIn) out.push("cash");
+      if (canRecordCash(role) && !o.cashIn) out.push("cash");
       if (ops) out.push("return");
       break;
   }

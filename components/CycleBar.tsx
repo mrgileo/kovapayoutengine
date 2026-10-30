@@ -1,8 +1,9 @@
 "use client";
 
 import { Download, Lock, CheckCircle2, ArrowRight } from "lucide-react";
-import { canEditRules, cycleLines, openCycle, payoutCsv, payslip, personOf, pnlFor, salesPeople, sum } from "@/lib/engine";
+import { canApprove, canSettle, cycleLines, openCycle, payoutCsv, payslip, personOf, pnlFor, salesPeople, sum } from "@/lib/engine";
 import { dateTime, shortDate, shortName } from "@/lib/format";
+import { downloadText } from "@/lib/download";
 import { useData, useStore } from "@/lib/store";
 import { Card, Fig } from "./ui";
 import type { Cycle, Drill } from "@/lib/types";
@@ -29,18 +30,12 @@ export function CycleBar() {
   const markPaid = useStore((s) => s.markPaid);
   const lockCycle = useStore((s) => s.lockCycle);
   const toast = useStore((s) => s.toast);
-  const editable = canEditRules(role);
+  const canClose = canApprove(role);
+  const settle = canSettle(role);
   const open = openCycle(data);
 
   function downloadCsv(cycleId: string) {
-    const csv = payoutCsv(data, cycleId);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `kova-payouts-${cycleId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(`kova-payouts-${cycleId}.csv`, payoutCsv(data, cycleId));
     toast("ok", `Exported bank payout CSV for ${cycleId}.`);
   }
 
@@ -77,7 +72,7 @@ export function CycleBar() {
           : "Accrued → Approved → Paid → Locked. Try returning an order from W43 (paid) vs W42 (locked) in the ledger below to see pay taken back after a week closes."
       }
       actions={
-        editable && (
+        canClose && (
           <button type="button" className="btn primary sm" onClick={closeCycle}>
             Close &amp; approve {open.id} <ArrowRight size={14} />
           </button>
@@ -132,15 +127,17 @@ export function CycleBar() {
               </div>
 
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: "auto", paddingTop: 4 }}>
-                <button type="button" className="btn xs" onClick={() => downloadCsv(c.id)}>
-                  <Download size={12} /> Bank CSV
-                </button>
-                {editable && c.status === "approved" && (
+                {settle && (
+                  <button type="button" className="btn xs" onClick={() => downloadCsv(c.id)}>
+                    <Download size={12} /> Bank CSV
+                  </button>
+                )}
+                {settle && c.status === "approved" && (
                   <button type="button" className="btn xs primary" onClick={() => markPaid(c.id)}>
                     <CheckCircle2 size={12} /> Mark paid
                   </button>
                 )}
-                {editable && c.status === "paid" && (
+                {settle && c.status === "paid" && (
                   <button type="button" className="btn xs" onClick={() => lockCycle(c.id)}>
                     <Lock size={12} /> Lock cycle
                   </button>
