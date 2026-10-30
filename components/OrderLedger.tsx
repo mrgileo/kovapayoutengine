@@ -83,7 +83,7 @@ export function OrderLedger() {
           tone: "warn",
           drill: {
             title: `Order #${o.id} · Post-Lock Return`,
-            subtitle: `Credited in ${pc.id} (Locked) · Commission is final`,
+            subtitle: `Credited in ${pc.id} (Locked) · Sales pay is final`,
             lines: paidLines.map((l) => ({
               ref: pc.id,
               label: personOf(data, l.personId).name,
@@ -97,13 +97,13 @@ export function OrderLedger() {
       if (data.rules.onReturn === "clawback") {
         return {
           amount: -paidAmt,
-          label: `Clawed back (${pc?.id})`,
+          label: `Pay taken back (${pc?.id})`,
           tone: "neg",
           drill: {
-            title: `Order #${o.id} · Post-Close Clawback`,
+            title: `Order #${o.id} · Pay taken back`,
             subtitle: `Paid in ${pc?.id} · Reversed in ${open.id}`,
             lines: paidLines.map((l) => ({
-              ref: "CLAWBACK",
+              ref: "TAKEN BACK",
               label: personOf(data, l.personId).name,
               detail: `Deducted in ${open.id}`,
               amount: -l.amount,
@@ -115,13 +115,13 @@ export function OrderLedger() {
       if (data.rules.onReturn === "offset") {
         return {
           amount: -paidAmt,
-          label: `Offset next cycle`,
+          label: `Taken back next week`,
           tone: "warn",
           drill: {
-            title: `Order #${o.id} · Scheduled Next-Cycle Offset`,
+            title: `Order #${o.id} · Pay to be taken back next week`,
             subtitle: `Paid in ${pc?.id} · Deducted on next cycle close`,
             lines: paidLines.map((l) => ({
-              ref: "OFFSET",
+              ref: "NEXT WEEK",
               label: personOf(data, l.personId).name,
               detail: `Recoverable in next cycle`,
               amount: -l.amount,
@@ -137,7 +137,7 @@ export function OrderLedger() {
       label: o.creditedCycle ? `Paid in ${o.creditedCycle}` : creditedNow ? "Accrued" : "Not yet credited",
       tone: creditedNow ? "pos" : "muted",
       drill: {
-        title: `Order #${o.id} · Commission Split`,
+        title: `Order #${o.id} · Sales pay split`,
         subtitle: `${o.customer} · Credited value ${m(val)}${o.discount ? ` (${Math.round(o.discount * 100)}% off list ${m(o.list)})` : ""}`,
         lines: lines.map((l) => ({
           ref: personOf(data, l.personId).role.toUpperCase(),
@@ -156,7 +156,7 @@ export function OrderLedger() {
       sub={
         role === "closer"
           ? "Designed for a 390px phone screen in Lagos traffic — zero horizontal scroll, clear personal earnings, and strict delivery controls."
-          : "Move orders forward, test discounts (#1049), inspect split-credit (#1053), or return a paid order from W43 (#1033) to trigger post-close clawback."
+          : "Move orders forward, test discounts (#1049), inspect split-credit (#1053), or return a paid order from W43 (#1033) to see pay taken back."
       }
       actions={
         <div className="filters" role="group" aria-label="Filter orders" style={{ alignItems: "center" }}>
@@ -251,7 +251,7 @@ export function OrderLedger() {
                 </div>
 
                 <div className="ocard-earn">
-                  <span>Your closer share ({isCredited(o, data.rules) ? "credited" : "when landed"}):</span>
+                  <span>Your sales pay ({isCredited(o, data.rules) ? "credited" : "when landed"}):</span>
                   <b className={isCredited(o, data.rules) ? "pos" : ""}>
                     <Fig amount={myShare} drill={comm.drill} />
                   </b>
@@ -296,7 +296,7 @@ export function OrderLedger() {
                 <th>Touch / Attribution</th>
                 <th className="r">Value</th>
                 <th>Stage</th>
-                <th className="r">Commission</th>
+                <th className="r">Sales pay</th>
                 <th className="r">Actions ({role})</th>
               </tr>
             </thead>

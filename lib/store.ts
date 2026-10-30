@@ -151,8 +151,8 @@ export const useStore = create<Store>()(
               kind: "rule",
               text: `Rule changed · ${label}: ${ruleOptionLabel(key, prev)} → ${ruleOptionLabel(key, value)}`,
               deltas: [
-                { label: "Total payout", amount: pa.payout - pb.payout },
-                { label: "Actual result", amount: pa.actual - pb.actual },
+                { label: "Total staff pay", amount: pa.payout - pb.payout },
+                { label: "Real profit", amount: pa.actual - pb.actual },
               ].filter((x) => Math.abs(x.amount) > 0.5),
             });
           });
@@ -178,7 +178,7 @@ export const useStore = create<Store>()(
                 text = `Order ${o.id} delivered · ${p} −${o.qty} on hand`;
                 break;
               case "fail":
-                text = `Order ${o.id} failed delivery · courier fee lost, goods back on shelf`;
+                text = `Order ${o.id} failed delivery · delivery fee lost, goods back on shelf`;
                 break;
               case "cash":
                 text = `Courier remitted cash for order ${o.id}`;
@@ -187,8 +187,8 @@ export const useStore = create<Store>()(
                 const cond = o.returnCondition === "damaged" ? `damaged, written off` : `${p} +${o.qty} restocked`;
                 const policy = credited
                   ? credited.status === "locked"
-                    ? ` · ${credited.id} locked, commission final`
-                    : ` · commission was paid in ${credited.id} → ${ruleOptionLabel("onReturn", d.rules.onReturn)}`
+                    ? ` · ${credited.id} locked, sales pay is final`
+                    : ` · sales pay was paid in ${credited.id} → ${ruleOptionLabel("onReturn", d.rules.onReturn)}`
                   : "";
                 text = `Order ${o.id} returned · ${cond}${policy}`;
                 break;
@@ -223,7 +223,7 @@ export const useStore = create<Store>()(
             const at = now();
             closeCycleFx(d, actor(), at);
             const c = cycleById(d, id)!;
-            log(d, { at, actor: actor(), cycle: id, kind: "cycle", text: `Closed and approved ${id} · accruals frozen`, deltas: [{ label: "Approved payout", amount: c.pnl!.payout }] });
+            log(d, { at, actor: actor(), cycle: id, kind: "cycle", text: `Closed and approved ${id} · pay figures frozen`, deltas: [{ label: "Approved staff pay", amount: c.pnl!.payout }] });
           });
           get().toast("ok", `${id} approved. ${openCycle(get().data).id} is now open.`);
         },
@@ -238,7 +238,7 @@ export const useStore = create<Store>()(
           if (get().role !== "founder") return;
           mutate((d) => {
             lockFx(d, cycleId, actor(), now());
-            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, commission final` });
+            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, sales pay is final` });
           });
           get().toast("ok", `${cycleId} locked. Later returns no longer touch its payouts.`);
         },

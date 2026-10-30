@@ -3,6 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { closerStats, openLines, payslip, personOf } from "@/lib/engine";
 import { pct } from "@/lib/format";
+import { PAY_LINE_TEXT } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { Avatar, Card, Fig } from "./ui";
 import type { Drill } from "@/lib/types";
@@ -23,10 +24,10 @@ export function CloserScorecard() {
         ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
         label:
           l.kind === "base"
-            ? "Weekly pro-rated base"
+            ? PAY_LINE_TEXT.base
             : l.kind === "commission"
-              ? `Order #${l.orderId}`
-              : `Adjustment (${l.kind})`,
+              ? PAY_LINE_TEXT.commission(l.orderId)
+              : PAY_LINE_TEXT.adjustment(l.kind),
         detail: l.note,
         amount: l.amount,
       })),
@@ -39,8 +40,8 @@ export function CloserScorecard() {
       title="Closer Quality, Return Rate & Net Contribution"
       sub={
         cap < 1
-          ? `Quality gate active (${Math.round(cap * 100)}% return cap): closers above the cap have their commission halved automatically.`
-          : "Paying pure volume incentivizes over-promising on the phone. Toggle the Return-rate quality gate above to penalize high-return closers."
+          ? `Quality gate active (${Math.round(cap * 100)}% return cap): closers above the cap have their sales pay halved automatically.`
+          : "Paying on volume alone encourages over-promising on the phone. Turn on the Return-rate gate above to penalise closers whose orders keep coming back."
       }
       flush
     >
@@ -52,8 +53,8 @@ export function CloserScorecard() {
               <th className="r">Delivered vol.</th>
               <th>Return rate</th>
               <th className="r">Avg discount</th>
-              <th className="r">Cycle pay</th>
-              <th className="r">Net margin contrib.</th>
+              <th className="r">This week's pay</th>
+              <th className="r">Profit contributed</th>
             </tr>
           </thead>
           <tbody>
@@ -129,7 +130,7 @@ export function CloserScorecard() {
                       <Fig amount={ps.gross} drill={() => buildCloserDrill(id)} />
                     </b>
                     <span className="sub">
-                      Comm: <Fig amount={st.earnedThisCycle} drill={() => buildCloserDrill(id)} />
+                      Sales pay: <Fig amount={st.earnedThisCycle} drill={() => buildCloserDrill(id)} />
                     </span>
                   </td>
 
@@ -137,7 +138,7 @@ export function CloserScorecard() {
                     <b className={st.netContribution < 0 ? "neg" : "pos"} style={{ fontSize: 14 }}>
                       <Fig amount={st.netContribution} sign drill={st.contributionDrill} />
                     </b>
-                    <span className="sub">After COGS &amp; courier</span>
+                    <span className="sub">After product cost &amp; delivery fees</span>
                   </td>
                 </tr>
               );
@@ -150,7 +151,7 @@ export function CloserScorecard() {
         <div className="insight">
           <AlertTriangle size={17} />
           <div>
-            <b>Why this matters:</b> Amaka books higher volume, but <b>37.5% of her resolved orders come back</b> (vs Chidi&apos;s 14.3%) and she discounted Order #1049 by 15% (past the 10% guardrail). Set <b>Return-rate quality gate → 30% cap</b> in the rules strip above to automatically halve her commission rate until her return rate drops.
+            <b>Why this matters:</b> Amaka books higher volume, but <b>37.5% of her resolved orders come back</b> (vs Chidi&apos;s 14.3%) and she discounted Order #1049 by 15% (past the 10% guardrail). Set <b>Return-rate gate → 30% cap</b> in the rules above to halve her sales pay until her return rate drops.
           </div>
         </div>
       </div>

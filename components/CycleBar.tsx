@@ -48,13 +48,13 @@ export function CycleBar() {
     const people = salesPeople(data);
     return {
       title: `${c.id} Payout Breakdown (${STATUS_LABEL[c.status]})`,
-      subtitle: `${shortDate(c.start)} – ${shortDate(c.end)} · Base + variable + clawback/offset adjustments`,
+      subtitle: `${shortDate(c.start)} – ${shortDate(c.end)} · Fixed salary + sales pay, less any pay taken back`,
       lines: people.map((p) => {
         const ps = payslip(lines, p.id);
         const parts: string[] = [];
-        if (ps.base) parts.push(`Base: ₦${ps.base.toLocaleString()}`);
-        if (ps.commission) parts.push(`Comm: ₦${Math.round(ps.commission).toLocaleString()}`);
-        if (ps.adjustments) parts.push(`Adj: ₦${Math.round(ps.adjustments).toLocaleString()}`);
+        if (ps.base) parts.push(`Salary: ₦${ps.base.toLocaleString()}`);
+        if (ps.commission) parts.push(`Sales pay: ₦${Math.round(ps.commission).toLocaleString()}`);
+        if (ps.adjustments) parts.push(`Pay taken back: ₦${Math.round(ps.adjustments).toLocaleString()}`);
         if (ps.carry) parts.push(`Carry: ₦${Math.round(ps.carry).toLocaleString()}`);
         return {
           ref: p.role.toUpperCase(),
@@ -70,7 +70,7 @@ export function CycleBar() {
   return (
     <Card
       title="Payout Cycles & Settlement"
-      sub="Accrued → Approved → Paid → Locked. Try returning an order from W43 (paid) vs W42 (locked) in the ledger below to see post-close clawbacks and offsets in action."
+      sub="Accrued → Approved → Paid → Locked. Try returning an order from W43 (paid) vs W42 (locked) in the ledger below to see pay taken back after a week closes."
       actions={
         editable && (
           <button type="button" className="btn primary sm" onClick={closeCycle}>

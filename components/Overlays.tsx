@@ -123,8 +123,8 @@ export function DiscountDialog() {
           <div className="eyebrow">Discount Guardrail · Order #{order.id}</div>
           <h2>{order.customer}</h2>
           <p>
-            Commission is calculated on the <b>discounted value</b>, never the list price. Discounting past the{" "}
-            <b>{Math.round(floor * 100)}% floor</b> halves the closer&apos;s commission rate on this order.
+            Sales pay is worked out on the <b>discounted price</b>, never the list price. Discounting past the{" "}
+            <b>{Math.round(floor * 100)}% floor</b> halves the closer&apos;s rate on this order.
           </p>
         </div>
 
@@ -152,13 +152,13 @@ export function DiscountDialog() {
             <span className="mono">{m(discountedPrice)}</span>
           </div>
           <div>
-            <span>Closer commission rate</span>
+            <span>Closer sales-pay rate</span>
             <span className={"mono " + (halved ? "neg" : "pos")}>
               {(effectiveRate * 100).toFixed(2)}% {halved ? `(halved from ${(baseRate * 100).toFixed(1)}%)` : "(full rate)"}
             </span>
           </div>
           <div className="tot">
-            <span>Closer commission on this order</span>
+            <span>Closer sales pay on this order</span>
             <span className={"mono " + (halved ? "neg" : "pos")}>
               {m(closerComm)} <span className="muted" style={{ fontWeight: 400 }}>(vs {m(fullComm)} at list)</span>
             </span>
@@ -214,7 +214,7 @@ export function ReturnDialog() {
           </h2>
           <p>
             Delivered in <b>{order.deliveredCycle}</b> ({m(orderValue(order))}). Specify warehouse condition and see how the{" "}
-            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule handles the commission.
+            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule handles the sales pay.
           </p>
         </div>
 
@@ -225,15 +225,15 @@ export function ReturnDialog() {
             onClick={() => setCond("resellable")}
           >
             <b>Resellable · Return to shelf (+{order.qty} {order.sku})</b>
-            <span>Goods pass inspection. Restocked into available inventory; only the ₦{DELIVERY_FEE.toLocaleString()} return courier leg is lost.</span>
+            <span>Goods pass inspection. Restocked into available inventory; only the ₦{DELIVERY_FEE.toLocaleString()} return delivery fee is lost.</span>
           </button>
           <button
             type="button"
             aria-pressed={cond === "damaged"}
             onClick={() => setCond("damaged")}
           >
-            <b>Damaged in transit · Write off COGS ({m(cogsAtRisk)})</b>
-            <span>Cannot be resold. Stock is not incremented and {m(cogsAtRisk)} is written off on the P&amp;L.</span>
+            <b>Damaged in transit · Write off product cost ({m(cogsAtRisk)})</b>
+            <span>Cannot be resold. Stock is not incremented and {m(cogsAtRisk)} is written off as damaged stock.</span>
           </button>
         </div>
 
@@ -245,23 +245,23 @@ export function ReturnDialog() {
             </span>
           </div>
           <div>
-            <span>Active return policy</span>
+            <span>Current rule</span>
             <span className="mono">{ruleOptionLabel("onReturn", data.rules.onReturn)}</span>
           </div>
           <div className="tot">
-            <span>Commission consequence</span>
+            <span>What happens to the sales pay</span>
             <span className="mono">
               {!creditedCycle
                 ? data.rules.onReturn === "absorb"
-                  ? "Kept by team (Absorb)"
-                  : "Accrual reversed immediately"
+                  ? "Staff keep it (business absorbs)"
+                  : "Not yet paid, so it is cancelled"
                 : creditedCycle.status === "locked"
                   ? `Kept (${creditedCycle.id} is locked)`
                   : data.rules.onReturn === "clawback"
-                    ? `−${m(paidAmt)} clawed back this cycle`
+                    ? `−${m(paidAmt)} taken back this week`
                     : data.rules.onReturn === "offset"
-                      ? `−${m(paidAmt)} deducted next cycle`
-                      : `${m(paidAmt)} absorbed by business`}
+                      ? `−${m(paidAmt)} taken back next week`
+                      : `${m(paidAmt)} kept by staff (business absorbs)`}
             </span>
           </div>
         </div>
@@ -317,7 +317,7 @@ export function NewOrderDialog() {
           <div className="eyebrow">Live Lead Intake</div>
           <h2>Create New Customer Order</h2>
           <p>
-            Test split attribution (different opener vs closer), stock availability checks, or immediate lead commission under the{" "}
+            Test split attribution (different opener vs closer), stock availability checks, or sales pay paid straight away under the{" "}
             <b>{data.rules.creditOn}</b> trigger.
           </p>
         </div>
@@ -421,7 +421,7 @@ export function NewOrderDialog() {
             </span>
           </div>
           <div className="tot">
-            <span>Total commission pool ({((r.closer + r.buyer + r.lead) * 100).toFixed(2)}%)</span>
+            <span>Total sales pay ({((r.closer + r.buyer + r.lead) * 100).toFixed(2)}%)</span>
             <span className="mono">{m(totalList * (r.closer + r.buyer + r.lead))}</span>
           </div>
         </div>

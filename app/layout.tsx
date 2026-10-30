@@ -7,7 +7,7 @@ const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Kova · Payout, P&L and stock engine",
-  description: "How sales commission, returns, cash collection and stock connect in a COD e-commerce business. Demo data.",
+  description: "How sales pay, returns, cash collection and stock connect in a COD e-commerce business. Demo data.",
 };
 
 export const viewport: Viewport = {

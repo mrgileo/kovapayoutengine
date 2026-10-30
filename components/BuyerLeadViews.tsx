@@ -1,6 +1,7 @@
 "use client";
 
 import { campaignStats, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
+import { L, PAY_LINE_TEXT } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { CloserScorecard } from "./CloserScorecard";
 import { Avatar, Card, Fig, Tile } from "./ui";
@@ -21,7 +22,7 @@ export function BuyerView() {
     subtitle: "Media buyer · Prospecting campaign",
     lines: ps.lines.map((l) => ({
       ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
-      label: l.kind === "base" ? "Weekly pro-rated base" : `Order #${l.orderId}`,
+      label: l.kind === "base" ? PAY_LINE_TEXT.base : PAY_LINE_TEXT.commission(l.orderId),
       detail: l.note,
       amount: l.amount,
     })),
@@ -63,15 +64,15 @@ export function BuyerView() {
           />
         </Tile>
         <Tile
-          label="ROAS on delivery"
-          note={`Booked ROAS looks like ${cs.bookedRoas.toFixed(2)}× — until returns & pending hit`}
+          label={L.salesPerAdNaira}
+          note={`Looks like ${L.perNaira(cs.bookedRoas)} on booked orders, until returns and pending orders hit`}
           tone={cs.deliveredRoas < 2 ? "neg" : "pos"}
         >
-          <span className="num">{cs.deliveredRoas.toFixed(2)}×</span>
+          <span className="num">{L.perNaira(cs.deliveredRoas)}</span>
         </Tile>
         <Tile
           label="Campaign net margin"
-          note="After COGS, ad spend, courier legs & commission"
+          note="After product cost, ads, delivery fees and sales pay"
           tone={cs.netMargin < 0 ? "neg" : "pos"}
         >
           <Fig amount={cs.netMargin} sign drill={cs.marginDrill} />
@@ -79,8 +80,8 @@ export function BuyerView() {
       </dl>
 
       <Card
-        title="Campaign Economics · Booked ROAS vs True Contribution Margin"
-        sub="Ad managers report ROAS on leads booked. Founders pay bills out of net contribution margin after COGS, courier legs, and ad spend."
+        title="Campaign results · booked sales vs what's really left"
+        sub="Ad managers report sales per ₦1 of ads on orders booked. You pay the bills from what's left after product cost, delivery fees, sales pay and ads."
         flush
       >
         <div className="tbl-wrap">
@@ -91,10 +92,10 @@ export function BuyerView() {
                 <th>Campaign</th>
                 <th className="r">Ad spend</th>
                 <th className="r">Booked vol.</th>
-                <th className="r">Booked ROAS</th>
+                <th className="r">{L.bookedSalesPerAdNaira}</th>
                 <th className="r">Delivered rev.</th>
-                <th className="r">Delivered ROAS</th>
-                <th className="r">Net margin (after COGS)</th>
+                <th className="r">{L.deliveredSalesPerAdNaira}</th>
+                <th className="r">Left after product, ads, pay</th>
                 <th className="r">Cycle pay</th>
               </tr>
             </thead>
@@ -138,7 +139,7 @@ export function BuyerView() {
                         }}
                       />
                     </td>
-                    <td className="r mono muted">{c.spend ? c.bookedRoas.toFixed(2) + "×" : "—"}</td>
+                    <td className="r mono muted">{c.spend ? L.perNaira(c.bookedRoas) : "—"}</td>
                     <td className="r mono">
                       <Fig
                         amount={c.deliveredRev}
@@ -154,7 +155,7 @@ export function BuyerView() {
                       />
                     </td>
                     <td className={"r mono " + (c.spend && c.deliveredRoas < 2 ? "neg" : "pos")} style={{ fontWeight: 600 }}>
-                      {c.spend ? c.deliveredRoas.toFixed(2) + "×" : "—"}
+                      {c.spend ? L.perNaira(c.deliveredRoas) : "—"}
                     </td>
                     <td className={"r mono " + (c.netMargin < 0 ? "neg" : "pos")} style={{ fontWeight: 600 }}>
                       <Fig amount={c.netMargin} sign drill={c.marginDrill} />
@@ -196,10 +197,10 @@ export function LeadView() {
 
   const payslipDrill: Drill = {
     title: `Ngozi Eze · ${open.id} Team Lead Payslip`,
-    subtitle: "1.0% override on credited team volume + weekly pro-rated base",
+    subtitle: "Team bonus on team sales + fixed salary (one week's share)",
     lines: ps.lines.map((l) => ({
       ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
-      label: l.kind === "base" ? "Weekly pro-rated base" : `Order #${l.orderId}`,
+      label: l.kind === "base" ? PAY_LINE_TEXT.base : PAY_LINE_TEXT.commission(l.orderId),
       detail: l.note,
       amount: l.amount,
     })),
@@ -209,10 +210,10 @@ export function LeadView() {
   return (
     <div className="stack">
       <dl className="tiles">
-        <Tile label="Team lead net payout" note="Weekly base + 1.0% team override" tone="pos">
+        <Tile label="Team lead net payout" note="Fixed salary + team bonus" tone="pos">
           <Fig amount={ps.payable} drill={payslipDrill} />
         </Tile>
-        <Tile label="Override commission" note="Net of team clawbacks">
+        <Tile label={L.teamBonus} note="After any pay taken back">
           <Fig amount={ps.commission + ps.adjustments} drill={payslipDrill} />
         </Tile>
         <Tile label="Team delivered volume" note={`${teamDelivered.length} orders landed in ${open.id}`}>

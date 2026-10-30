@@ -25,10 +25,10 @@ export function RulesStrip() {
 
   return (
     <Card
-      title="Payout & Operating Rules"
+      title="Pay rules"
       sub={
         editable
-          ? "Change a rule and every figure, payslip, and P&L line recalculates immediately."
+          ? "Change a rule and every figure, payslip and profit line recalculates immediately."
           : `Set by the founder. Last changed ${shortDate(latestStamp.at)} by ${shortName(latestPerson.name)}`
       }
       actions={
@@ -82,8 +82,8 @@ export function RulesStrip() {
                       onClick={() => setRule(def.key, opt.value as never)}
                       title={
                         editable
-                          ? `Simulated payout: ${m(sim.payout)} · Actual net: ${m(sim.actual, { sign: true })}`
-                          : "Only the founder can modify payout rules"
+                          ? `Staff pay would be ${m(sim.payout)} · Real profit ${m(sim.actual, { sign: true })}`
+                          : "Only the founder can change the pay rules"
                       }
                     >
                       <span>{opt.label}</span>

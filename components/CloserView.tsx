@@ -14,6 +14,7 @@ import {
   sum,
 } from "@/lib/engine";
 import { pct } from "@/lib/format";
+import { L, PAY_LINE_TEXT } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { Fig, Tile } from "./ui";
 import type { Drill } from "@/lib/types";
@@ -44,7 +45,7 @@ export function CloserView() {
     subtitle: "Closer · Reports to Ngozi Eze",
     lines: ps.lines.map((l) => ({
       ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
-      label: l.kind === "base" ? "Weekly pro-rated base" : l.kind === "commission" ? `Order #${l.orderId}` : `Adjustment (${l.kind})`,
+      label: l.kind === "base" ? PAY_LINE_TEXT.base : l.kind === "commission" ? PAY_LINE_TEXT.commission(l.orderId) : PAY_LINE_TEXT.adjustment(l.kind),
       detail: l.note,
       amount: l.amount,
     })),
@@ -52,7 +53,7 @@ export function CloserView() {
   };
 
   const potentialDrill: Drill = {
-    title: "Pending Pipeline Commission",
+    title: "Sales pay on your open orders",
     subtitle: "If all currently open orders land and clear",
     lines: openOrders.map((o) => {
       const ls = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
@@ -92,19 +93,19 @@ export function CloserView() {
 
         <div className="split">
           <div>
-            <span>Weekly Base</span>
+            <span>{L.fixedSalary}</span>
             <b>
               <Fig amount={ps.base} drill={payslipDrill} />
             </b>
           </div>
           <div>
-            <span>Commission</span>
+            <span>{L.salesPay}</span>
             <b>
               <Fig amount={ps.commission} drill={payslipDrill} />
             </b>
           </div>
           <div>
-            <span>Clawbacks / Carry</span>
+            <span>{PAY_LINE_TEXT.takenBackCarry}</span>
             <b className={ps.adjustments + ps.carry < 0 ? "neg-t" : ""}>
               <Fig amount={ps.adjustments + ps.carry} sign drill={payslipDrill} />
             </b>

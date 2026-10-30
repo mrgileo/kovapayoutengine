@@ -12,13 +12,15 @@ import {
   paidOnUndelivered,
 } from "@/lib/engine";
 import { pct } from "@/lib/format";
+import { L, PNL_TEXT as P } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { CloserScorecard } from "./CloserScorecard";
-import { Card, Fig, Tile } from "./ui";
+import { Card, Fig, Tile, useMoney } from "./ui";
 import type { PnLKey } from "@/lib/types";
 
 export function FounderView() {
   const data = useData();
+  const m = useMoney();
   const pnl = computePnl(data);
   const open = openCycle(data);
   const courierCash = cashWithCourier(data);
@@ -43,14 +45,14 @@ export function FounderView() {
     cls: string;
     isTotal?: boolean;
   }[] = [
-    { key: "revenue", label: "Delivered revenue", sub: `Orders landed in ${open.id}`, amount: pnl.revenue, sign: 1, cls: "rev" },
-    { key: "refunds", label: "− Prior-cycle refunds", sub: "Returned after a closed cycle", amount: pnl.refunds, sign: -1, cls: "cost" },
-    { key: "cogs", label: "− Cost of goods (COGS)", sub: "Unit cost of landed stock", amount: pnl.cogs, sign: -1, cls: "cost" },
-    { key: "writeoffs", label: "− Damaged write-offs", sub: "Returned unsellable", amount: pnl.writeoffs, sign: -1, cls: "cost" },
-    { key: "commission", label: "− Variable commission", sub: "Net of clawbacks", amount: pnl.commission, sign: -1, cls: "cost comm" },
-    { key: "base", label: "− Fixed base pay", sub: "Sales staff weekly pro-rata", amount: pnl.base, sign: -1, cls: "cost comm" },
-    { key: "adSpend", label: "− Meta ad spend", sub: "Prospecting + Retargeting", amount: pnl.adSpend, sign: -1, cls: "cost" },
-    { key: "logistics", label: "− Courier leg fees", sub: "Outbound, failed & return legs", amount: pnl.logistics, sign: -1, cls: "cost" },
+    { key: "revenue", label: P.revenue.label, sub: P.revenue.sub(open.id), amount: pnl.revenue, sign: 1, cls: "rev" },
+    { key: "refunds", label: P.refunds.label, sub: P.refunds.sub, amount: pnl.refunds, sign: -1, cls: "cost" },
+    { key: "cogs", label: P.cogs.label, sub: P.cogs.sub, amount: pnl.cogs, sign: -1, cls: "cost" },
+    { key: "writeoffs", label: P.writeoffs.label, sub: P.writeoffs.sub, amount: pnl.writeoffs, sign: -1, cls: "cost" },
+    { key: "commission", label: P.commission.label, sub: P.commission.sub, amount: pnl.commission, sign: -1, cls: "cost comm" },
+    { key: "base", label: P.base.label, sub: P.base.sub, amount: pnl.base, sign: -1, cls: "cost comm" },
+    { key: "adSpend", label: P.adSpend.label, sub: P.adSpend.sub, amount: pnl.adSpend, sign: -1, cls: "cost" },
+    { key: "logistics", label: P.logistics.label, sub: P.logistics.sub, amount: pnl.logistics, sign: -1, cls: "cost" },
   ];
 
   return (
@@ -58,9 +60,9 @@ export function FounderView() {
       {/* Headline moment: "payout ratio healthy, business underwater" */}
       <section className="headline" aria-label="Executive P&L headline">
         <div>
-          <div className="eyebrow">Founder Reality Check · {open.id}</div>
+          <div className="eyebrow">Founder summary · {open.id}</div>
           <h2>
-            Variable commission is a healthy {pct(pnl.commissionRatio)}, yet the business is{" "}
+            {L.headline(pct(pnl.commissionRatio))}{" "}
             {pnl.actual < 0 ? "losing " : "netting "}
             <Fig
               amount={pnl.actual}
@@ -71,68 +73,68 @@ export function FounderView() {
             this cycle.
           </h2>
           <p>
-            A naive tracker reports <b>revenue minus commission</b> (<Fig amount={naiveNet} drill={pnl.drills.revenue} />) and calls the week profitable. Once you fold in <b>COGS</b> (<Fig amount={pnl.cogs} drill={pnl.drills.cogs} />), <b>ad spend</b> (<Fig amount={pnl.adSpend} drill={pnl.drills.adSpend} />),{" "}
+            {L.headlineBody.intro} <b>{L.headlineBody.productCost}</b> (<Fig amount={pnl.cogs} drill={pnl.drills.cogs} />), <b>{L.headlineBody.adSpend}</b> (<Fig amount={pnl.adSpend} drill={pnl.drills.adSpend} />),{" "}
             {pnl.base > 0 && (
               <>
-                <b>pro-rated base</b> (<Fig amount={pnl.base} drill={pnl.drills.base} />),{" "}
+                <b>{L.headlineBody.fixedSalary}</b> (<Fig amount={pnl.base} drill={pnl.drills.base} />),{" "}
               </>
             )}
-            and <b>courier legs</b> (<Fig amount={pnl.logistics} drill={pnl.drills.logistics} />), the true operating margin appears. Click any figure to audit the exact orders behind it.
+            and <b>{L.headlineBody.deliveryFees}</b> (<Fig amount={pnl.logistics} drill={pnl.drills.logistics} />), {L.headlineBody.outro}
           </p>
         </div>
 
         <div className="hl-stats">
           <div className="hl-stat">
-            <span>Naive &ldquo;Net after commission&rdquo;</span>
+            <span>{L.salesReport}</span>
             <b className="ok">
               <Fig
                 amount={naiveNet}
                 drill={{
-                  title: "Naive 'Net after commission' (Illusion)",
-                  subtitle: "Ignores COGS and ad spend",
+                  title: L.salesReport,
+                  subtitle: "Sales minus sales pay. Ignores product cost and ads.",
                   lines: [
                     { ref: "+", label: "Delivered revenue", amount: pnl.revenue },
-                    { ref: "−", label: "Variable commission", amount: -pnl.commission },
+                    { ref: "−", label: L.salesPay, amount: -pnl.commission },
                   ],
                   total: naiveNet,
                 }}
               />
             </b>
-            <em>Reports ₦418,412 while business is losing money</em>
+            <em>Sales {m(pnl.revenue)} − sales pay {m(pnl.commission)}</em>
           </div>
           <div className="hl-stat">
-            <span>Core actual (Rev − COGS − Comm − Ads)</span>
+            <span>{L.afterProductAndAds}</span>
             <b className={coreActual < 0 ? "bad" : "ok"}>
               <Fig
                 amount={coreActual}
                 sign
                 drill={{
-                  title: "Core Actual (Revenue − COGS − Commission − Ad Spend)",
-                  subtitle: "The exact 4-line founder reality check",
+                  title: L.afterProductAndAds,
+                  subtitle: "Sales minus product cost, sales pay and ad spend",
                   lines: [
                     { ref: "+", label: "Delivered revenue", amount: pnl.revenue },
-                    { ref: "−", label: "Cost of goods", amount: -pnl.cogs },
-                    { ref: "−", label: "Commission", amount: -pnl.commission },
-                    { ref: "−", label: "Ad spend", amount: -pnl.adSpend },
+                    { ref: "−", label: L.productCost, amount: -pnl.cogs },
+                    { ref: "−", label: L.salesPay, amount: -pnl.commission },
+                    { ref: "−", label: L.adSpend, amount: -pnl.adSpend },
                   ],
                   total: coreActual,
                 }}
               />
             </b>
-            <em>₦447.5k − ₦222.5k − ₦29.1k − ₦281k</em>
+            <em>{m(pnl.revenue, { compact: true })} − {m(pnl.cogs, { compact: true })} − {m(pnl.commission, { compact: true })} − {m(pnl.adSpend, { compact: true })}</em>
           </div>
           <div className="hl-stat">
-            <span>Full operating net (incl. base &amp; courier)</span>
+            <span>{L.realProfit}</span>
             <b className={pnl.actual < 0 ? "bad" : "ok"}>
               <Fig amount={pnl.actual} sign drill={pnl.drills.actual} />
             </b>
-            <em>After weekly base &amp; ₦3,500 courier legs</em>
+            <em>After fixed salaries and delivery fees too</em>
           </div>
           <div className="hl-stat">
-            <span>Total payroll % (Base + Comm)</span>
+            <span>{L.payAsPctOfSales}</span>
             <b className={pnl.payoutRatio > targetRatio ? "bad" : "ok"}>{pct(pnl.payoutRatio)}</b>
             <em>
-              Commission only: {pct(pnl.commissionRatio)} (target &le; {pct(TARGETS.commissionRatio, 0)})
+              Sales pay alone: {pct(pnl.commissionRatio)} (aim for {pct(TARGETS.commissionRatio, 0)} or less)
             </em>
           </div>
         </div>
@@ -145,14 +147,14 @@ export function FounderView() {
         </Tile>
         <Tile
           label="Cash still with courier"
-          note={courierCash.total > 0 ? "Delivered on paper, not in bank" : "All delivered cash remitted"}
+          note={courierCash.total > 0 ? "Delivered, but the cash isn't in the bank yet" : "All delivered cash received"}
           tone={courierCash.total > 0 ? "warn" : "pos"}
         >
           <Fig amount={courierCash.total} drill={courierCash} />
         </Tile>
         <Tile
           label="Paid on undelivered orders"
-          note={undelivered.total > 0 ? "Money out before goods land" : "Zero pre-delivery leakage"}
+          note={undelivered.total > 0 ? "Sales pay going out before the order arrives" : "No sales pay going out before delivery"}
           tone={undelivered.total > 0 ? "neg" : "pos"}
         >
           <Fig amount={undelivered.total} drill={undelivered} />
@@ -160,15 +162,15 @@ export function FounderView() {
         <Tile
           label={
             data.rules.onReturn === "offset"
-              ? "Scheduled next-cycle offsets"
-              : "Commission kept on returns"
+              ? L.payTakenBackNextWeek
+              : L.payKeptOnReturns
           }
           note={
             data.rules.onReturn === "offset"
-              ? "Deducted from next week's payout"
+              ? "Comes off next week's payout"
               : absorbed.total > 0
-                ? "Absorbed by business on returns"
-                : "Clawback protecting margin"
+                ? "Staff keep it, the business takes the loss"
+                : "Pay taken back protects your margin"
           }
           tone={absorbed.total > 0 ? "neg" : deferred.total < 0 ? "warn" : "pos"}
         >
@@ -190,7 +192,7 @@ export function FounderView() {
       <div className="grid-2">
         {/* True P&L Waterfall */}
         <Card
-          title={`True Operating P&L Waterfall · ${open.id}`}
+          title={`Where the money went · ${open.id}`}
           sub="Click any row to inspect the exact orders, SKUs, campaigns, or staff lines behind the figure."
           flush
         >
@@ -218,8 +220,8 @@ export function FounderView() {
 
             <div className="wf-row is-total">
               <div className="lbl">
-                <span>= Actual Operating Net</span>
-                <small>After COGS, payroll, ads &amp; courier</small>
+                <span>{P.actual.label}</span>
+                <small>{P.actual.sub}</small>
               </div>
               <div className="wf-track">
                 <div
@@ -237,7 +239,7 @@ export function FounderView() {
           <div className="meter">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
-                Total Payroll (Base + Variable) vs Delivered Revenue
+                {L.payAsPctOfSales} (fixed salary + sales pay vs delivered revenue)
               </span>
               <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>
                 {pct(pnl.payoutRatio)} <span className="muted" style={{ fontSize: 11.5 }}>(target &le; {pct(targetRatio, 0)})</span>
@@ -250,7 +252,7 @@ export function FounderView() {
                   width: `${Math.min(100, ((pnl.revenue > 0 ? Math.max(0, pnl.commission) / pnl.revenue : 0) / scaleMax) * 100)}%`,
                   background: "var(--yellow)",
                 }}
-                title="Variable commission"
+                title={L.salesPay}
               />
               <div
                 className="meter-seg"
@@ -258,7 +260,7 @@ export function FounderView() {
                   width: `${Math.min(100, ((pnl.revenue > 0 ? pnl.base / pnl.revenue : 0) / scaleMax) * 100)}%`,
                   background: "var(--pos-fill)",
                 }}
-                title="Fixed base pay"
+                title={L.fixedSalary}
               />
               <div
                 className="meter-mark"
@@ -274,11 +276,11 @@ export function FounderView() {
             <div className="legend">
               <span>
                 <i style={{ background: "var(--yellow)" }} />
-                Variable commission (<Fig amount={pnl.commission} drill={pnl.drills.commission} />)
+                {L.salesPay} (<Fig amount={pnl.commission} drill={pnl.drills.commission} />)
               </span>
               <span>
                 <i style={{ background: "var(--pos-fill)" }} />
-                Weekly base (<Fig amount={pnl.base} drill={pnl.drills.base} />)
+                {L.fixedSalary} (<Fig amount={pnl.base} drill={pnl.drills.base} />)
               </span>
             </div>
           </div>

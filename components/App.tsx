@@ -398,10 +398,10 @@ export function App() {
                 Viewing as {activePerson.name} · {activePerson.title}
               </div>
               <h1>
-                {role === "founder" && "Executive P&L, Payout Governance & Cycle Control"}
+                {role === "founder" && "Real Profit, Pay Rules & Weekly Close"}
                 {role === "closer" && "Closer Phone Console & Personal Earnings"}
-                {role === "buyer" && "Media Buyer Attribution & Delivered ROAS"}
-                {role === "lead" && "Sales Team Lead Override & Quality Scorecard"}
+                {role === "buyer" && "Media Buyer Results & Sales per ₦1 of Ads"}
+                {role === "lead" && "Sales Team Lead Bonus & Quality Scorecard"}
                 {role === "stock" && "Warehouse Stock Book, Reservations & PO Loop"}
               </h1>
               <p>
@@ -431,16 +431,16 @@ export function App() {
               <div className="guide">
                 <ol>
                   <li>
-                    <b>The P&amp;L Illusion (Founder tab):</b> Notice how variable commission is a healthy 6.2%, yet the company is losing money once COGS, Meta ad spend, pro-rated base salaries, and ₦3,500 courier legs are deducted. Click any number in the waterfall to audit the orders behind it.
+                    <b>The sales-report illusion (Founder tab):</b> Sales pay looks healthy at 6.5% of sales, yet the company is losing money once product cost, Meta ad spend, fixed salaries and ₦3,500 delivery fees are taken off. Click any number to see the orders behind it.
                   </li>
                   <li>
                     <b>Permissions &amp; Audit Stamps:</b> Switch to <b>Amaka (Closer)</b> or <b>Dayo (Inventory)</b> in the sidebar. The rules strip locks with a founder audit stamp, and Amaka cannot mark her own orders delivered.
                   </li>
                   <li>
-                    <b>Realistic Lead-Credit Comparison:</b> On the Founder tab, switch <b>Credit a sale on</b> from <i>Delivery (6.5%)</i> to <i>Lead (2.75%)</i>. Even at less than half the commission rate, paying on leads pays out on unconfirmed and failed orders. Now try <i>Cash in</i> to withhold commission on orders #1047 and #1050 until the courier remits the COD cash.
+                    <b>Realistic Lead-Credit Comparison:</b> On the Founder tab, switch <b>Pay staff when...</b> from <i>Delivery (6.5%)</i> to <i>Lead (2.75%)</i>. Even at less than half the rate, paying on leads pays out on orders that never arrive. Now try <i>Cash in</i> to hold back sales pay on orders #1047 and #1050 until the courier hands over the cash.
                   </li>
                   <li>
-                    <b>Post-Close Return Clawback vs Offset:</b> In the Order Ledger, click the <b>Paid in W42/W43</b> filter and process a return on <b>Order #1033</b> (paid in W43). Toggle the return rule between <i>Claw back</i>, <i>Offset next cycle</i>, and <i>Absorb</i> — then try returning <b>Order #1024</b> from locked cycle W42.
+                    <b>Pay taken back after a week closes:</b> In the Order Ledger, click the <b>Paid in W42/W43</b> filter and process a return on <b>Order #1033</b> (paid in W43). Toggle <b>Pay taken back</b> between <i>Take back now</i>, <i>Take back next week</i>, and <i>Business absorbs</i> — then try returning <b>Order #1024</b> from locked cycle W42.
                   </li>
                   <li>
                     <b>Discount Guardrail &amp; Split Credit:</b> Inspect <b>Order #1049</b> (15% discount past the 10% floor halves Amaka&apos;s rate) and <b>Order #1053</b> (opened by Amaka, closed by Chidi — toggle <i>First touch · Last touch · 50-50</i>).

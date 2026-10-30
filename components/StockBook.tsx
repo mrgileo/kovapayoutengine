@@ -275,7 +275,7 @@ export function StockBook() {
 
       <Card
         title="SKU Unit Economics & Return Bleed"
-        sub="Which products actually make money after COGS, courier legs, damaged write-offs, and sales commissions?"
+        sub="Which products actually make money after product cost, delivery fees, damaged stock and sales pay?"
         flush
       >
         <div className="tbl-wrap">
@@ -287,9 +287,9 @@ export function StockBook() {
                 <th className="r">Landed qty</th>
                 <th className="r">Return rate</th>
                 <th className="r">Delivered rev.</th>
-                <th className="r">Unit COGS</th>
-                <th className="r">Courier &amp; write-offs</th>
-                <th className="r">Commission</th>
+                <th className="r">Product cost</th>
+                <th className="r">Delivery fees &amp; damaged stock</th>
+                <th className="r">Sales pay</th>
                 <th className="r">Net SKU profit</th>
               </tr>
             </thead>

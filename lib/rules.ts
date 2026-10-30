@@ -1,5 +1,6 @@
 import type { Rules, RuleKey } from "./types.ts";
 import { RATES, totalRate } from "./engine.ts";
+import { RULE_TEXT as T } from "./labels.ts";
 
 export interface RuleOption {
   value: Rules[RuleKey];
@@ -17,87 +18,69 @@ const pc = (n: number) => (n * 100).toFixed(2).replace(/0$/, "").replace(/\.0$/,
 export const RULE_DEFS: RuleDef[] = [
   {
     key: "creditOn",
-    label: "Credit a sale on",
+    label: T.creditOn.label,
     options: [
-      { value: "lead", label: "Lead" },
-      { value: "delivered", label: "Delivery" },
-      { value: "cash", label: "Cash in" },
+      { value: "lead", label: T.creditOn.options.lead },
+      { value: "delivered", label: T.creditOn.options.delivered },
+      { value: "cash", label: T.creditOn.options.cash },
     ],
     explain: (r) =>
       r.creditOn === "lead"
-        ? `Every order earns ${pc(totalRate("lead"))} the moment it exists, delivered or not. Cheaper per order, paid on far more of them.`
+        ? T.creditOn.explain.lead(pc(totalRate("lead")))
         : r.creditOn === "delivered"
-          ? `${pc(totalRate("delivered"))} once the courier marks it delivered. Closer ${pc(RATES.delivered.closer)} · buyer ${pc(RATES.delivered.buyer)} · lead ${pc(RATES.delivered.lead)}.`
-          : `${pc(totalRate("cash"))} only once the courier has remitted the cash. Nothing is paid on money still on a bike in Ikeja.`,
+          ? T.creditOn.explain.delivered(pc(totalRate("delivered")), pc(RATES.delivered.closer), pc(RATES.delivered.buyer), pc(RATES.delivered.lead))
+          : T.creditOn.explain.cash(pc(totalRate("cash"))),
   },
   {
     key: "onReturn",
-    label: "When a paid order comes back",
+    label: T.onReturn.label,
     options: [
-      { value: "clawback", label: "Claw back" },
-      { value: "offset", label: "Offset next cycle" },
-      { value: "absorb", label: "Absorb" },
+      { value: "clawback", label: T.onReturn.options.clawback },
+      { value: "offset", label: T.onReturn.options.offset },
+      { value: "absorb", label: T.onReturn.options.absorb },
     ],
-    explain: (r) =>
-      r.onReturn === "clawback"
-        ? "Commission already paid is deducted from this cycle's payout. Unpaid accruals simply reverse."
-        : r.onReturn === "offset"
-          ? "Commission already paid is recovered from next cycle's payout, so nobody gets a surprise this week."
-          : "Commission stays paid. The business carries the loss, and the incentive to over-promise stays intact.",
+    explain: (r) => T.onReturn.explain[r.onReturn],
   },
   {
     key: "split",
-    label: "Two closers, one order",
+    label: T.split.label,
     options: [
-      { value: "first", label: "First touch" },
-      { value: "last", label: "Last touch" },
-      { value: "half", label: "50-50" },
+      { value: "first", label: T.split.options.first },
+      { value: "last", label: T.split.options.last },
+      { value: "half", label: T.split.options.half },
     ],
-    explain: (r) =>
-      r.split === "first"
-        ? "Whoever opened the conversation gets the closer commission."
-        : r.split === "last"
-          ? "Whoever closed the sale gets the closer commission."
-          : "Closer commission is split evenly between opener and closer.",
+    explain: (r) => T.split.explain[r.split],
   },
   {
     key: "discountFloor",
-    label: "Discount floor",
+    label: T.discountFloor.label,
     options: [
-      { value: 0.05, label: "5%" },
-      { value: 0.1, label: "10%" },
-      { value: 0.15, label: "15%" },
+      { value: 0.05, label: T.discountFloor.options["0.05"] },
+      { value: 0.1, label: T.discountFloor.options["0.1"] },
+      { value: 0.15, label: T.discountFloor.options["0.15"] },
     ],
-    explain: (r) =>
-      `Commission is always on the discounted price. Discount more than ${Math.round(r.discountFloor * 100)}% and the closer's rate halves on that order.`,
+    explain: (r) => T.discountFloor.explain(Math.round(r.discountFloor * 100)),
   },
   {
     key: "returnCap",
-    label: "Return-rate quality gate",
+    label: T.returnCap.label,
     options: [
-      { value: 1, label: "Off" },
-      { value: 0.3, label: "30% cap" },
-      { value: 0.2, label: "20% cap" },
+      { value: 1, label: T.returnCap.options["1"] },
+      { value: 0.3, label: T.returnCap.options["0.3"] },
+      { value: 0.2, label: T.returnCap.options["0.2"] },
     ],
-    explain: (r) =>
-      r.returnCap >= 1
-        ? "No return-rate penalty. Closers keep full rate even when 35%+ of their deliveries bounce."
-        : `If a closer's return rate exceeds ${Math.round(r.returnCap * 100)}%, their commission halves on the cycle — curing over-promising on the phone.`,
+    explain: (r) => (r.returnCap >= 1 ? T.returnCap.explain.off : T.returnCap.explain.on(Math.round(r.returnCap * 100))),
   },
   {
     key: "payModel",
-    label: "Pay structure",
+    label: T.payModel.label,
     options: [
-      { value: "commission", label: "Commission only" },
-      { value: "base_plus", label: "Base + variable" },
+      { value: "commission", label: T.payModel.options.commission },
+      { value: "base_plus", label: T.payModel.options.base_plus },
     ],
-    explain: (r) =>
-      r.payModel === "base_plus"
-        ? "Monthly base for closers, buyers and the lead, pro-rated weekly, plus commission on top."
-        : "Pure commission. Cheap on a bad week, and it pays people to chase volume over quality.",
+    explain: (r) => T.payModel.explain[r.payModel],
   },
 ];
 
 export const ruleOptionLabel = (key: RuleKey, value: Rules[RuleKey]) =>
   RULE_DEFS.find((d) => d.key === key)?.options.find((o) => o.value === value)?.label ?? String(value);
-

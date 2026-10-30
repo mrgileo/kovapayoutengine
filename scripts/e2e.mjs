@@ -244,7 +244,7 @@ try {
   `);
   await sleep(150);
   const retConsequence = await evaluate(`return document.querySelector(".dialog .calc .tot")?.innerText;`);
-  assert.ok(retConsequence.includes("clawed back"), `Return dialog should show clawback consequence: ${retConsequence}`);
+  assert.ok(retConsequence.includes("taken back"), `Return dialog should show pay-taken-back consequence: ${retConsequence}`);
   await evaluate(`
     const confirmRet = Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Confirm return"));
     confirmRet.click();

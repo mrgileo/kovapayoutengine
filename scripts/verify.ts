@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { buildSeed } from "../lib/seed.ts";
+import { L, PNL_TEXT, RULE_TEXT, PAY_LINE_TEXT } from "../lib/labels.ts";
+import { RULE_DEFS } from "../lib/rules.ts";
 import {
   actionsFor,
+  campaignStats,
+  skuEconomics,
   canEditRules,
   closeCycle,
   DELIVERY_FEE,
@@ -137,5 +141,31 @@ const sLead = structuredClone(s);
 sLead.rules.creditOn = "lead";
 assert.equal(Math.round(paidOnUndelivered(sLead).total), 31404, "Paid on undelivered under Lead should be ₦31,404");
 
-console.log("ALL 15 ENGINE INVARIANTS PASSED.");
+// 16. Plain language: none of the old accounting terms reach the screen via labels, rules or drills
+const OLD_TERMS = /COGS|cost of goods|naive|core actual|full operating|variable commission|fixed base|base pay|override|ROAS|clawback|claw back|clawed|write-off|courier leg|payout ratio|credit a sale|refund.*(staff|commission)/i;
+const flatten = (v: unknown): string[] =>
+  typeof v === "string" ? [v] : typeof v === "function" ? [] : v && typeof v === "object" ? Object.values(v).flatMap(flatten) : [];
+const drillText = (d: { title: string; subtitle?: string; lines: { ref: string; label: string; detail?: string }[] }) =>
+  [d.title, d.subtitle ?? "", ...d.lines.flatMap((l) => [l.ref, l.label, l.detail ?? ""])];
+const pnlNow = computePnl(s);
+const screenText = [
+  ...flatten(L),
+  ...flatten(PNL_TEXT),
+  ...flatten(RULE_TEXT),
+  ...flatten(PAY_LINE_TEXT),
+  PNL_TEXT.revenue.sub("W44"),
+  L.headline("6.5%"),
+  L.deliveryFeeNote(3500),
+  ...RULE_DEFS.flatMap((d) => [d.label, ...d.options.map((o) => o.label), d.explain(s.rules)]),
+  ...Object.values(pnlNow.drills).flatMap(drillText),
+  ...["tobi", "zainab"].flatMap((b) => drillText(campaignStats(s, b).marginDrill)),
+  ...skuEconomics(s).flatMap((e) => drillText(e.drill)),
+  ...closerStats(s, "amaka").contributionDrill.lines.flatMap((l) => [l.label, l.detail ?? ""]),
+  ...openLines(s).map((l) => l.note),
+];
+for (const text of screenText) assert.equal(OLD_TERMS.test(text), false, "Old accounting term on screen: " + text);
+assert.equal(L.realProfit, "Real profit");
+assert.equal(`${L.payTakenBack}|${L.refunds}`, "Pay taken back|Refunds", "Pay taken back (staff) and Refunds (customers) stay separate terms");
+
+console.log("ALL 16 ENGINE INVARIANTS PASSED.");
 
