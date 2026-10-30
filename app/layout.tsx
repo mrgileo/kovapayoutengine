@@ -14,32 +14,24 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  colorScheme: "light dark",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f8f8f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#070709" },
-  ],
+  colorScheme: "light",
+  themeColor: "#f8f8f5",
 };
 
 const foucScript = `
+var scheme = "light";
 try {
-  var saved = localStorage.getItem("kova-color-scheme");
-  var meta = document.querySelector('meta[name="color-scheme"]');
-  if (saved === "light" || saved === "dark") {
-    if (meta) meta.setAttribute("content", saved);
-    document.documentElement.dataset.theme = saved;
-  } else {
-    if (meta) meta.setAttribute("content", "light dark");
-    delete document.documentElement.dataset.theme;
-  }
+  if (localStorage.getItem("kova-color-scheme") === "dark") scheme = "dark";
 } catch (e) {}
+document.querySelectorAll('meta[name="color-scheme"]').forEach(function (m) { m.setAttribute("content", scheme); });
+document.documentElement.dataset.theme = scheme;
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
-        <meta name="color-scheme" content="light dark" />
+        <meta name="color-scheme" content="light" />
         <script dangerouslySetInnerHTML={{ __html: foucScript }} />
       </head>
       <body suppressHydrationWarning>{children}</body>

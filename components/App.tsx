@@ -27,32 +27,24 @@ const ROLE_ORDER: Role[] = ["founder", "closer", "buyer", "lead", "stock"];
 const SCHEME_KEY = "kova-color-scheme";
 const SIDE_KEY = "kova-side-collapsed";
 
-export type ThemeChoice = "light" | "dark" | "system";
+/** Light by default. The browser's own light/dark setting is deliberately ignored; only an explicit toggle saves a choice. */
+export type ThemeChoice = "light" | "dark";
 
-function applyScheme(choice: ThemeChoice) {
+function applyScheme(choice: ThemeChoice, save: boolean) {
   if (typeof document === "undefined") return;
-  const meta = document.querySelector('meta[name="color-scheme"]');
-  if (choice === "light" || choice === "dark") {
-    meta?.setAttribute("content", choice);
-    document.documentElement.dataset.theme = choice;
-    try {
-      window.localStorage?.setItem?.(SCHEME_KEY, choice);
-    } catch {}
-  } else {
-    meta?.setAttribute("content", "light dark");
-    delete document.documentElement.dataset.theme;
-    try {
-      window.localStorage?.removeItem?.(SCHEME_KEY);
-    } catch {}
-  }
+  document.querySelectorAll('meta[name="color-scheme"]').forEach((m) => m.setAttribute("content", choice));
+  document.documentElement.dataset.theme = choice;
+  if (!save) return;
+  try {
+    window.localStorage?.setItem?.(SCHEME_KEY, choice);
+  } catch {}
 }
 
 export function App() {
   const [hydrated, setHydrated] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [sideCollapsed, setSideCollapsed] = useState(false);
-  const [themeChoice, setThemeChoice] = useState<ThemeChoice>("system");
-  const [systemDark, setSystemDark] = useState(true);
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>("light");
   const data = useData();
   const role = useStore((s) => s.role);
   const ccy = useStore((s) => s.ccy);
@@ -69,36 +61,22 @@ export function App() {
     setHydrated(true);
     try {
       const saved = window.localStorage?.getItem?.(SCHEME_KEY);
-      if (saved === "light" || saved === "dark") {
-        setThemeChoice(saved);
-        applyScheme(saved);
-      } else {
-        setThemeChoice("system");
-        applyScheme("system");
-      }
+      const initial: ThemeChoice = saved === "dark" ? "dark" : "light";
+      setThemeChoice(initial);
+      applyScheme(initial, false);
       const savedSide = window.localStorage?.getItem?.(SIDE_KEY);
       if (savedSide === "1") setSideCollapsed(true);
     } catch {}
 
-    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (mql) {
-      setSystemDark(mql.matches);
-      const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-      mql.addEventListener("change", onChange);
-
-      const onStorage = (e: StorageEvent) => {
-        if (e.key === SCHEME_KEY) {
-          const val = e.newValue === "light" || e.newValue === "dark" ? e.newValue : "system";
-          setThemeChoice(val);
-          applyScheme(val);
-        }
-      };
-      window.addEventListener("storage", onStorage);
-      return () => {
-        mql.removeEventListener("change", onChange);
-        window.removeEventListener("storage", onStorage);
-      };
-    }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === SCHEME_KEY) {
+        const val: ThemeChoice = e.newValue === "dark" ? "dark" : "light";
+        setThemeChoice(val);
+        applyScheme(val, false);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   function toggleSidebar() {
@@ -130,20 +108,15 @@ export function App() {
     return <div className="skeleton">Loading Kova Payout &amp; Operations Engine…</div>;
   }
 
-  const resolvedScheme: "light" | "dark" =
-    themeChoice === "system" ? (systemDark ? "dark" : "light") : themeChoice;
+  const resolvedScheme: ThemeChoice = themeChoice;
 
   function toggleTheme() {
-    const target: "light" | "dark" = resolvedScheme === "dark" ? "light" : "dark";
-    const sysScheme: "light" | "dark" = systemDark ? "dark" : "light";
-    const nextChoice: ThemeChoice = target === sysScheme ? "system" : target;
-    setThemeChoice(nextChoice);
-    applyScheme(nextChoice);
+    selectThemeExplicit(resolvedScheme === "dark" ? "light" : "dark");
   }
 
   function selectThemeExplicit(choice: ThemeChoice) {
     setThemeChoice(choice);
-    applyScheme(choice);
+    applyScheme(choice, true);
   }
 
   const open = openCycle(data);
@@ -361,7 +334,7 @@ export function App() {
               type="button"
               className="theme-toggle"
               onClick={toggleTheme}
-              title={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} mode (current: ${themeChoice === "system" ? `System · ${resolvedScheme}` : themeChoice})`}
+              title={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} mode (current: ${themeChoice})`}
               aria-label={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} theme`}
             >
               {resolvedScheme === "dark" ? (
@@ -485,7 +458,6 @@ export function App() {
         onClose={() => setCmdOpen(false)}
         onSwitchRole={switchRoleWithTransition}
         themeChoice={themeChoice}
-        systemDark={systemDark}
         onSelectTheme={selectThemeExplicit}
       />
       <ToastTray />

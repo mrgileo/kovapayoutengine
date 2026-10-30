@@ -350,16 +350,14 @@ export function CommandPalette({
   open,
   onClose,
   onSwitchRole,
-  themeChoice = "system",
-  systemDark = true,
+  themeChoice = "light",
   onSelectTheme,
 }: {
   open: boolean;
   onClose: () => void;
   onSwitchRole: (r: Role) => void;
-  themeChoice?: "light" | "dark" | "system";
-  systemDark?: boolean;
-  onSelectTheme?: (choice: "light" | "dark" | "system") => void;
+  themeChoice?: "light" | "dark";
+  onSelectTheme?: (choice: "light" | "dark") => void;
 }) {
   const data = useData();
   const role = useStore((s) => s.role);
@@ -403,14 +401,6 @@ export function CommandPalette({
             tag: themeChoice === "dark" ? "Active" : "Theme",
             run: () => {
               onSelectTheme("dark");
-              onClose();
-            },
-          },
-          {
-            label: `Theme: System (Currently ${systemDark ? "dark" : "light"})`,
-            tag: themeChoice === "system" ? "Active" : "Theme",
-            run: () => {
-              onSelectTheme("system");
               onClose();
             },
           },

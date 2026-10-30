@@ -107,6 +107,44 @@ try {
   const debugHtml = await evaluate(`return { url: location.href, title: document.title, text: document.body?.innerText?.slice(0, 300) };`);
   console.log("Page state:", debugHtml, "Errors:", errors);
 
+  // 0. Light by default even when the browser prefers dark; the toggle works and only saves on an explicit click
+  await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
+  await evaluate(`localStorage.removeItem("kova-color-scheme");`);
+  await send("Page.reload");
+  for (let i = 0; i < 40 && !(await evaluate(`return Boolean(document.querySelector(".theme-toggle"));`)); i++) await sleep(250);
+  const theme0 = await evaluate(`
+    return {
+      theme: document.documentElement.dataset.theme,
+      saved: localStorage.getItem("kova-color-scheme"),
+      bg: getComputedStyle(document.body).backgroundColor,
+      scheme: getComputedStyle(document.documentElement).colorScheme,
+    };
+  `);
+  const lum = (css) => css.match(/\d+/g).slice(0, 3).map(Number).reduce((a, b) => a + b, 0) / 3;
+  assert.equal(theme0.theme, "light", "Must start light when the browser prefers dark");
+  assert.equal(theme0.saved, null, "Default theme must not be saved as a user choice");
+  assert.equal(theme0.scheme, "light");
+  assert.ok(lum(theme0.bg) > 200, "Page background should be light, got " + theme0.bg);
+  await evaluate(`document.querySelector(".theme-toggle").click();`);
+  await sleep(300);
+  const theme1 = await evaluate(`return { theme: document.documentElement.dataset.theme, saved: localStorage.getItem("kova-color-scheme"), bg: getComputedStyle(document.body).backgroundColor, cs: getComputedStyle(document.documentElement).colorScheme, bgVar: getComputedStyle(document.documentElement).getPropertyValue("--bg"), metas: Array.from(document.querySelectorAll("meta[name=color-scheme]")).map(m => m.content) };`);
+  assert.equal(theme1.theme, "dark", "Toggle switches to dark");
+  assert.equal(theme1.saved, "dark", "Explicit choice is saved");
+  assert.equal(theme1.cs, "dark", "Computed color-scheme switches to dark");
+  // Compare the resolved --bg token, not the painted pixel: the body has a 220ms colour transition that headless Chrome can leave mid-fade.
+  const hex = theme1.bgVar.trim().replace("#", "");
+  const lumHex = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)).reduce((x, y) => x + y, 0) / 3;
+  assert.ok(lumHex < 40, "Dark --bg token should be dark, got " + theme1.bgVar);
+  await send("Page.reload");
+  for (let i = 0; i < 40 && !(await evaluate(`return Boolean(document.querySelector(".theme-toggle"));`)); i++) await sleep(250);
+  const theme2 = await evaluate(`return document.documentElement.dataset.theme;`);
+  assert.equal(theme2, "dark", "Saved dark choice survives a reload");
+  await evaluate(`document.querySelector(".theme-toggle").click();`);
+  await sleep(200);
+  await evaluate(`localStorage.removeItem("kova-color-scheme");`);
+  await send("Emulation.setEmulatedMedia", { features: [] });
+  console.log("✓ [0] Light by default despite a dark browser preference; toggle works; only an explicit click saves");
+
   // 1. Founder view & P&L headline
   const headlineText = await evaluate(`return document.querySelector(".headline h2")?.innerText;`);
   assert.ok(headlineText && headlineText.includes("losing"), `Headline should show loss: ${headlineText}`);

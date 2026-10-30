@@ -9,13 +9,12 @@
 
 :root {
   /* MANDATORY (modern-web-guidance: dark-mode): viewport-wide color-scheme */
-  color-scheme: light dark;
+  color-scheme: light;
 
-  &:has(> head > meta[name="color-scheme"][content="dark"]),
+  /* data-theme is the single switch; <meta name=color-scheme> only tells the browser chrome. */
   &[data-theme="dark"] {
     color-scheme: dark;
   }
-  &:has(> head > meta[name="color-scheme"][content="light"]),
   &[data-theme="light"] {
     color-scheme: light;
   }
@@ -135,7 +134,7 @@
   --shadow-lg: 0 24px 60px -12px rgba(9, 9, 11, 0.24), 0 0 0 1px rgba(9, 9, 11, 0.08);
 
   /* MANDATORY: Fallback for browsers without light-dark() support */
-  @media (prefers-color-scheme: dark) {
+  &[data-theme="dark"] {
     --bg: var(--bg-dark);
     --bg-2: var(--bg-2-dark);
     --surface: var(--surface-dark);

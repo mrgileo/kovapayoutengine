@@ -22,9 +22,9 @@ The Kova Payout Engine is a client-persisted Next.js 15 + React 19 + TypeScript 
 >
 > **• 60-Second CEO Tour Card:** Clicking **60-sec CEO tour** in the page header (or **CEO demo walkthrough** in the sidebar) opens an interactive 6-step executive walkthrough explaining the exact moments to test during a live demonstration.
 
-## **1.2 Adaptive Light & Dark Mode Design System**
+## **1.2 Light-by-Default Theme (Light & Dark)**
 
-The interface is built around a high-contrast **Yellow + Carbon Black + Crisp White** palette that supports both **Light Mode** and **Dark Mode** (via \<meta name="color-scheme" content="light dark"\> and CSS light-dark() tokens, persisted in localStorage under kova-color-scheme):
+The interface is built around a high-contrast **Yellow + Carbon Black + Crisp White** palette that supports both **Light Mode** and **Dark Mode** (switched by one `data-theme` attribute on the page root, with CSS light-dark() tokens). **The app opens in Light Mode by default and never follows the browser or operating-system setting.** The toggle in the top bar (or the command palette) switches to Dark Mode, and only that explicit choice is saved in localStorage under kova-color-scheme:
 
 | **Semantic Token**                       | **Dark Mode Value**                         | **Light Mode Value**                            | **Where It Is Used**                                                                                      |
 |------------------------------------------|---------------------------------------------|-------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
@@ -252,7 +252,7 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 >
 > **• 3. Live Lead Intake Modal (\`NewOrderDialog\`):** Opens when clicking **+ New lead** in the Order Ledger or Command Palette. Allows creating a live order with custom Customer name, Delivery city (Lagos, Abuja, Port Harcourt, Ibadan, Enugu, Kano), Product SKU, Quantity (1–3), Opened by (First touch), Closed by (Last touch), and Media buyer, while previewing warehouse availability and total commission pool.
 >
-> **• 4. Quick Command Palette (\`CommandPalette\` — \`⌘K\` / \`Ctrl+K\`):** Keyboard-driven spotlight modal with instant search filter to switch themes (Light, Dark, System), jump to any role persona, create a new lead, toggle any founder rule, close the active payout cycle, or reset demo state.
+> **• 4. Quick Command Palette (\`CommandPalette\` — \`⌘K\` / \`Ctrl+K\`):** Keyboard-driven spotlight modal with instant search filter to switch themes (Light, Dark), jump to any role persona, create a new lead, toggle any founder rule, close the active payout cycle, or reset demo state.
 >
 > **• 5. Immutable Audit & Event Log (\`AuditLogCard\`) & Toast Tray (\`ToastTray\`):** Every state mutation appends a timestamped entry to the Audit Log with the actor's avatar, role, cycle ID, description, and signed P&L/payout delta pills (Actual net: −₦14,622, Team payout: +₦14,622), while firing a color-coded toast notification (ok dark green, warn yellow, err light red) in the bottom-right corner.
 
@@ -260,7 +260,7 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 
 | **File Path**                  | **Responsibility**                                                                                                                                            |
 |--------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| app/layout.tsx                 | Next.js RootLayout, Geist Sans & Mono fonts, \<meta name="color-scheme" content="light dark"\>, and FOUC prevention script.                                   |
+| app/layout.tsx                 | Next.js RootLayout, Geist Sans & Mono fonts, \<meta name="color-scheme"\> kept in step with the theme, and a FOUC prevention script that defaults to light.                                   |
 | app/globals.css                | Adaptive Light/Dark mode design tokens (light-dark()), fixed collapsible sidebar, spotlight cards, spring segmented controls, and resizable table headers.    |
 | lib/types.ts                   | Strict TypeScript interfaces for Role, Stage, CreditOn, OnReturn, SplitRule, PayModel, Rules, Order, Cycle, PayLine, PurchaseOrder, Drill, and PnL.           |
 | lib/engine.ts                  | Pure, zero-React calculation and mutation engine (computePnl, commissionLines, payslip, whatIf, applyOrderAction, closeCycle, raisePO, receivePO, payoutCsv). |
