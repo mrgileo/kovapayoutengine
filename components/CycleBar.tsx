@@ -24,6 +24,7 @@ const STATUS_TONE = {
 export function CycleBar() {
   const data = useData();
   const role = useStore((s) => s.role);
+  const imported = useStore((s) => s.dataSource) === "imported";
   const closeCycle = useStore((s) => s.closeCycle);
   const markPaid = useStore((s) => s.markPaid);
   const lockCycle = useStore((s) => s.lockCycle);
@@ -70,7 +71,11 @@ export function CycleBar() {
   return (
     <Card
       title="Payout Cycles & Settlement"
-      sub="Accrued → Approved → Paid → Locked. Try returning an order from W43 (paid) vs W42 (locked) in the ledger below to see pay taken back after a week closes."
+      sub={
+        imported
+          ? "Accrued → Approved → Paid → Locked. Try returning an order from a paid week in the ledger below to see pay taken back after a week closes."
+          : "Accrued → Approved → Paid → Locked. Try returning an order from W43 (paid) vs W42 (locked) in the ledger below to see pay taken back after a week closes."
+      }
       actions={
         editable && (
           <button type="button" className="btn primary sm" onClick={closeCycle}>

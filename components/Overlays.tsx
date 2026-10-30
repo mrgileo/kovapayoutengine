@@ -196,7 +196,7 @@ export function NewOrderDialog() {
 
   const [customer, setCustomer] = useState("Chioma Nwankwo");
   const [city, setCity] = useState("Lagos");
-  const [sku, setSku] = useState("AIR-12");
+  const [skuPick, setSku] = useState("AIR-12");
   const [qty, setQty] = useState(1);
   const [openedBy, setOpenedBy] = useState("amaka");
   const [closer, setCloser] = useState("chidi");
@@ -204,8 +204,11 @@ export function NewOrderDialog() {
 
   if (!open) return null;
 
+  // Your own data may not have the demo SKUs or buyers: fall back to the first one that exists.
+  const sku = data.products.some((x) => x.sku === skuPick) ? skuPick : data.products[0].sku;
   const p = productOf(data, sku);
   const sr = stockRow(data, p);
+  const buyers = data.people.filter((x) => x.role === "buyer");
   const totalList = p.price * qty;
   const r = RATES[data.rules.creditOn];
 
@@ -303,8 +306,11 @@ export function NewOrderDialog() {
               onChange={(e) => setBuyer(e.target.value)}
               style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line-strong)", font: "inherit" }}
             >
-              <option value="tobi">Tobi Ade</option>
-              <option value="zainab">Zainab Bello</option>
+              {buyers.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
             </select>
           </label>
         </div>

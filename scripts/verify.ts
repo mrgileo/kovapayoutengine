@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { buildSeed } from "../lib/seed.ts";
+import { TEMPLATES, importData, isoWeekNumber, parseCsv } from "../lib/importer.ts";
 import { L, PNL_TEXT, RULE_TEXT, PAY_LINE_TEXT } from "../lib/labels.ts";
 import { RULE_DEFS } from "../lib/rules.ts";
 import {
@@ -220,5 +221,74 @@ for (const role of ["founder", "closer", "buyer", "lead", "stock"] as const) {
   for (const o of s.orders) assert.equal((actionsFor(s, role, o) as string[]).includes("discount"), false);
 }
 
-console.log("ALL 20 ENGINE INVARIANTS PASSED.");
+// 21. Import: the shipped templates produce a working dashboard through the same engine
+assert.equal(isoWeekNumber("2026-10-26"), 44, "26 Oct 2026 is ISO week 44 (the demo W44)");
+assert.equal(isoWeekNumber("2026-10-12"), 42);
+const imp = importData({ orders: TEMPLATES.orders, adSpend: TEMPLATES.adSpend, products: TEMPLATES.products });
+assert.equal(imp.ok, true, "Templates must import cleanly");
+if (imp.ok) {
+  const st = imp.state;
+  assert.equal(imp.summary.orders, 6);
+  assert.equal(imp.summary.weeks, 2);
+  assert.deepEqual(st.cycles.map((c) => c.id + ":" + c.status), ["W43:paid", "W44:open"]);
+  assert.equal(st.spend.W43.tobi, 75000, "Ad spend is summed into its Monday–Sunday week");
+  assert.equal(st.spend.W44.tobi, 75000);
+  for (const o of st.orders) assert.equal(orderValue(o), o.unitPrice * o.qty);
+  const pnl = computePnl(st);
+  assert.equal(pnl.cycleId, "W44");
+  assert.equal(pnl.revenue, 187000, "Only #3004 is delivered in the open week");
+  assert.equal(pnl.adSpend, 75000);
+  assert.equal(pnl.cogs, 96000);
+  assert.equal(st.people.some((p) => p.id === "zainab"), false, "One imported media buyer");
+  assert.equal(st.audit.some((a) => a.text.includes("Imported 6 orders")), true);
+  assert.equal(payslip(openLines(st), "amaka").gross >= 0, true);
+  assert.equal(stockRows(st).length, 5);
+  assert.equal(imp.summary.adSpendTotal, 150000);
+}
+
+// 22. Import: bad files fail with the line, the column and a plain message (and never throw)
+const HDR = "order_id,date,customer,city,sku,qty,price,stage,closer,campaign\n";
+const bad = importData({
+  orders:
+    HDR +
+    "1,2026-13-40,A,Lagos,AIR-12,1,212000,delivered,amaka,\n" +
+    "1,2026-10-20,B,Lagos,AIR-12,0,212000,delivered,amaka,\n" +
+    "2,2026-10-20,C,Lagos,ZZZ-99,1,5000,teleported,nobody,\n" +
+    "3,2026-10-20,D,Lagos,ZZZ-99,1,abc,delivered,chidi,\n",
+});
+assert.equal(bad.ok, false);
+if (!bad.ok) {
+  const has = (line: number, column: string) => bad.errors.some((e) => e.line === line && e.column === column);
+  assert.equal(has(2, "date"), true, "Impossible date");
+  assert.equal(has(3, "order_id"), true, "Duplicate id");
+  assert.equal(has(3, "qty"), true, "Zero quantity");
+  assert.equal(has(4, "stage"), true, "Unknown stage");
+  assert.equal(has(4, "closer"), true, "Unknown closer");
+  assert.equal(has(5, "price"), true, "Non-numeric price");
+}
+const ROW = HDR + "1,2026-10-20,A,Lagos,ZZZ-99,1,5000,delivered,amaka,\n";
+const noCost = importData({ orders: ROW });
+assert.equal(noCost.ok === false && noCost.errors.some((e) => e.column === "sku" && /no product cost/.test(e.message)), true, "Unknown SKU without a cost is an error");
+assert.equal(importData({ orders: ROW, products: "sku,name,cost,on_hand\nZZZ-99,Widget,2000,4\n" }).ok, true, "A products file supplies the missing cost");
+assert.equal(importData({ orders: "order_id,date\n1,2026-10-20\n" }).ok, false, "Missing columns");
+assert.equal(importData({ orders: "" }).ok, false, "Empty file");
+assert.equal(importData({ orders: "not,a,real\nfile,at,all" }).ok, false);
+const OK_ROW = HDR + "1,2026-10-20,A,Lagos,AIR-12,1,212000,delivered,amaka,\n";
+assert.equal(importData({ orders: OK_ROW, adSpend: "date,amount\n2026-10-20,lots\n" }).ok, false, "Bad ad-spend rows fail too");
+assert.equal(importData({ orders: HDR + "1,2024-01-01,A,Lagos,AIR-12,1,212000,delivered,amaka,\n2,2026-10-20,B,Lagos,AIR-12,1,212000,delivered,amaka,\n" }).ok, false, "Spans over 26 weeks are refused");
+
+// 23. Import: CSV reader handles quotes, commas in names, ₦ and thousands separators, BOM and CRLF
+assert.deepEqual(parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n').map((r) => r.cells), [["a", "b"], ["x, y", 'say "hi"']]);
+const messy = importData({ orders: HDR.replace("\n", "\r\n") + '9,2026-10-20,"Obi, Ada",Lagos,air-12,1,"₦212,000",Delivered,Amaka Obi,"Promo, big"\r\n' });
+assert.equal(messy.ok, true);
+if (messy.ok) {
+  const o = messy.state.orders[0];
+  assert.equal(o.customer, "Obi, Ada");
+  assert.equal(o.unitPrice, 212000);
+  assert.equal(o.sku, "AIR-12");
+  assert.equal(o.closer, "amaka");
+  assert.equal(o.campaign, "Promo, big");
+}
+
+console.log("ALL 23 ENGINE INVARIANTS PASSED.");
 

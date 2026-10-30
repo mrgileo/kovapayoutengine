@@ -103,6 +103,7 @@ To prevent commission fraud (such as a closer marking their own order 'Delivered
 | **Record COD Cash Remitted (\`cashIn = true\`)**       | YES                    | NO                        | NO                     | NO                    | YES                  |
 | **Process Customer Return (\`delivered → returned\`)** | YES                    | NO (Warehouse only)       | NO                     | YES                   | YES                  |
 | **Raise & Receive Purchase Orders (POs)**              | YES                    | NO                        | NO                     | NO                    | YES                  |
+| **Load Your Own Data (CSV) / Back to Demo Data**       | YES                    | NO                        | NO                     | NO                    | NO                   |
 
 # **3. The 5 Pay Rules (Founder Governance Strip)**
 
@@ -165,6 +166,20 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 ## **5.2 One-Click Bank Payout CSV Export**
 
 > **•** Every cycle card (W42, W43, W44) has a **Bank CSV** button that generates and downloads kova-payouts-\<cycleId\>.csv with columns: Cycle, Status, Staff ID, Name, Role, Base (NGN), Sales pay (NGN), Pay taken back (NGN), Prior Carry (NGN), Net Payable (NGN), Carry To Next Cycle (NGN).
+
+## **5.3 Try It With Your Orders (CSV Import)**
+
+> **• Where:** the founder-only **Try it with your orders** button in the sidebar opens the import dialog (`ImportDialog.tsx`). **Your data never leaves this browser:** the files are read on the device, parsed in `lib/importer.ts`, and stored only in this browser's localStorage. Nothing is uploaded.
+>
+> **• Three files (templates can be downloaded from the dialog):** **Orders** (required): `order_id, date, customer, city, sku, qty, price, stage, closer, campaign`. **Ad spend** (optional): `date, amount`. **Products** (optional): `sku, name, cost, on_hand` (plus an optional `price`). A products file is needed for any SKU outside the five demo SKUs, because profit needs a product cost; a SKU with no cost is a clear error rather than a silent zero.
+>
+> **• Rules for the orders file:** dates are `YYYY-MM-DD`; `price` is the price of **one unit** (a leading ₦ and thousands commas are accepted); `qty` is a whole number from 1 to 1,000; `stage` is one of new, confirmed, dispatched, delivered, returned, cancelled or failed; `closer` must match a demo closer (Amaka Obi or Chidi Nwosu, by id, first name or full name). Up to 5,000 rows, 26 weeks and 2 MB per file.
+>
+> **• Validation:** every problem is listed with the file, the line and the column (for example "orders file, line 4, qty: Quantity "0" must be a whole number from 1 to 1000"). Nothing loads until the files are clean, and a bad file can never crash the app. Notes that do not block (unknown columns, a SKU sold at several prices, ad spend outside the order weeks) are shown separately.
+>
+> **• How the numbers are built:** weeks run Monday to Sunday from each order date and are numbered from the ISO week of the first order. The earlier weeks are closed and paid through the same engine as the demo (`closeCycle` → `markPaid`, with all but the latest closed week locked); the **latest week is the open cycle**. Ad spend is summed into its week and credited to one stand-in media buyer (**Imported Ads**, with the demo buyer salary). The team lead, salaries and the five pay rules are the demo's. Delivered and returned orders count in the week of their order date with the cash treated as received, because the file has no delivery dates. Stock on hand comes from the products file; if it is missing it is set to the units in open orders plus a reorder buffer so nothing is blocked.
+>
+> **• While your data is loaded:** a banner says so and repeats that the data never leaves the browser, with **Load different files** and **Back to demo data** buttons (founder only). The demo-only 60-second tour is hidden. **Back to demo data** restores the seed in one click; the sidebar **Reset demo state** does the same.
 
 # **6. Role-by-Role Screen & Component Specifications**
 
@@ -266,8 +281,10 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | lib/engine.ts                  | Pure, zero-React calculation and mutation engine (computePnl, commissionLines, payslip, whatIf, applyOrderAction, closeCycle, raisePO, receivePO, payoutCsv). |
 | components/AdBudget.tsx        | Profit per order, simulated Meta feed label, and each media buyer's ad cost per delivered order against the founder's max.                                |
 | components/PriceBook.tsx       | Company prices per SKU. Founder-editable, closers read-only; a price change only applies to new orders (each order stores its own unit price). |
+| components/ImportDialog.tsx    | Founder-only dialog: template downloads, three file pickers, live validation, summary, and "Show my dashboard". |
 | lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 8) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
 | lib/rules.ts                   | Metadata and dynamic explanations for the 6 payout and operating rules.                                                                                       |
+| lib/importer.ts                | Pure CSV reader, validator and state builder for "Try it with your orders" (templates, line/column errors, weekly cycles replayed through the engine). |
 | lib/store.ts                   | Zustand reactive store with localStorage persistence (kova-payout-engine) and action dispatchers.                                                          |
 | components/App.tsx             | Application shell, fixed collapsible sidebar, WAI-ARIA role tabs, directional View Transitions, top utility bar, and walkthrough guide.                       |
 | components/ui.tsx              | Reusable primitives: \<Fig /\> (number tweening + drill trigger), \<Tile /\>, \<Card /\> (pointer spotlight), \<StagePill /\>, and useTableColumnResize().    |
@@ -280,5 +297,5 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
 | components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray.                                                       |
-| scripts/verify.ts              | Automated 20-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
+| scripts/verify.ts              | Automated 23-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
 | scripts/e2e.mjs                | Automated 10-scenario headless Chrome E2E test suite verifying DOM, 390px mobile layout, modals, and persistence.                                             |

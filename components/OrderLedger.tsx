@@ -28,6 +28,7 @@ export function OrderLedger() {
   const act = useStore((s) => s.act);
   const setReturnFor = useStore((s) => s.setReturnFor);
   const setNewOrderOpen = useStore((s) => s.setNewOrderOpen);
+  const imported = useStore((s) => s.dataSource) === "imported";
   const m = useMoney();
 
   const open = openCycle(data);
@@ -150,7 +151,9 @@ export function OrderLedger() {
       sub={
         role === "closer"
           ? "Designed for a 390px phone screen in Lagos traffic — zero horizontal scroll, clear personal earnings, and strict delivery controls."
-          : "Move orders forward, inspect split-credit (#1053), or return a paid order from W43 (#1033) to see pay taken back."
+          : imported
+            ? "Move orders forward, or return an order from an earlier paid week to see pay taken back."
+            : "Move orders forward, inspect split-credit (#1053), or return a paid order from W43 (#1033) to see pay taken back."
       }
       actions={
         <div className="filters" role="group" aria-label="Filter orders" style={{ alignItems: "center" }}>
@@ -166,7 +169,7 @@ export function OrderLedger() {
           </label>
           {[
             { id: "OPEN", label: `Current (${open.id})`, count: data.orders.filter((o) => o.createdCycle === open.id || o.reversedCycle === open.id).length },
-            { id: "PAID_PRIOR", label: "Paid in W42/W43 (test return)", count: data.orders.filter((o) => o.creditedCycle && o.stage === "delivered").length },
+            { id: "PAID_PRIOR", label: imported ? "Paid in earlier weeks (test return)" : "Paid in W42/W43 (test return)", count: data.orders.filter((o) => o.creditedCycle && o.stage === "delivered").length },
             { id: "SPLIT", label: "Split touch", count: data.orders.filter((o) => o.openedBy !== o.closer).length },
             { id: "ALL", label: "All cycles", count: data.orders.length },
           ].map((f) => (

@@ -7,8 +7,6 @@ import { L } from "@/lib/labels";
 import { useData, useStore } from "@/lib/store";
 import { Avatar, Card, Fig, Tile, useMoney } from "./ui";
 
-const BUYERS = ["tobi", "zainab"];
-
 /** Profit per order, plus each media buyer's ad cost per delivered order against the founder's cap.
  *  Ad spend comes from a simulated feed. Nothing here touches anyone's pay. */
 export function AdBudget() {
@@ -17,6 +15,7 @@ export function AdBudget() {
   const setMax = useStore((s) => s.setMaxCostPerOrder);
   const m = useMoney();
   const open = openCycle(data);
+  const buyers = data.people.filter((p) => p.role === "buyer").map((p) => p.id);
   const editable = canEditRules(role);
   const ppo = profitPerOrder(data);
 
@@ -84,7 +83,7 @@ export function AdBudget() {
             </tr>
           </thead>
           <tbody>
-            {BUYERS.map((id) => {
+            {buyers.map((id) => {
               const c = adCost(data, id);
               const p = personOf(data, id);
               return (

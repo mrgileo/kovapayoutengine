@@ -102,7 +102,7 @@ export function BuyerView() {
               </tr>
             </thead>
             <tbody>
-              {["tobi", "zainab"].map((id) => {
+              {data.people.filter((p) => p.role === "buyer").map((b) => b.id).map((id) => {
                 const p = personOf(data, id);
                 const c = campaignStats(data, id);
                 const ords = data.orders.filter((o) => o.buyer === id && o.createdCycle === open.id);

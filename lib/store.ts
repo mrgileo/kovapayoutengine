@@ -28,6 +28,7 @@ import {
 import { SEED_VERSION, buildSeed } from "./seed";
 import { RULE_DEFS, ruleOptionLabel } from "./rules";
 import { L } from "./labels";
+import type { ImportSummary } from "./importer";
 
 export interface Toast {
   id: number;
@@ -44,6 +45,10 @@ interface Store {
   returnFor: number | null;
   newOrderOpen: boolean;
   guideOpen: boolean;
+  /** Where the numbers come from: the built-in demo, or the user's own CSV files (never uploaded anywhere). */
+  dataSource: "demo" | "imported";
+  importSummary: ImportSummary | null;
+  importOpen: boolean;
 
   setRole: (r: Role) => void;
   setCcy: (c: Currency) => void;
@@ -74,6 +79,9 @@ interface Store {
   raisePO: (sku: string, qty: number) => void;
   receivePO: (poId: string) => void;
   reset: () => void;
+  setImportOpen: (open: boolean) => void;
+  applyImport: (state: DemoState, summary: ImportSummary) => void;
+  backToDemo: () => void;
 }
 
 let toastSeq = 0;
@@ -116,6 +124,9 @@ export const useStore = create<Store>()(
         returnFor: null,
         newOrderOpen: false,
         guideOpen: false,
+        dataSource: "demo",
+        importSummary: null,
+        importOpen: false,
 
         setRole: (role) => set({ role }),
         setCcy: (ccy) => set({ ccy }),
@@ -301,8 +312,31 @@ export const useStore = create<Store>()(
           }
         },
         reset: () => {
-          set({ data: buildSeed(), drill: null, returnFor: null, newOrderOpen: false });
+          set({ data: buildSeed(), dataSource: "demo", importSummary: null, drill: null, returnFor: null, newOrderOpen: false });
           get().toast("ok", "Demo reset to the seed data.");
+        },
+        setImportOpen: (importOpen) => {
+          if (importOpen && !canEditRules(get().role)) {
+            get().toast("err", "Only the founder can load your own data.");
+            return;
+          }
+          set({ importOpen });
+        },
+        applyImport: (state, summary) => {
+          if (!canEditRules(get().role)) {
+            get().toast("err", "Only the founder can load your own data.");
+            return;
+          }
+          set({ data: state, dataSource: "imported", importSummary: summary, importOpen: false, drill: null, returnFor: null, newOrderOpen: false });
+          get().toast("ok", `Loaded ${summary.orders} of your orders across ${summary.weeks} week${summary.weeks === 1 ? "" : "s"}. Nothing left this browser.`);
+        },
+        backToDemo: () => {
+          if (!canEditRules(get().role)) {
+            get().toast("err", "Only the founder can switch back to the demo data.");
+            return;
+          }
+          set({ data: buildSeed(), dataSource: "demo", importSummary: null, importOpen: false, drill: null, returnFor: null, newOrderOpen: false });
+          get().toast("ok", "Back to the demo data.");
         },
       };
     },
@@ -314,7 +348,7 @@ export const useStore = create<Store>()(
           ? window.localStorage
           : { getItem: () => null, setItem: () => {}, removeItem: () => {} },
       ),
-      partialize: (s) => ({ data: s.data, role: s.role, ccy: s.ccy }),
+      partialize: (s) => ({ data: s.data, role: s.role, ccy: s.ccy, dataSource: s.dataSource, importSummary: s.importSummary }),
       migrate: () => ({ data: buildSeed(), role: "founder" as Role, ccy: "NGN" as Currency }),
     },
   ),

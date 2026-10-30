@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Command, Compass, Moon, PanelLeftClose, PanelLeftOpen, RotateCcw, Sparkles, Sun } from "lucide-react";
+import { Command, Compass, FileUp, Moon, PanelLeftClose, PanelLeftOpen, RotateCcw, ShieldCheck, Sparkles, Sun } from "lucide-react";
 import { PERSONA, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
 import { CCY, Currency, shortDate } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
@@ -10,6 +10,7 @@ import { BuyerView, LeadView } from "./BuyerLeadViews";
 import { CloserView } from "./CloserView";
 import { CycleBar } from "./CycleBar";
 import { FounderView } from "./FounderView";
+import { ImportDialog } from "./ImportDialog";
 import { OrderLedger } from "./OrderLedger";
 import {
   AuditLogCard,
@@ -53,6 +54,11 @@ export function App() {
   const setCcy = useStore((s) => s.setCcy);
   const setGuide = useStore((s) => s.setGuide);
   const reset = useStore((s) => s.reset);
+  const dataSource = useStore((s) => s.dataSource);
+  const importSummary = useStore((s) => s.importSummary);
+  const setImportOpen = useStore((s) => s.setImportOpen);
+  const backToDemo = useStore((s) => s.backToDemo);
+  const imported = dataSource === "imported";
   const m = useMoney();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   useTableColumnResize();
@@ -286,6 +292,13 @@ export function App() {
             <span className="side-btn-txt">{guideOpen ? "Hide CEO walkthrough" : "CEO demo walkthrough"}</span>
           </button>
 
+          {role === "founder" && (
+            <button type="button" className="side-btn" onClick={() => setImportOpen(true)} title="Try it with your orders">
+              <FileUp size={14} style={{ flexShrink: 0 }} />
+              <span className="side-btn-txt">Try it with your orders</span>
+            </button>
+          )}
+
           <button
             type="button"
             className="side-btn"
@@ -383,11 +396,34 @@ export function App() {
               </p>
             </div>
             <div className="head-actions">
-              <button type="button" className="btn sm" onClick={() => setGuide(!guideOpen)}>
-                <Sparkles size={13} /> {guideOpen ? "Hide walkthrough" : "60-sec CEO tour"}
-              </button>
+              {!imported && (
+                <button type="button" className="btn sm" onClick={() => setGuide(!guideOpen)}>
+                  <Sparkles size={13} /> {guideOpen ? "Hide walkthrough" : "60-sec CEO tour"}
+                </button>
+              )}
             </div>
           </header>
+
+          {imported && importSummary && (
+            <div className="insight" role="status" id="imported-banner">
+              <ShieldCheck size={17} />
+              <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", width: "100%" }}>
+                <span>
+                  <b>You are looking at your own data:</b> {importSummary.orders} orders, {importSummary.firstWeek} to {importSummary.openWeek}. Your data never leaves this browser.
+                </span>
+                {role === "founder" && (
+                  <span style={{ display: "flex", gap: 8 }}>
+                    <button type="button" className="btn xs" onClick={() => setImportOpen(true)}>
+                      Load different files
+                    </button>
+                    <button type="button" className="btn xs primary" onClick={backToDemo}>
+                      Back to demo data
+                    </button>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {guideOpen && (
             <Card
@@ -453,6 +489,7 @@ export function App() {
       <DrillDrawer />
       <ReturnDialog />
       <NewOrderDialog />
+      <ImportDialog />
       <CommandPalette
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}

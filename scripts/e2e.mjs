@@ -241,7 +241,7 @@ try {
     const raiseAllBtn = Array.from(document.querySelectorAll(".alert button")).find(b => b.innerText.includes("Raise POs"));
     if (raiseAllBtn) raiseAllBtn.click();
   `);
-  await sleep(150);
+  for (let i = 0; i < 20 && !String(await evaluate(`return document.querySelector(".alert")?.innerText;`)).includes("Stock loop closed"); i++) await sleep(150);
   const stockAfter = await evaluate(`return document.querySelector(".alert")?.innerText;`);
   assert.ok(stockAfter.includes("Stock loop closed"), `Raising POs should clear stock alert, got: ${stockAfter}`);
   console.log("✓ [7/10] Inventory PO loop closed:", stockAfter);
@@ -343,6 +343,103 @@ try {
   assert.ok(persistedCycle.includes("W45"), `State must persist across reload (expected W45, got ${persistedCycle})`);
   console.log("✓ [10/10] Page reloaded — state persisted in localStorage:", persistedCycle);
 
+  // 11. Import your own data: errors are clear, good files load, the closer view still fits 390px, and demo data comes back
+  const HDR = "order_id,date,customer,city,sku,qty,price,stage,closer,campaign\n";
+  const GOOD =
+    HDR +
+    "5001,2026-11-02,Ada Obi,Lagos,AIR-12,1,212000,delivered,amaka,Promo\n" +
+    "5002,2026-11-03,Musa Bello,Kano,KET-03,2,45000,delivered,chidi,Promo\n" +
+    "5003,2026-11-04,Ife Ade,Abuja,BLN-07,1,73500,returned,amaka,\n" +
+    "5004,2026-11-10,Tola Eze,Lagos,VAC-21,1,187000,delivered,chidi,\n" +
+    "5005,2026-11-11,Emma Udo,Enugu,STM-09,1,112000,dispatched,amaka,\n";
+  const BAD = HDR + "5001,2026-11-02,Ada,Lagos,AIR-12,0,212000,delivered,amaka,\n5002,not-a-date,Bo,Lagos,AIR-12,1,212000,flying,nobody,\n";
+  const AD = "date,amount\n2026-11-03,50000\n2026-11-10,60000\n";
+
+  const pickFile = (inputId, name, text) => evaluate(`
+    const input = document.getElementById(${JSON.stringify(inputId)});
+    const dt = new DataTransfer();
+    dt.items.add(new File([${JSON.stringify(text)}], ${JSON.stringify(name)}, { type: "text/csv" }));
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  `);
+
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(200);
+  await evaluate(`Array.from(document.querySelectorAll(".side-btn")).find(b => b.innerText.includes("Try it with your orders")).click();`);
+  await sleep(250);
+  const dlg = await evaluate(`return document.querySelector('.dialog[aria-label="Load your own data"]')?.innerText || "";`);
+  assert.ok(dlg.includes("Your data never leaves this browser"), "Dialog must state that data never leaves the browser");
+  assert.ok(dlg.includes("Orders template") && dlg.includes("Ad spend template"), "Template downloads must be offered");
+
+  await pickFile("import-orders", "bad.csv", BAD);
+  await sleep(400);
+  const errText = await evaluate(`return document.getElementById("import-errors")?.innerText || "";`);
+  assert.ok(/line 2/.test(errText) && /qty/.test(errText), "Errors must name the line and column: " + errText);
+  assert.ok(/stage/.test(errText) && /closer/.test(errText) && /date/.test(errText), "Every bad column is reported: " + errText);
+  const disabled = await evaluate(`return Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Show my dashboard")).disabled;`);
+  assert.equal(disabled, true, "Load button stays disabled while there are errors");
+
+  await pickFile("import-orders", "orders.csv", GOOD);
+  await pickFile("import-adspend", "ad.csv", AD);
+  await sleep(400);
+  const okText = await evaluate(`return document.getElementById("import-ok")?.innerText || "";`);
+  assert.ok(okText.includes("5 orders across 2 weeks"), "Summary should describe the data: " + okText);
+  await evaluate(`Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Show my dashboard")).click();`);
+  await sleep(500);
+  const imported = await evaluate(`
+    return {
+      banner: document.getElementById("imported-banner")?.innerText || "",
+      headline: document.querySelector(".headline h2")?.innerText || "",
+      cycle: document.querySelector(".side-cycle .pill")?.innerText || "",
+      tour: Array.from(document.querySelectorAll("button")).some(b => b.innerText.includes("60-sec CEO tour")),
+    };
+  `);
+  assert.ok(imported.banner.includes("your own data") && imported.banner.includes("never leaves this browser"), "Banner: " + imported.banner);
+  assert.ok(imported.banner.includes("5 orders"), "Banner shows the order count");
+  assert.ok(imported.cycle.includes("W46"), "Latest week (2 Nov = W45, 9 Nov = W46) is the open cycle, got " + imported.cycle);
+  assert.ok(imported.headline.length > 0, "Founder headline recomputed from the imported orders");
+  assert.equal(imported.tour, false, "The demo-only CEO tour is hidden on your own data");
+
+  // revenue in the open week = #5004 only (₦187,000)
+  const revTile = await evaluate(`return Array.from(document.querySelectorAll(".tile")).find(t => t.innerText.includes("Delivered revenue"))?.innerText || "";`);
+  assert.ok(revTile.includes("187,000"), "Open-week delivered revenue should be ₦187,000, got " + revTile);
+
+  // The closer view works on imported data at 390px with no horizontal scroll
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await evaluate(`document.querySelector('#tab-closer').click();`);
+  await sleep(300);
+  const w390 = await evaluate(`return { sw: document.documentElement.scrollWidth, cards: document.querySelectorAll(".ocard").length };`);
+  assert.equal(w390.sw, 390, "Imported closer view must not scroll horizontally, got " + w390.sw);
+  assert.ok(w390.cards > 0, "Closer sees order cards for imported data");
+  await send("Emulation.clearDeviceMetricsOverride");
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(200);
+
+  // every role renders on imported data (the buyer, lead and warehouse views had demo-specific assumptions)
+  for (const tab of ["buyer", "lead", "stock"]) {
+    await evaluate(`document.querySelector('#tab-${tab}').click();`);
+    await sleep(300);
+    const shown = await evaluate(`return { tiles: document.querySelectorAll(".tile").length, ad: document.body.innerText.includes("Imported Ads") || ${JSON.stringify(tab)} !== "buyer" };`);
+    assert.ok(shown.tiles > 0, tab + " view should render tiles on imported data");
+    assert.ok(shown.ad, "Buyer view names the imported media buyer");
+  }
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(200);
+
+  // survives a reload
+  await send("Page.reload");
+  for (let i = 0; i < 40 && !(await evaluate(`return Boolean(document.getElementById("imported-banner"));`)); i++) await sleep(250);
+  assert.equal(await evaluate(`return Boolean(document.getElementById("imported-banner"));`), true, "Imported data persists across a reload");
+
+  // back to demo data
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(b => b.innerText.includes("Back to demo data")).click();`);
+  await sleep(500);
+  const back = await evaluate(`return { banner: Boolean(document.getElementById("imported-banner")), cycle: document.querySelector(".side-cycle .pill")?.innerText || "", head: document.querySelector(".headline h2")?.innerText || "" };`);
+  assert.equal(back.banner, false, "Banner is gone after going back");
+  assert.ok(back.cycle.includes("W44"), "Demo cycle W44 is back, got " + back.cycle);
+  assert.ok(back.head.includes("152,420"), "Demo headline is back: " + back.head);
+  console.log("✓ [11] Import: clear row errors, loaded your data, 390px closer view fits, survives reload, back to demo data");
+
   // Reset back to clean seed so user gets fresh state if they open a new tab
   await evaluate(`
     const resetBtn = Array.from(document.querySelectorAll(".side-btn")).find(b => b.innerText.includes("Reset demo state"));
@@ -351,7 +448,7 @@ try {
   await sleep(150);
 
   assert.equal(errors.length, 0, `Zero console/runtime errors expected, got: ${errors.join("; ")}`);
-  console.log("\nALL 10 END-TO-END BROWSER TESTS PASSED WITH 0 RUNTIME ERRORS.");
+  console.log("\nALL END-TO-END BROWSER TESTS PASSED WITH 0 RUNTIME ERRORS.");
   ws.close();
 } finally {
   proc.kill();
