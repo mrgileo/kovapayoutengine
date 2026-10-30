@@ -1,0 +1,27 @@
+{
+  "name": "kova-payout-engine",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Payout, P&L and stock engine demo for COD e-commerce operators.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings scripts/verify.ts"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
+

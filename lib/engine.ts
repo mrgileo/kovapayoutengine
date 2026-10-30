@@ -1,0 +1,925 @@
+// Pure calculation layer. No React, no storage: every figure on screen comes from here,
+// which is what makes each one drillable back to the orders behind it.
+
+import type {
+  AuditEntry,
+  CreditOn,
+  Cycle,
+  DemoState,
+  Drill,
+  DrillLine,
+  Order,
+  PayLine,
+  Person,
+  PnL,
+  Product,
+  Role,
+  Rules,
+} from "./types.ts";
+
+/* ------------------------------------------------------------------ constants */
+
+export const DELIVERY_FEE = 3500; // per courier leg, outbound or return
+
+/** Rates depend on the trigger. Paying on a lead is cheaper per order, because it is
+ *  paid on every order — including the ones that never land. */
+export const RATES: Record<CreditOn, { closer: number; buyer: number; lead: number }> = {
+  delivered: { closer: 0.04, buyer: 0.015, lead: 0.01 },
+  cash: { closer: 0.04, buyer: 0.015, lead: 0.01 },
+  lead: { closer: 0.015, buyer: 0.0075, lead: 0.005 },
+};
+export const totalRate = (c: CreditOn) => RATES[c].closer + RATES[c].buyer + RATES[c].lead;
+
+export const TARGETS = {
+  commissionRatio: 0.1,
+  payoutRatio: { commission: 0.1, base_plus: 0.35 },
+};
+
+export const SALES_ROLES: Role[] = ["closer", "buyer", "lead"];
+export const PERSONA: Record<Role, string> = {
+  closer: "amaka",
+  buyer: "tobi",
+  lead: "ngozi",
+  stock: "dayo",
+  founder: "chidinma",
+};
+export const MAX_DISCOUNT = 0.2;
+
+/* ------------------------------------------------------------------ lookups */
+
+export const orderValue = (o: Order) => Math.round(o.list * (1 - o.discount));
+export const personOf = (s: DemoState, id: string): Person =>
+  s.people.find((p) => p.id === id) ?? { id, name: id, role: "closer", title: "", monthlyBase: 0 };
+export const firstName = (s: DemoState, id: string) => personOf(s, id).name.split(" ")[0];
+export const productOf = (s: DemoState, sku: string): Product => s.products.find((p) => p.sku === sku)!;
+export const openCycle = (s: DemoState): Cycle => s.cycles.find((c) => c.status === "open")!;
+export const cycleById = (s: DemoState, id: string) => s.cycles.find((c) => c.id === id);
+export const salesPeople = (s: DemoState) => s.people.filter((p) => SALES_ROLES.includes(p.role));
+export const weeklyBase = (p: Person) => Math.round((p.monthlyBase * 12) / 52);
+export const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+const pctTxt = (n: number) => (n * 100).toFixed(n * 100 < 1 ? 2 : 1).replace(/\.0+$/, "") + "%";
+
+/* ------------------------------------------------------------------ crediting */
+
+export function isCredited(o: Order, rules: Rules): boolean {
+  if (o.stage === "returned" || o.stage === "cancelled") {
+    if (rules.creditOn === "lead") return rules.onReturn === "absorb";
+    // A delivery-triggered order only earned anything if it actually landed.
+    if (o.stage !== "returned" || rules.onReturn !== "absorb") return false;
+    return rules.creditOn === "delivered" || o.cashIn;
+  }
+  if (rules.creditOn === "lead") return true;
+  if (rules.creditOn === "delivered") return o.stage === "delivered";
+  return o.stage === "delivered" && o.cashIn;
+}
+
+export const discountPenalty = (o: Order, rules: Rules) => o.discount > rules.discountFloor + 1e-9;
+
+export function closerReturnRate(s: DemoState, personId: string): number {
+  const mine = s.orders.filter((o) => o.closer === personId);
+  const delivered = mine.filter((o) => o.stage === "delivered").length;
+  const returned = mine.filter((o) => o.stage === "returned").length;
+  const resolved = delivered + returned;
+  return resolved ? returned / resolved : 0;
+}
+
+export function returnCapBreached(s: DemoState, personId: string, rules: Rules = s.rules): boolean {
+  const cap = rules.returnCap ?? 1;
+  return cap < 1 && closerReturnRate(s, personId) > cap + 1e-9;
+}
+
+export function commissionLines(s: DemoState, o: Order, rules: Rules, cycleId: string): PayLine[] {
+  const v = orderValue(o);
+  const r = RATES[rules.creditOn];
+  const out: PayLine[] = [];
+  const halved = discountPenalty(o, rules);
+  const closerRate = r.closer * (halved ? 0.5 : 1);
+  const guardNote = halved
+    ? ` · halved: ${Math.round(o.discount * 100)}% discount is past the ${Math.round(rules.discountFloor * 100)}% floor`
+    : o.discount > 0
+      ? ` · on discounted value (${Math.round(o.discount * 100)}% off)`
+      : "";
+  const pool = v * closerRate;
+  const addCloser = (personId: string, share: number, label: string) => {
+    const capHit = returnCapBreached(s, personId, rules);
+    const amt = share * (capHit ? 0.5 : 1);
+    const capNote = capHit
+      ? ` · halved: ${Math.round(closerReturnRate(s, personId) * 100)}% return rate exceeds ${Math.round((rules.returnCap ?? 1) * 100)}% quality gate`
+      : "";
+    out.push({
+      key: `${cycleId}-${o.id}-${personId}-commission-${out.length}`,
+      personId,
+      kind: "commission",
+      orderId: o.id,
+      amount: amt,
+      note: `${label}${guardNote}${capNote}`,
+    });
+  };
+  const add = (personId: string, kind: PayLine["kind"], amount: number, note: string) =>
+    out.push({ key: `${cycleId}-${o.id}-${personId}-${kind}-${out.length}`, personId, kind, orderId: o.id, amount, note });
+
+  if (o.openedBy !== o.closer) {
+    const opener = firstName(s, o.openedBy);
+    const closer = firstName(s, o.closer);
+    if (rules.split === "first") addCloser(o.openedBy, pool, `Closer ${pctTxt(closerRate)} · first touch: ${opener} opened it`);
+    else if (rules.split === "last") addCloser(o.closer, pool, `Closer ${pctTxt(closerRate)} · last touch: ${closer} closed it`);
+    else {
+      addCloser(o.openedBy, pool / 2, `Closer ${pctTxt(closerRate)} · 50-50 split, opened`);
+      addCloser(o.closer, pool / 2, `Closer ${pctTxt(closerRate)} · 50-50 split, closed`);
+    }
+  } else {
+    addCloser(o.closer, pool, `Closer ${pctTxt(closerRate)}`);
+  }
+  add(o.buyer, "commission", v * r.buyer, `Media buyer ${pctTxt(r.buyer)} · ${o.campaign}`);
+  const lead = personOf(s, o.closer).reportsTo;
+  if (lead) add(lead, "commission", v * r.lead, `Team lead override ${pctTxt(r.lead)}`);
+  return out;
+}
+
+export interface Reversals {
+  clawbacks: PayLine[];
+  deferred: PayLine[];
+  absorbed: { order: Order; amount: number; reason: string }[];
+}
+
+/** Credited orders that came back in the open cycle. In-cycle returns of uncredited
+ *  orders simply never accrue; this handles the hard case — money already went out. */
+export function reversals(s: DemoState, rules: Rules): Reversals {
+  const c = openCycle(s);
+  const res: Reversals = { clawbacks: [], deferred: [], absorbed: [] };
+  for (const o of s.orders) {
+    if (o.reversedCycle !== c.id) continue;
+    if (o.stage !== "returned" && o.stage !== "cancelled") continue;
+    // Same-cycle return that stayed credited under "absorb".
+    if (!o.creditedCycle) {
+      if (!o.closedOut && isCredited(o, rules)) {
+        const amt = sum(commissionLines(s, o, rules, c.id).map((l) => l.amount));
+        res.absorbed.push({ order: o, amount: amt, reason: "Returned in this cycle · policy: absorb" });
+      }
+      continue;
+    }
+    const pc = cycleById(s, o.creditedCycle);
+    if (!pc) continue;
+    const paid = (pc.lines ?? []).filter((l) => l.orderId === o.id && l.kind === "commission");
+    const total = sum(paid.map((l) => l.amount));
+    if (pc.status === "locked") {
+      res.absorbed.push({ order: o, amount: total, reason: `${pc.id} is locked · return window closed` });
+    } else if (rules.onReturn === "clawback") {
+      paid.forEach((l, i) =>
+        res.clawbacks.push({
+          key: `${c.id}-claw-${o.id}-${i}`,
+          personId: l.personId,
+          kind: "clawback",
+          orderId: o.id,
+          amount: -l.amount,
+          note: `Clawback · order ${o.id} came back after ${pc.id} was ${pc.status}`,
+        }),
+      );
+    } else if (rules.onReturn === "offset") {
+      paid.forEach((l, i) =>
+        res.deferred.push({
+          key: `${c.id}-off-${o.id}-${i}`,
+          personId: l.personId,
+          kind: "offset",
+          orderId: o.id,
+          amount: -l.amount,
+          note: `Offset · order ${o.id} came back after ${pc.id} was ${pc.status}`,
+        }),
+      );
+    } else {
+      res.absorbed.push({ order: o, amount: total, reason: `Paid in ${pc.id} · policy: absorb` });
+    }
+  }
+  return res;
+}
+
+export function openLines(s: DemoState, rules: Rules = s.rules): PayLine[] {
+  const c = openCycle(s);
+  const lines: PayLine[] = [...c.carryIn];
+  if (rules.payModel === "base_plus") {
+    for (const p of salesPeople(s)) {
+      lines.push({ key: `${c.id}-base-${p.id}`, personId: p.id, kind: "base", amount: weeklyBase(p), note: "Monthly base, pro-rated to one weekly cycle" });
+    }
+  }
+  for (const o of s.orders) {
+    if (o.creditedCycle || o.closedOut || !isCredited(o, rules)) continue;
+    lines.push(...commissionLines(s, o, rules, c.id));
+  }
+  lines.push(...reversals(s, rules).clawbacks);
+  return lines;
+}
+
+export function cycleLines(s: DemoState, cycleId?: string, rules: Rules = s.rules): PayLine[] {
+  const c = cycleId ? cycleById(s, cycleId) : openCycle(s);
+  if (!c) return [];
+  return c.status === "open" ? openLines(s, rules) : c.lines ?? [];
+}
+
+export interface Payslip {
+  personId: string;
+  base: number;
+  commission: number;
+  adjustments: number;
+  carry: number;
+  gross: number;
+  payable: number;
+  lines: PayLine[];
+}
+
+export function payslip(lines: PayLine[], personId: string): Payslip {
+  const mine = lines.filter((l) => l.personId === personId);
+  const by = (k: PayLine["kind"][]) => sum(mine.filter((l) => k.includes(l.kind)).map((l) => l.amount));
+  const gross = sum(mine.map((l) => l.amount));
+  return {
+    personId,
+    base: by(["base"]),
+    commission: by(["commission"]),
+    adjustments: by(["clawback", "offset"]),
+    carry: by(["carry"]),
+    gross,
+    payable: Math.max(0, gross),
+    lines: mine,
+  };
+}
+
+/* ------------------------------------------------------------------ P&L */
+
+const unitCost = (s: DemoState, o: Order) => productOf(s, o.sku).cost * o.qty;
+const orderRef = (o: Order) => `#${o.id}`;
+
+export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
+  const c = openCycle(s);
+  const C = c.id;
+  const lines = openLines(s, rules);
+
+  const revOrders = s.orders.filter((o) => o.deliveredCycle === C && !(o.stage === "returned" && o.reversedCycle === C));
+  const refundOrders = s.orders.filter((o) => o.stage === "returned" && o.reversedCycle === C && o.deliveredCycle !== C);
+  const writeoffOrders = s.orders.filter(
+    (o) => o.stage === "returned" && o.reversedCycle === C && o.deliveredCycle === C && o.returnCondition === "damaged",
+  );
+
+  const revenueL: DrillLine[] = revOrders.map((o) => ({
+    ref: orderRef(o),
+    label: `${o.customer} · ${o.sku} ×${o.qty}`,
+    detail: o.discount ? `${Math.round(o.discount * 100)}% discount applied` : o.cashIn ? "Cash remitted" : "Delivered · cash still with courier",
+    amount: orderValue(o),
+  }));
+  const refundL: DrillLine[] = refundOrders.map((o) => ({
+    ref: orderRef(o),
+    label: `${o.customer} · delivered ${o.deliveredCycle}, returned ${C}`,
+    detail: o.returnCondition === "damaged" ? "Damaged · not restocked" : "Resellable · restocked",
+    amount: orderValue(o),
+  }));
+  const cogsL: DrillLine[] = [
+    ...revOrders.map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} · ${productOf(s, o.sku).name}`, detail: "Unit cost × qty", amount: unitCost(s, o) })),
+    ...refundOrders
+      .filter((o) => o.returnCondition !== "damaged")
+      .map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} back on the shelf`, detail: "Prior-cycle return, restocked", amount: -unitCost(s, o) })),
+  ];
+  const writeoffL: DrillLine[] = writeoffOrders.map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} returned damaged`, detail: "Written off at cost", amount: unitCost(s, o) }));
+
+  const commLines = lines.filter((l) => l.kind === "commission" || l.kind === "clawback" || l.kind === "offset");
+  const commissionL: DrillLine[] = commLines.map((l) => ({
+    ref: l.orderId ? `#${l.orderId}` : l.kind,
+    label: `${personOf(s, l.personId).name}`,
+    detail: l.note,
+    amount: l.amount,
+  }));
+  const baseL: DrillLine[] = lines
+    .filter((l) => l.kind === "base")
+    .map((l) => ({ ref: personOf(s, l.personId).title, label: personOf(s, l.personId).name, detail: l.note, amount: l.amount }));
+
+  const spend = s.spend[C] ?? {};
+  const spendL: DrillLine[] = Object.entries(spend).map(([id, amt]) => ({
+    ref: "Meta",
+    label: `${personOf(s, id).name} · ${personOf(s, id).title.replace("Media buyer · ", "")}`,
+    detail: "Ad spend synced for this cycle",
+    amount: amt,
+  }));
+
+  const logisticsL: DrillLine[] = [];
+  for (const o of s.orders) {
+    if (o.deliveredCycle === C) logisticsL.push({ ref: orderRef(o), label: `Outbound · ${o.city}`, detail: "Courier delivery leg", amount: DELIVERY_FEE });
+    if (o.failed && o.reversedCycle === C) logisticsL.push({ ref: orderRef(o), label: `Failed attempt · ${o.city}`, detail: "Paid for a delivery that did not happen", amount: DELIVERY_FEE });
+    if (o.stage === "returned" && o.reversedCycle === C) logisticsL.push({ ref: orderRef(o), label: `Return leg · ${o.city}`, detail: "Courier pickup back to warehouse", amount: DELIVERY_FEE });
+  }
+
+  const total = (l: DrillLine[]) => sum(l.map((x) => x.amount));
+  const revenue = total(revenueL);
+  const refunds = total(refundL);
+  const cogs = total(cogsL);
+  const writeoffs = total(writeoffL);
+  const commission = total(commissionL);
+  const base = total(baseL);
+  const adSpend = total(spendL);
+  const logistics = total(logisticsL);
+  const actual = revenue - refunds - cogs - writeoffs - commission - base - adSpend - logistics;
+  const payout = commission + base;
+
+  const d = (title: string, l: DrillLine[], subtitle?: string): Drill => ({ title, subtitle, lines: l, total: total(l) });
+  const actualL: DrillLine[] = [
+    { ref: "+", label: "Delivered revenue", amount: revenue },
+    { ref: "−", label: "Refunds on earlier cycles", amount: -refunds },
+    { ref: "−", label: "Cost of goods", amount: -cogs },
+    { ref: "−", label: "Damaged returns written off", amount: -writeoffs },
+    { ref: "−", label: "Commission (net of clawbacks)", amount: -commission },
+    { ref: "−", label: "Base pay", amount: -base },
+    { ref: "−", label: "Ad spend", amount: -adSpend },
+    { ref: "−", label: "Courier fees", amount: -logistics },
+  ].filter((x) => x.amount !== 0 || x.ref === "+");
+
+  return {
+    cycleId: C,
+    revenue,
+    refunds,
+    cogs,
+    writeoffs,
+    commission,
+    base,
+    adSpend,
+    logistics,
+    actual,
+    payout,
+    payoutRatio: revenue > 0 ? payout / revenue : 0,
+    commissionRatio: revenue > 0 ? commission / revenue : 0,
+    drills: {
+      revenue: d("Delivered revenue", revenueL, `Orders delivered in ${C} and not returned`),
+      refunds: d("Refunds on earlier cycles", refundL, "Orders delivered in a closed cycle, returned in this one"),
+      cogs: d("Cost of goods", cogsL, "What the goods cost Kova, not what they sold for"),
+      writeoffs: d("Damaged returns written off", writeoffL),
+      commission: d("Commission", commissionL, "Every line, including clawbacks and offsets"),
+      base: d("Base pay", baseL, "Fixed pay for sales staff, pro-rated weekly"),
+      adSpend: d("Ad spend", spendL),
+      logistics: d("Courier fees", logisticsL, `₦${DELIVERY_FEE.toLocaleString()} per leg`),
+      actual: d("Actual result this cycle", actualL, "What is left after every cost the business carries"),
+    },
+  };
+}
+
+export function pnlFor(s: DemoState, cycleId?: string): PnL | undefined {
+  const c = cycleId ? cycleById(s, cycleId) : openCycle(s);
+  if (!c) return undefined;
+  return c.status === "open" ? computePnl(s) : c.pnl;
+}
+
+export function whatIf(s: DemoState, patch: Partial<Rules>) {
+  const p = computePnl(s, { ...s.rules, ...patch });
+  return { payout: p.payout, commission: p.commission, actual: p.actual };
+}
+
+/* ------------------------------------------------------------------ founder extras */
+
+export function cashWithCourier(s: DemoState): Drill {
+  const lines = s.orders
+    .filter((o) => o.stage === "delivered" && !o.cashIn)
+    .map((o) => ({ ref: orderRef(o), label: `${o.customer} · ${o.city}`, detail: `Delivered ${o.deliveredCycle} · awaiting courier remittance`, amount: orderValue(o) }));
+  return { title: "Cash still with the courier", subtitle: "Delivered on paper, not yet in the bank", lines, total: sum(lines.map((l) => l.amount)) };
+}
+
+export function paidOnUndelivered(s: DemoState): Drill {
+  const lines = openLines(s)
+    .filter((l) => l.kind === "commission" && l.orderId)
+    .map((l) => ({ l, o: s.orders.find((o) => o.id === l.orderId)! }))
+    .filter(({ o }) => o.stage !== "delivered")
+    .map(({ l, o }) => ({ ref: orderRef(o), label: `${personOf(s, l.personId).name}`, detail: `Order is ${o.stage}${o.failed ? " (failed delivery)" : ""}`, amount: l.amount }));
+  return { title: "Commission on orders that have not landed", subtitle: "Money out against revenue not yet in", lines, total: sum(lines.map((l) => l.amount)) };
+}
+
+export function absorbedDrill(s: DemoState): Drill {
+  const r = reversals(s, s.rules);
+  const lines = r.absorbed.map((a) => ({ ref: orderRef(a.order), label: a.order.customer, detail: a.reason, amount: a.amount }));
+  return { title: "Commission kept on returned goods", subtitle: "The business carries this, not the team", lines, total: sum(lines.map((l) => l.amount)) };
+}
+
+export function deferredDrill(s: DemoState): Drill {
+  const r = reversals(s, s.rules);
+  const lines = r.deferred.map((l) => ({ ref: `#${l.orderId}`, label: personOf(s, l.personId).name, detail: l.note, amount: l.amount }));
+  return { title: "Deductions scheduled for next cycle", subtitle: "Offset policy: recovered from the next payout, not this one", lines, total: sum(lines.map((l) => l.amount)) };
+}
+
+/* ------------------------------------------------------------------ people metrics */
+
+export interface CloserStats {
+  personId: string;
+  orders: number;
+  delivered: number;
+  returned: number;
+  failed: number;
+  returnRate: number;
+  capBreached: boolean;
+  deliveredValue: number;
+  discounted: number;
+  avgDiscount: number;
+  earnedThisCycle: number;
+  lifetimeCommission: number;
+  /** Net profit generated by this closer's orders in the open cycle after COGS, closer comm, and courier legs. */
+  netContribution: number;
+  contributionDrill: Drill;
+}
+
+export function closerStats(s: DemoState, personId: string): CloserStats {
+  const c = openCycle(s);
+  const mine = s.orders.filter((o) => o.closer === personId);
+  const delivered = mine.filter((o) => o.stage === "delivered");
+  const returned = mine.filter((o) => o.stage === "returned");
+  const failed = mine.filter((o) => o.stage === "cancelled" && o.failed);
+  const resolved = delivered.length + returned.length;
+  const disc = mine.filter((o) => o.discount > 0);
+  const closedComm = sum(
+    s.cycles
+      .filter((cy) => cy.status !== "open")
+      .flatMap((cy) => cy.lines ?? [])
+      .filter((l) => l.personId === personId && l.kind !== "base" && l.kind !== "carry")
+      .map((l) => l.amount),
+  );
+  const lines = openLines(s);
+  const open = payslip(lines, personId);
+
+  // Net margin contribution in the open cycle
+  const contribLines: DrillLine[] = [];
+  for (const o of mine) {
+    if (o.deliveredCycle === c.id && !(o.stage === "returned" && o.reversedCycle === c.id)) {
+      const gross = orderValue(o) - unitCost(s, o) - DELIVERY_FEE;
+      contribLines.push({
+        ref: orderRef(o),
+        label: `${o.customer} · landed (${o.sku} ×${o.qty})`,
+        detail: `Rev ₦${orderValue(o).toLocaleString()} − COGS ₦${unitCost(s, o).toLocaleString()} − Courier ₦${DELIVERY_FEE.toLocaleString()}`,
+        amount: gross,
+      });
+    } else if (o.stage === "returned" && o.reversedCycle === c.id) {
+      const dmg = o.returnCondition === "damaged" ? unitCost(s, o) : 0;
+      const loss = -(DELIVERY_FEE * 2 + dmg);
+      contribLines.push({
+        ref: orderRef(o),
+        label: `${o.customer} · returned (${o.returnCondition ?? "resellable"})`,
+        detail: `2 courier legs lost${dmg ? ` + ₦${dmg.toLocaleString()} damaged write-off` : ""}`,
+        amount: loss,
+      });
+    } else if (o.failed && o.reversedCycle === c.id) {
+      contribLines.push({
+        ref: orderRef(o),
+        label: `${o.customer} · failed delivery`,
+        detail: "Outbound courier leg wasted",
+        amount: -DELIVERY_FEE,
+      });
+    }
+  }
+  const closerCommCost = open.commission + open.adjustments;
+  if (closerCommCost !== 0) {
+    contribLines.push({
+      ref: "COMM",
+      label: `${personOf(s, personId).name} · cycle commission`,
+      detail: "Variable commission & clawbacks",
+      amount: -closerCommCost,
+    });
+  }
+  const netContribution = sum(contribLines.map((l) => l.amount));
+
+  return {
+    personId,
+    orders: mine.length,
+    delivered: delivered.length,
+    returned: returned.length,
+    failed: failed.length,
+    returnRate: resolved ? returned.length / resolved : 0,
+    capBreached: returnCapBreached(s, personId),
+    deliveredValue: sum(delivered.map(orderValue)),
+    discounted: disc.length,
+    avgDiscount: disc.length ? sum(disc.map((o) => o.discount)) / disc.length : 0,
+    earnedThisCycle: closerCommCost,
+    lifetimeCommission: closedComm + closerCommCost,
+    netContribution,
+    contributionDrill: {
+      title: `${personOf(s, personId).name} · Net Margin Contribution (${c.id})`,
+      subtitle: "Delivered gross profit minus return/failed courier bleed and closer commission",
+      lines: contribLines,
+      total: netContribution,
+    },
+  };
+}
+
+export interface CampaignStats {
+  buyerId: string;
+  campaign: string;
+  spend: number;
+  bookedRev: number;
+  bookedRoas: number;
+  deliveredRev: number;
+  deliveredRoas: number;
+  cogs: number;
+  logistics: number;
+  commission: number;
+  netMargin: number;
+  marginDrill: Drill;
+}
+
+export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
+  const c = openCycle(s);
+  const spend = s.spend[c.id]?.[buyerId] ?? 0;
+  const campaign = buyerId === "tobi" ? "Prospecting" : "Retargeting";
+  const ords = s.orders.filter((o) => o.buyer === buyerId && o.createdCycle === c.id);
+  const del = ords.filter((o) => o.stage === "delivered");
+  const ret = s.orders.filter((o) => o.buyer === buyerId && o.stage === "returned" && o.reversedCycle === c.id);
+  const failed = s.orders.filter((o) => o.buyer === buyerId && o.failed && o.reversedCycle === c.id);
+
+  const bookedRev = sum(ords.map(orderValue));
+  const deliveredRev = sum(del.map(orderValue));
+  const cogs = sum(del.map((o) => unitCost(s, o)));
+  const logistics = del.length * DELIVERY_FEE + ret.length * (DELIVERY_FEE * 2) + failed.length * DELIVERY_FEE;
+  const lines = openLines(s);
+  const comm = sum(
+    lines
+      .filter((l) => l.orderId && ords.some((o) => o.id === l.orderId) && l.kind === "commission")
+      .map((l) => l.amount),
+  );
+  const netMargin = deliveredRev - cogs - logistics - comm - spend;
+  const drillLines: DrillLine[] = [
+    { ref: "+", label: "Delivered revenue", detail: `${del.length} landed orders`, amount: deliveredRev },
+    { ref: "−", label: "Cost of goods (COGS)", detail: "Unit cost of delivered items", amount: -cogs },
+    { ref: "−", label: "Courier legs", detail: `${del.length} delivered, ${ret.length} returned, ${failed.length} failed`, amount: -logistics },
+    { ref: "−", label: "Order commissions", detail: "Closer + buyer + lead share", amount: -comm },
+    { ref: "−", label: "Meta ad spend", detail: `${campaign} campaign`, amount: -spend },
+  ];
+
+  return {
+    buyerId,
+    campaign,
+    spend,
+    bookedRev,
+    bookedRoas: spend > 0 ? bookedRev / spend : 0,
+    deliveredRev,
+    deliveredRoas: spend > 0 ? deliveredRev / spend : 0,
+    cogs,
+    logistics,
+    commission: comm,
+    netMargin,
+    marginDrill: {
+      title: `${campaign} Campaign · True Contribution Margin (${c.id})`,
+      subtitle: `Managed by ${personOf(s, buyerId).name} · ROAS without COGS and returns is a vanity metric`,
+      lines: drillLines,
+      total: netMargin,
+    },
+  };
+}
+
+export interface SkuEconomics {
+  sku: string;
+  name: string;
+  unitCost: number;
+  deliveredQty: number;
+  returnedQty: number;
+  returnRate: number;
+  revenue: number;
+  cogs: number;
+  damagedLoss: number;
+  courierCost: number;
+  commission: number;
+  netProfit: number;
+  drill: Drill;
+}
+
+export function skuEconomics(s: DemoState): SkuEconomics[] {
+  const c = openCycle(s);
+  const lines = openLines(s);
+  return s.products.map((p) => {
+    const allSku = s.orders.filter((o) => o.sku === p.sku);
+    const delAll = allSku.filter((o) => o.stage === "delivered");
+    const retAll = allSku.filter((o) => o.stage === "returned");
+    const resolved = delAll.length + retAll.length;
+
+    const delC = allSku.filter((o) => o.deliveredCycle === c.id && !(o.stage === "returned" && o.reversedCycle === c.id));
+    const retC = allSku.filter((o) => o.stage === "returned" && o.reversedCycle === c.id);
+    const failC = allSku.filter((o) => o.failed && o.reversedCycle === c.id);
+
+    const revenue = sum(delC.map(orderValue));
+    const cogs = sum(delC.map((o) => o.qty * p.cost));
+    const damagedLoss = sum(retC.filter((o) => o.returnCondition === "damaged").map((o) => o.qty * p.cost));
+    const courierCost = (delC.length + retC.length * 2 + failC.length) * DELIVERY_FEE;
+    const commission = sum(
+      lines
+        .filter((l) => l.orderId && allSku.some((o) => o.id === l.orderId) && (l.kind === "commission" || l.kind === "clawback"))
+        .map((l) => l.amount),
+    );
+    const netProfit = revenue - cogs - damagedLoss - courierCost - commission;
+
+    return {
+      sku: p.sku,
+      name: p.name,
+      unitCost: p.cost,
+      deliveredQty: sum(delC.map((o) => o.qty)),
+      returnedQty: sum(retC.map((o) => o.qty)),
+      returnRate: resolved ? retAll.length / resolved : 0,
+      revenue,
+      cogs,
+      damagedLoss,
+      courierCost,
+      commission,
+      netProfit,
+      drill: {
+        title: `${p.sku} (${p.name}) · Unit Economics (${c.id})`,
+        subtitle: `Unit cost ₦${p.cost.toLocaleString()} · Lifetime return rate ${Math.round((resolved ? retAll.length / resolved : 0) * 100)}%`,
+        lines: [
+          { ref: "+", label: "Delivered revenue", detail: `${delC.length} order(s) landed in ${c.id}`, amount: revenue },
+          { ref: "−", label: "Unit COGS", detail: `${sum(delC.map((o) => o.qty))} units × ₦${p.cost.toLocaleString()}`, amount: -cogs },
+          ...(damagedLoss ? [{ ref: "−", label: "Damaged return write-off", detail: "Unsellable returned stock", amount: -damagedLoss }] : []),
+          { ref: "−", label: "Courier legs", detail: "Outbound + return + failed delivery legs", amount: -courierCost },
+          { ref: "−", label: "Sales commission", detail: "Net commission on this SKU", amount: -commission },
+        ],
+        total: netProfit,
+      },
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ stock */
+
+export type StockStatus = "out" | "reorder" | "inbound" | "watch" | "ok";
+export const STOCK_LABEL: Record<StockStatus, string> = {
+  out: "Out of stock",
+  reorder: "Reorder now",
+  inbound: "On order",
+  watch: "Watch",
+  ok: "Healthy",
+};
+
+export interface StockRow {
+  product: Product;
+  onHand: number;
+  committed: number;
+  onOrder: number;
+  available: number;
+  projected: number;
+  status: StockStatus;
+  nextEta?: string;
+  suggested: number;
+}
+
+export function stockRow(s: DemoState, p: Product): StockRow {
+  const committed = sum(s.orders.filter((o) => o.sku === p.sku && (o.stage === "confirmed" || o.stage === "dispatched")).map((o) => o.qty));
+  const open = s.pos.filter((x) => x.sku === p.sku && x.status === "open");
+  const onOrder = sum(open.map((x) => x.qty));
+  const available = p.onHand - committed;
+  const projected = available + onOrder;
+  let status: StockStatus;
+  if (available <= p.reorder && onOrder > 0 && projected > p.reorder) status = "inbound";
+  else if (projected <= 0) status = "out";
+  else if (projected <= p.reorder) status = "reorder";
+  else if (projected <= p.reorder * 2) status = "watch";
+  else status = "ok";
+  const nextEta = open.map((x) => x.eta).sort()[0];
+  return { product: p, onHand: p.onHand, committed, onOrder, available, projected, status, nextEta, suggested: Math.max(p.reorder * 3 - projected, p.reorder) };
+}
+
+export const stockRows = (s: DemoState) => s.products.map((p) => stockRow(s, p));
+export const needsAttention = (s: DemoState) => stockRows(s).filter((r) => r.status === "out" || r.status === "reorder");
+
+/* ------------------------------------------------------------------ permissions */
+
+export type ActionKey = "confirm" | "dispatch" | "deliver" | "fail" | "cash" | "return" | "cancel" | "discount";
+
+export const ACTION_LABEL: Record<ActionKey, string> = {
+  confirm: "Confirm",
+  dispatch: "Dispatch",
+  deliver: "Mark delivered",
+  fail: "Failed delivery",
+  cash: "Cash received",
+  return: "Process return",
+  cancel: "Cancel",
+  discount: "Discount",
+};
+
+export function canEditRules(role: Role) {
+  return role === "founder";
+}
+
+/** Segregation of duties: whoever earns on an order never certifies its delivery. */
+export function actionsFor(s: DemoState, role: Role, o: Order): ActionKey[] {
+  const viewer = PERSONA[role];
+  const own = o.closer === viewer || o.openedBy === viewer;
+  const sales = (role === "closer" && own) || role === "lead" || role === "founder";
+  const ops = role === "stock" || role === "founder";
+  const out: ActionKey[] = [];
+  switch (o.stage) {
+    case "new":
+      if (sales) out.push("confirm", "discount", "cancel");
+      break;
+    case "confirmed":
+      if (ops) out.push("dispatch");
+      if (sales) out.push("discount", "cancel");
+      break;
+    case "dispatched":
+      if (ops) out.push("deliver", "fail");
+      break;
+    case "delivered":
+      if (role === "founder" && !o.cashIn) out.push("cash");
+      if (ops) out.push("return");
+      break;
+  }
+  return out;
+}
+
+export function blockedNote(role: Role, o: Order): string | null {
+  if (role === "closer" && (o.stage === "dispatched" || o.stage === "confirmed")) return "Logistics confirms delivery. Closers can't mark their own orders delivered.";
+  if (role === "closer" && o.stage === "delivered" && !o.cashIn) return "Delivered. Waiting on courier to remit the cash.";
+  if (role === "buyer") return null;
+  return null;
+}
+
+/* ------------------------------------------------------------------ mutations (on a draft) */
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+export const addDays = (iso: string, n: number) => {
+  const d = new Date(iso + (iso.length === 10 ? "T00:00:00Z" : ""));
+  d.setUTCDate(d.getUTCDate() + n);
+  return isoDay(d);
+};
+export const nextCycleId = (id: string) => "W" + (parseInt(id.slice(1), 10) + 1);
+
+export function log(d: DemoState, e: Omit<AuditEntry, "id" | "cycle"> & { cycle?: string }) {
+  d.seq += 1;
+  d.audit.unshift({ id: d.seq, cycle: e.cycle ?? openCycle(d).id, ...e });
+  if (d.audit.length > 200) d.audit.length = 200;
+}
+
+export function transition(
+  d: DemoState,
+  orderId: number,
+  action: ActionKey,
+  opts: { condition?: "resellable" | "damaged"; discount?: number } = {},
+): string | null {
+  const o = d.orders.find((x) => x.id === orderId);
+  if (!o) return "Order not found";
+  const c = openCycle(d);
+  const p = productOf(d, o.sku);
+  switch (action) {
+    case "confirm": {
+      const row = stockRow(d, p);
+      if (row.available < o.qty) {
+        return row.onOrder > 0
+          ? `Only ${Math.max(0, row.available)} ${o.sku} free. ${row.onOrder} on order, due ${row.nextEta}. Confirm once it lands.`
+          : `Only ${Math.max(0, row.available)} ${o.sku} free to promise. Inventory needs to raise a PO first.`;
+      }
+      o.stage = "confirmed";
+      return null;
+    }
+    case "dispatch":
+      o.stage = "dispatched";
+      return null;
+    case "deliver":
+      o.stage = "delivered";
+      o.deliveredCycle = c.id;
+      p.onHand -= o.qty;
+      return null;
+    case "fail":
+      o.stage = "cancelled";
+      o.failed = true;
+      o.reversedCycle = c.id;
+      return null;
+    case "cash":
+      o.cashIn = true;
+      return null;
+    case "return":
+      o.stage = "returned";
+      o.reversedCycle = c.id;
+      o.returnCondition = opts.condition ?? "resellable";
+      if (o.returnCondition === "resellable") p.onHand += o.qty;
+      return null;
+    case "cancel":
+      o.stage = "cancelled";
+      o.reversedCycle = c.id;
+      return null;
+    case "discount":
+      o.discount = Math.max(0, Math.min(MAX_DISCOUNT, opts.discount ?? 0));
+      return null;
+  }
+}
+
+/** Close the open cycle: freeze lines and P&L, carry negatives and offsets forward,
+ *  open the next week. accrued → approved. */
+export function closeCycle(d: DemoState, actor: string, at: string) {
+  const c = openCycle(d);
+  const lines = openLines(d);
+  const pnl = computePnl(d);
+  const { deferred } = reversals(d, d.rules);
+  const nextId = nextCycleId(c.id);
+  const carryOut: PayLine[] = [];
+
+  for (const p of salesPeople(d)) {
+    const net = sum(lines.filter((l) => l.personId === p.id).map((l) => l.amount));
+    if (net < -0.5) {
+      lines.push({ key: `${c.id}-carry-${p.id}`, personId: p.id, kind: "carry", amount: -net, note: `Negative balance moved to ${nextId}. No negative payslips.` });
+      carryOut.push({ key: `${nextId}-carryin-${p.id}`, personId: p.id, kind: "carry", amount: net, note: `Balance owed from ${c.id}` });
+    }
+  }
+  deferred.forEach((l) => carryOut.push({ ...l, key: `${nextId}-${l.key}`, note: l.note + ` · deducted in ${nextId}` }));
+
+  const credited = new Set(lines.filter((l) => l.kind === "commission" && l.orderId).map((l) => l.orderId!));
+  for (const o of d.orders) {
+    if (credited.has(o.id)) o.creditedCycle = c.id;
+    else if (!o.creditedCycle && (o.stage === "returned" || o.stage === "cancelled")) o.closedOut = true;
+  }
+
+  c.status = "approved";
+  c.lines = lines;
+  c.pnl = pnl;
+  c.closedAt = at;
+  c.closedBy = actor;
+
+  d.cycles.push({ id: nextId, start: addDays(c.start, 7), end: addDays(c.end, 7), status: "open", carryIn: carryOut });
+  d.spend[nextId] = { ...(d.spend[c.id] ?? {}) };
+}
+
+export function markPaid(d: DemoState, cycleId: string, actor: string, at: string) {
+  const c = cycleById(d, cycleId);
+  if (!c || c.status !== "approved") return;
+  c.status = "paid";
+  c.paidAt = at;
+  c.paidBy = actor;
+}
+
+export function lockCycle(d: DemoState, cycleId: string, actor: string, at: string) {
+  const c = cycleById(d, cycleId);
+  if (!c || c.status !== "paid") return;
+  c.status = "locked";
+  c.lockedAt = at;
+  c.lockedBy = actor;
+}
+
+export function raisePO(d: DemoState, sku: string, qty: number, actor: string, at: string) {
+  const p = productOf(d, sku);
+  const n = d.pos.length + 1;
+  d.pos.push({
+    id: `PO-${String(n).padStart(3, "0")}`,
+    sku,
+    qty,
+    unitCost: p.cost,
+    raisedAt: at,
+    raisedBy: actor,
+    eta: addDays(at.slice(0, 10), p.leadDays),
+    status: "open",
+  });
+}
+
+export function receivePO(d: DemoState, poId: string, at: string) {
+  const po = d.pos.find((x) => x.id === poId);
+  if (!po || po.status !== "open") return;
+  po.status = "received";
+  po.receivedAt = at;
+  productOf(d, po.sku).onHand += po.qty;
+}
+
+export const RETAIL_PRICE: Record<string, number> = {
+  "AIR-12": 212000,
+  "BLN-07": 73500,
+  "KET-03": 45000,
+  "VAC-21": 187000,
+  "STM-09": 112000,
+};
+
+export function createOrder(
+  d: DemoState,
+  input: {
+    customer: string;
+    city: string;
+    sku: string;
+    qty: number;
+    openedBy: string;
+    closer: string;
+    buyer: string;
+  },
+): Order {
+  const c = openCycle(d);
+  const maxId = d.orders.reduce((m, o) => Math.max(m, o.id), 1000);
+  const unitRetail = RETAIL_PRICE[input.sku] ?? productOf(d, input.sku).cost * 2;
+  const order: Order = {
+    id: maxId + 1,
+    customer: input.customer.trim() || "Walk-in Customer",
+    city: input.city,
+    sku: input.sku,
+    qty: Math.max(1, input.qty),
+    list: unitRetail * Math.max(1, input.qty),
+    discount: 0,
+    openedBy: input.openedBy,
+    closer: input.closer,
+    buyer: input.buyer,
+    campaign: input.buyer === "tobi" ? "Prospecting" : "Retargeting",
+    stage: "new",
+    cashIn: false,
+    createdCycle: c.id,
+  };
+  d.orders.unshift(order);
+  return order;
+}
+
+/* ------------------------------------------------------------------ exports */
+
+export function payoutCsv(s: DemoState, cycleId: string): string {
+  const lines = cycleLines(s, cycleId);
+  const rows = [["cycle", "person", "role", "base", "commission", "adjustments", "carry", "net_payable"]];
+  for (const p of salesPeople(s)) {
+    const ps = payslip(lines, p.id);
+    rows.push([cycleId, p.name, p.title, ps.base, ps.commission, ps.adjustments, ps.carry, ps.payable].map((v) => (typeof v === "number" ? Math.round(v).toString() : v)));
+  }
+  return rows.map((r) => r.map((v) => (/[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(",")).join("\n");
+}
+

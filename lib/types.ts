@@ -1,0 +1,196 @@
+// Domain model for the Kova payout engine.
+// Everything the UI shows is derived from these records by lib/engine.ts.
+
+export type Stage = "new" | "confirmed" | "dispatched" | "delivered" | "returned" | "cancelled";
+
+export type Role = "closer" | "buyer" | "lead" | "stock" | "founder";
+
+/** When a sale earns commission. */
+export type CreditOn = "lead" | "delivered" | "cash";
+/** What happens to commission when an already-credited order comes back. */
+export type OnReturn = "clawback" | "offset" | "absorb";
+/** Who gets closer credit when one person opened the order and another closed it. */
+export type SplitRule = "first" | "last" | "half";
+/** Whether sales staff carry a fixed base on top of commission. */
+export type PayModel = "commission" | "base_plus";
+
+export interface Rules {
+  creditOn: CreditOn;
+  onReturn: OnReturn;
+  split: SplitRule;
+  /** Discount above this fraction halves the closer's rate on that order. */
+  discountFloor: number;
+  /** Return rate above this fraction halves the closer's variable commission on the cycle. */
+  returnCap: number;
+  payModel: PayModel;
+}
+export type RuleKey = keyof Rules;
+
+export interface Stamp {
+  by: string; // person id
+  at: string; // ISO timestamp
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  role: Role;
+  title: string;
+  /** Monthly base in naira. Pro-rated into each weekly cycle. */
+  monthlyBase: number;
+  reportsTo?: string;
+}
+
+export interface Product {
+  sku: string;
+  name: string;
+  onHand: number;
+  reorder: number;
+  cost: number;
+  leadDays: number;
+}
+
+export interface Order {
+  id: number;
+  customer: string;
+  city: string;
+  sku: string;
+  qty: number;
+  /** List value of the order (all units) before discount. */
+  list: number;
+  /** Fraction 0..0.2 */
+  discount: number;
+  /** First touch: who opened the conversation. */
+  openedBy: string;
+  /** Last touch: who closed the sale. */
+  closer: string;
+  buyer: string;
+  campaign: string;
+  stage: Stage;
+  /** Courier has remitted the cash (COD). */
+  cashIn: boolean;
+  /** Cancelled after dispatch = a failed delivery attempt. */
+  failed?: boolean;
+  returnCondition?: "resellable" | "damaged";
+
+  createdCycle: string;
+  deliveredCycle?: string;
+  reversedCycle?: string; // cycle in which it was returned / cancelled
+
+  /** Cycle whose payout already includes this order's commission. */
+  creditedCycle?: string;
+  /** Terminal and settled in a closed cycle without commission. */
+  closedOut?: boolean;
+}
+
+export type LineKind = "base" | "commission" | "clawback" | "offset" | "carry";
+
+export interface PayLine {
+  key: string;
+  personId: string;
+  kind: LineKind;
+  orderId?: number;
+  amount: number;
+  note: string;
+}
+
+export type CycleStatus = "open" | "approved" | "paid" | "locked";
+
+export interface Cycle {
+  id: string; // e.g. W44
+  start: string; // ISO date
+  end: string;
+  status: CycleStatus;
+  /** Lines carried in from the previous close (offsets, negative balances). */
+  carryIn: PayLine[];
+  /** Frozen on close. */
+  lines?: PayLine[];
+  pnl?: PnL;
+  closedAt?: string;
+  closedBy?: string;
+  paidAt?: string;
+  paidBy?: string;
+  lockedAt?: string;
+  lockedBy?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  sku: string;
+  qty: number;
+  unitCost: number;
+  raisedAt: string;
+  raisedBy: string;
+  eta: string;
+  status: "open" | "received";
+  receivedAt?: string;
+}
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  actor: string;
+  cycle: string;
+  kind: "order" | "rule" | "cycle" | "stock" | "discount" | "system";
+  text: string;
+  /** Money movements caused by this event, stored in naira and formatted at render. */
+  deltas?: { label: string; amount: number }[];
+}
+
+export interface DemoState {
+  version: number;
+  people: Person[];
+  products: Product[];
+  orders: Order[];
+  cycles: Cycle[];
+  rules: Rules;
+  rulesMeta: Record<RuleKey, Stamp>;
+  /** cycle id -> buyer id -> ad spend */
+  spend: Record<string, Record<string, number>>;
+  pos: PurchaseOrder[];
+  audit: AuditEntry[];
+  seq: number;
+}
+
+/** One row in a drill-down: the evidence behind a figure. */
+export interface DrillLine {
+  ref: string;
+  label: string;
+  detail?: string;
+  amount: number;
+}
+
+export interface Drill {
+  title: string;
+  subtitle?: string;
+  lines: DrillLine[];
+  total: number;
+}
+
+export interface PnL {
+  cycleId: string;
+  revenue: number;
+  refunds: number;
+  cogs: number;
+  writeoffs: number;
+  commission: number;
+  base: number;
+  adSpend: number;
+  logistics: number;
+  actual: number;
+  payout: number;
+  payoutRatio: number;
+  commissionRatio: number;
+  drills: Record<PnLKey, Drill>;
+}
+
+export type PnLKey =
+  | "revenue"
+  | "refunds"
+  | "cogs"
+  | "writeoffs"
+  | "commission"
+  | "base"
+  | "adSpend"
+  | "logistics"
+  | "actual";
