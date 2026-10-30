@@ -15,6 +15,7 @@ import {
   lockCycle as lockFx,
   log,
   markPaid as markPaidFx,
+  impactOf,
   openCycle,
   openLines,
   payslip,
@@ -180,6 +181,7 @@ export const useStore = create<Store>()(
           const prev = get().data.rules[key];
           if (prev === value) return;
           const res = mutate((d) => {
+            const pre = structuredClone(d);
             const pb = computePnl(d);
             d.rules[key] = value;
             d.rulesMeta[key] = { by: actor(), at: now() };
@@ -194,6 +196,7 @@ export const useStore = create<Store>()(
                 { label: "Total staff pay", amount: pa.payout - pb.payout },
                 { label: "Real profit", amount: pa.actual - pb.actual },
               ].filter((x) => Math.abs(x.amount) > 0.5),
+              impact: impactOf(pre, d),
             });
           });
           if (res) get().toast("ok", `${RULE_DEFS.find((r) => r.key === key)!.label} → ${ruleOptionLabel(key, value)}. Stamped to you.`);
@@ -238,7 +241,7 @@ export const useStore = create<Store>()(
                 break;
             }
             const before = get().data;
-            log(d, { at: now(), actor: actor(), kind: "order", text, deltas: peopleDeltas(before, d) });
+            log(d, { at: now(), actor: actor(), kind: "order", text, deltas: peopleDeltas(before, d), impact: impactOf(before, d) });
           });
           if (!res) return;
           const deltas = peopleDeltas(res.before, res.after);
@@ -287,9 +290,10 @@ export const useStore = create<Store>()(
         },
         receivePO: (poId) => {
           mutate((d) => {
+            const before = structuredClone(d);
             receivePOFx(d, poId, now());
             const po = d.pos.find((x) => x.id === poId)!;
-            log(d, { at: now(), actor: actor(), kind: "stock", text: `${po.id} received · ${po.sku} +${po.qty} on hand` });
+            log(d, { at: now(), actor: actor(), kind: "stock", text: `${po.id} received · ${po.sku} +${po.qty} on hand`, impact: impactOf(before, d) });
           });
         },
         createOrder: (input) => {
@@ -305,6 +309,7 @@ export const useStore = create<Store>()(
               kind: "order",
               text: `Lead #${o.id} created · ${o.customer} · ${o.sku} ×${o.qty}${splitNote}`,
               deltas: peopleDeltas(before, d),
+              impact: impactOf(before, d),
             });
           });
           if (res) {

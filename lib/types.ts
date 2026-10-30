@@ -125,6 +125,20 @@ export interface PurchaseOrder {
   receivedAt?: string;
 }
 
+/** What an event did to the rest of the company. Computed by diffing the state before and after. */
+export interface Impact {
+  /** Change in each person's pay this week. */
+  pay: { personId: string; amount: number }[];
+  /** Change in delivered revenue. */
+  revenue?: number;
+  /** Change in real profit. */
+  profit?: number;
+  /** Change in cash still with the courier (up is bad). */
+  stuckCash?: number;
+  /** Units on hand and units free to promise, where either moved. */
+  stock: { sku: string; onHand: [number, number]; available: [number, number] }[];
+}
+
 export interface AuditEntry {
   id: number;
   at: string;
@@ -134,6 +148,8 @@ export interface AuditEntry {
   text: string;
   /** Money movements caused by this event, stored in naira and formatted at render. */
   deltas?: { label: string; amount: number }[];
+  /** Who and what this event moved. Present on order, stock and rule events recorded after this was added. */
+  impact?: Impact;
 }
 
 export interface DemoState {

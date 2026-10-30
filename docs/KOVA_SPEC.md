@@ -20,6 +20,8 @@ The Kova Payout Engine is a client-persisted Next.js 15 + React 19 + TypeScript 
 >
 > **• Directional View Transitions:** Switching between role personas animates the main workspace directionally (forwards sliding up when moving down the org chart, backwards sliding down when moving up) using the native browser document.startViewTransition() API with graceful fallback.
 >
+> **• Live Activity Strip (`ActivityStrip.tsx`):** A line pinned under the top bar on every tab. It shows the latest event (who did what, and when) and **who and what it moved, for the role you are viewing as**. Marking #1043 delivered shows, to the founder: *Amaka +₦8,480 · Tobi +₦3,180 · Ngozi +₦2,120 · Delivered revenue +₦212,000 · Real profit +₦116,720 · Cash with courier +₦212,000 · AIR-12 on hand 4 → 3*. The same event shows a closer only *You +₦8,480* and the stock move, a media buyer only *You +₦3,180*, the team lead themself and their own closers, and the warehouse only the stock move. Company revenue, profit and courier cash are founder-only. Every chip carries a +/− sign, so colour is never the only signal; the viewer's own chip is outlined. New events flash the strip briefly and an **Earlier** button opens the last five. On a phone only the top bar stays pinned; the strip scrolls with the page. Before any event it says what to try.
+>
 > **• 60-Second CEO Tour Card:** Clicking **60-sec CEO tour** in the page header (or **CEO demo walkthrough** in the sidebar) opens an interactive 6-step executive walkthrough explaining the exact moments to test during a live demonstration.
 
 ## **1.2 Light-by-Default Theme (Light & Dark)**
@@ -104,6 +106,8 @@ To prevent commission fraud (such as a closer marking their own order 'Delivered
 | **Process Customer Return (\`delivered → returned\`)** | YES                    | NO (Warehouse only)       | NO                     | YES                   | YES                  |
 | **Raise & Receive Purchase Orders (POs)**              | YES                    | NO                        | NO                     | NO                    | YES                  |
 | **Load Your Own Data (CSV) / Back to Demo Data**       | YES                    | NO                        | NO                     | NO                    | NO                   |
+
+**What the live activity strip reveals (`impactFor()`):** Founder: everyone's pay change, delivered revenue, real profit, cash with the courier, and stock. Team lead: their own pay and their closers' pay, plus stock. Closer and media buyer: their own pay plus stock. Warehouse: stock only. Nobody sees another team member's pay unless they supervise them.
 
 # **3. The 5 Pay Rules (Founder Governance Strip)**
 
@@ -285,6 +289,7 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | lib/engine.ts                  | Pure, zero-React calculation and mutation engine (computePnl, commissionLines, payslip, whatIf, applyOrderAction, closeCycle, raisePO, receivePO, payoutCsv). |
 | components/AdBudget.tsx        | Profit per order, simulated Meta feed label, and each media buyer's ad cost per delivered order against the founder's max.                                |
 | components/RevenueFlow.tsx     | Founder-view revenue flow funnel ("Where every order is") and the stuck-or-leaking panel, both drillable. Engine: `revenueFlow()` and `leaks()` in lib/engine.ts. |
+| components/ActivityStrip.tsx   | Live activity strip pinned under the top bar on every tab, with per-role chips and an Earlier list. Engine: `impactOf()` and `impactFor()`; events carry an `impact` recorded in the audit log. |
 | components/PriceBook.tsx       | Company prices per SKU. Founder-editable, closers read-only; a price change only applies to new orders (each order stores its own unit price). |
 | components/ImportDialog.tsx    | Founder-only dialog: template downloads, three file pickers, live validation, summary, and "Show my dashboard". |
 | lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 8) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
@@ -302,5 +307,5 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
 | components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray.                                                       |
-| scripts/verify.ts              | Automated 25-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
+| scripts/verify.ts              | Automated 26-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
 | scripts/e2e.mjs                | Automated 10-scenario headless Chrome E2E test suite verifying DOM, 390px mobile layout, modals, and persistence.                                             |

@@ -9,6 +9,7 @@ import type {
   DemoState,
   Drill,
   DrillLine,
+  Impact,
   Order,
   PayLine,
   Person,
@@ -776,6 +777,55 @@ export function leaks(s: DemoState): Leak[] {
 
   return [cashLeak, blockedLeak, returnsLeak, adLeak, payEarly, payKept];
 }
+
+/* ------------------------------------------------------------------ impact of an event */
+
+/** Compare the company before and after an event: whose pay moved, and what it did to revenue,
+ *  profit, cash with the courier and stock. It is the same engine, so nothing here is estimated. */
+export function impactOf(before: DemoState, after: DemoState): Impact {
+  const lb = openLines(before);
+  const la = openLines(after);
+  const pay = salesPeople(after)
+    .map((p) => ({ personId: p.id, amount: payslip(la, p.id).gross - payslip(lb, p.id).gross }))
+    .filter((x) => Math.abs(x.amount) > 0.5);
+  const pb = computePnl(before);
+  const pa = computePnl(after);
+  const rb = stockRows(before);
+  const stock = stockRows(after)
+    .map((row) => {
+      const was = rb.find((x) => x.product.sku === row.product.sku);
+      return { sku: row.product.sku, onHand: [was?.onHand ?? row.onHand, row.onHand] as [number, number], available: [was?.available ?? row.available, row.available] as [number, number] };
+    })
+    .filter((x) => x.onHand[0] !== x.onHand[1] || x.available[0] !== x.available[1]);
+  const out: Impact = { pay, stock };
+  const dRevenue = pa.revenue - pb.revenue;
+  const dProfit = pa.actual - pb.actual;
+  const dStuck = cashWithCourier(after).total - cashWithCourier(before).total;
+  if (Math.abs(dRevenue) > 0.5) out.revenue = dRevenue;
+  if (Math.abs(dProfit) > 0.5) out.profit = dProfit;
+  if (Math.abs(dStuck) > 0.5) out.stuckCash = dStuck;
+  return out;
+}
+
+/** What each role is allowed to see of an event's impact. Founders see everything; the team lead sees
+ *  their own closers' pay and their own; closers and buyers see only their own pay; the warehouse sees stock. */
+export function impactFor(s: DemoState, impact: Impact, role: Role): Impact {
+  const me = PERSONA[role];
+  switch (role) {
+    case "founder":
+      return impact;
+    case "lead":
+      return { pay: impact.pay.filter((p) => p.personId === me || personOf(s, p.personId).reportsTo === me), stock: impact.stock };
+    case "closer":
+    case "buyer":
+      return { pay: impact.pay.filter((p) => p.personId === me), stock: impact.stock };
+    case "stock":
+      return { pay: [], stock: impact.stock };
+  }
+}
+
+export const impactIsEmpty = (i: Impact) =>
+  i.pay.length === 0 && i.stock.length === 0 && i.revenue === undefined && i.profit === undefined && i.stuckCash === undefined;
 
 export interface SkuEconomics {
   sku: string;

@@ -183,7 +183,7 @@ try {
 
   // 4. Switch to Closer role & verify rules are locked + stamp shown + phone cards rendered
   await evaluate(`document.querySelector('#tab-closer').click();`);
-  await sleep(150);
+  for (let i = 0; i < 30 && !(await evaluate(`return document.querySelectorAll(".ocard").length > 0 && document.querySelectorAll(".seg.locked").length > 0;`)); i++) await sleep(150);
   const closerChecks = await evaluate(`
     const segLocked = document.querySelectorAll(".seg.locked").length;
     const disabledBtns = document.querySelectorAll(".seg button:disabled").length;
@@ -237,6 +237,8 @@ try {
   // 7. Switch to Inventory (stock) & Raise PO to clear alert
   await evaluate(`document.querySelector('#tab-stock').click();`);
   await sleep(150);
+  // wait for the warehouse view to mount its alert and button before clicking
+  for (let i = 0; i < 30 && !(await evaluate(`return Array.from(document.querySelectorAll(".alert button")).some(b => b.innerText.includes("Raise POs"));`)); i++) await sleep(150);
   const stockBefore = await evaluate(`return document.querySelector(".alert")?.innerText;`);
   await evaluate(`
     const raiseAllBtn = Array.from(document.querySelectorAll(".alert button")).find(b => b.innerText.includes("Raise POs"));
@@ -303,6 +305,59 @@ try {
   await evaluate(`document.querySelector('.drawer button[aria-label="Close drill-down"]').click();`);
   await sleep(200);
   console.log("✓ [7c] Revenue flow funnel + leaks panel: figures tie to the P&L, drill-downs open, table view present");
+
+  // 7d. Live activity strip: an event on one tab shows who and what it moved, restricted by role
+  const stripText = () => evaluate(`return document.querySelector(".activity")?.innerText || "";`);
+  const waitStrip = async (needle) => {
+    for (let i = 0; i < 30 && !(await stripText()).includes(needle); i++) await sleep(150);
+    return stripText();
+  };
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(300);
+  const placed = await evaluate(`
+    const row = Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1043"));
+    const btn = row && Array.from(row.querySelectorAll("button")).find(b => b.innerText.includes("Mark delivered"));
+    if (btn) btn.click();
+    return Boolean(btn);
+  `);
+  assert.equal(placed, true, "Founder can mark #1043 delivered from the ledger");
+  const founderStrip = await waitStrip("Order 1043 delivered");
+  assert.ok(/Amaka\s*\+₦8,480/.test(founderStrip), "Founder sees the closer's pay move: " + founderStrip);
+  assert.ok(/Ngozi\s*\+₦2,120/.test(founderStrip), "Founder sees the team lead's pay move");
+  assert.ok(/Real profit\s*\+₦116,720/.test(founderStrip), "Founder sees real profit move: " + founderStrip);
+  assert.ok(/Cash with courier\s*\+₦212,000/.test(founderStrip), "Founder sees cash with the courier rise");
+  assert.ok(founderStrip.includes("AIR-12 on hand 4 → 3"), "Founder sees stock move: " + founderStrip);
+
+  for (const [tab, must, mustNot] of [
+    ["closer", [/You\s*\+₦8,480/], [/Real profit/, /Tobi/, /Ngozi/]],
+    ["buyer", [/You\s*\+₦3,180/], [/Real profit/, /Amaka/]],
+    ["lead", [/You\s*\+₦2,120/, /Amaka\s*\+₦8,480/], [/Real profit/, /Tobi/]],
+    ["stock", [/AIR-12 on hand 4 → 3/], [/\+₦/, /Real profit/]],
+  ]) {
+    await evaluate(`document.querySelector('#tab-${tab}').click();`);
+    await sleep(300);
+    const text = await stripText();
+    for (const re of must) assert.ok(re.test(text), `${tab} strip should match ${re}: ${text}`);
+    for (const re of mustNot) assert.ok(!re.test(text), `${tab} strip must not match ${re}: ${text}`);
+  }
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(300);
+  // the strip is sticky and the history opens
+  const sticky = await evaluate(`return getComputedStyle(document.querySelector(".sticky-head")).position;`);
+  assert.equal(sticky, "sticky", "The strip stays on screen under the top bar");
+  await evaluate(`document.querySelector(".act-more")?.click();`);
+  await sleep(200);
+  assert.ok(await evaluate(`return document.querySelectorAll(".act-earlier .act-event").length > 0;`), "Earlier events can be opened");
+  // on a phone the strip must not stay pinned (the top bar alone does), and nothing overflows
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(300);
+  const phone = await evaluate(`return { head: getComputedStyle(document.querySelector(".sticky-head")).display, bar: getComputedStyle(document.querySelector(".topbar")).position, sw: document.documentElement.scrollWidth };`);
+  assert.equal(phone.head, "contents", "On a phone the strip scrolls away");
+  assert.equal(phone.bar, "sticky", "The top bar stays pinned on a phone");
+  assert.equal(phone.sw, 390, "No horizontal scroll with the strip on a phone");
+  await send("Emulation.clearDeviceMetricsOverride");
+  await sleep(200);
+  console.log("✓ [7d] Live activity strip: one delivery shows pay, profit, cash and stock moves, filtered per role");
 
   // 8. No discounts anywhere; five rules visible; founder price change applies to new orders only
   await evaluate(`document.querySelector('#tab-founder').click();`);

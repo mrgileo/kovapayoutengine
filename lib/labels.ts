@@ -13,6 +13,7 @@ export const L = {
   productCost: "Product cost",
   damagedStock: "Damaged stock",
   salesPay: "Sales pay",
+  cashWithCourier: "Cash with courier",
   fixedSalary: "Fixed salary",
   adSpend: "Meta ad spend",
   deliveryFees: "Delivery fees",

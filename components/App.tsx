@@ -6,6 +6,7 @@ import { PERSONA, computePnl, needsAttention, openCycle, personOf } from "@/lib/
 import { CCY, Currency, shortDate } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
 import type { Role } from "@/lib/types";
+import { ActivityStrip } from "./ActivityStrip";
 import { BuyerView, LeadView } from "./BuyerLeadViews";
 import { CloserView } from "./CloserView";
 import { CycleBar } from "./CycleBar";
@@ -322,6 +323,7 @@ export function App() {
         role="tabpanel"
         aria-labelledby={`tab-${role}`}
       >
+        <div className="sticky-head">
         <div className="topbar">
           <div className="topbar-left">
             <button
@@ -374,6 +376,8 @@ export function App() {
               <span className="kbd">⌘K</span>
             </button>
           </div>
+        </div>
+        <ActivityStrip />
         </div>
 
         <div className="main-in">

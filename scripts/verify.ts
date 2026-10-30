@@ -7,6 +7,9 @@ import {
   actionsFor,
   adCost,
   cashWithCourier,
+  impactFor,
+  impactIsEmpty,
+  impactOf,
   leaks,
   revenueFlow,
   profitPerOrder,
@@ -360,5 +363,54 @@ const sLead2 = structuredClone(s);
 sLead2.rules.creditOn = "lead";
 assert.equal(Math.round(leaks(sLead2).find((l) => l.key === "payEarly")!.amount), 34210, "Pay before delivery shows up under the Lead rule");
 
-console.log("ALL 25 ENGINE INVARIANTS PASSED.");
+// 26. Live activity: an event's impact is the engine's own before/after difference, shown per role
+const deliveredAfter = structuredClone(s);
+assert.equal(transition(deliveredAfter, 1043, "deliver"), null);
+const imp1043 = impactOf(s, deliveredAfter);
+const payOf = (i: typeof imp1043, id: string) => i.pay.find((p) => p.personId === id)?.amount;
+assert.equal(payOf(imp1043, "amaka"), 212000 * 0.04, "Closer earns 4% when #1043 lands");
+assert.equal(payOf(imp1043, "tobi"), 212000 * 0.015, "Media buyer earns 1.5%");
+assert.equal(payOf(imp1043, "ngozi"), 212000 * 0.01, "Team lead earns 1%");
+assert.equal(
+  Math.abs(sum(imp1043.pay.map((p) => p.amount)) - (computePnl(deliveredAfter).payout - computePnl(s).payout)) < 1e-6,
+  true,
+  "The pay deltas add up to the change in total staff pay",
+);
+assert.equal(imp1043.revenue, 212000, "Delivered revenue rises by the order value");
+assert.equal(imp1043.profit, 212000 - 78000 - 13780 - DELIVERY_FEE, "Real profit moves by revenue − product cost − sales pay − delivery fee");
+assert.equal(imp1043.stuckCash, 212000, "Delivered but cash not yet in: cash with the courier rises");
+assert.deepEqual(imp1043.stock, [{ sku: "AIR-12", onHand: [4, 3], available: [2, 2] }], "On hand drops, free stock is unchanged because the unit was already reserved");
+
+const confirmed = structuredClone(s);
+assert.equal(transition(confirmed, 1048, "confirm"), null);
+const impConfirm = impactOf(s, confirmed);
+assert.deepEqual(impConfirm.stock, [{ sku: "BLN-07", onHand: [12, 12], available: [11, 10] }], "Confirming reserves a unit: free stock drops, on hand does not");
+assert.equal(impConfirm.pay.length === 0 && impConfirm.revenue === undefined, true, "Confirming moves no money under the Delivery rule");
+
+const cashed = structuredClone(deliveredAfter);
+assert.equal(transition(cashed, 1043, "cash"), null);
+assert.equal(impactOf(deliveredAfter, cashed).stuckCash, -212000, "Cash received clears the cash with the courier");
+
+assert.equal(impactIsEmpty(impactOf(s, structuredClone(s))), true, "No change, no impact");
+
+// who sees what
+const seen = (role: Parameters<typeof impactFor>[2]) => impactFor(s, imp1043, role);
+assert.deepEqual(seen("founder").pay.map((p) => p.personId).sort(), ["amaka", "ngozi", "tobi"]);
+assert.equal(seen("founder").profit !== undefined && seen("founder").stuckCash !== undefined, true, "Founder sees company profit and stuck cash");
+assert.deepEqual(seen("closer").pay.map((p) => p.personId), ["amaka"], "A closer sees only their own pay");
+assert.deepEqual(seen("buyer").pay.map((p) => p.personId), ["tobi"], "A media buyer sees only their own pay");
+assert.deepEqual(seen("lead").pay.map((p) => p.personId).sort(), ["amaka", "ngozi"], "The team lead sees themself and their own closers, not the media buyer");
+assert.deepEqual(seen("stock").pay, [], "The warehouse sees no pay");
+for (const role of ["lead", "closer", "buyer", "stock"] as const) {
+  const i = seen(role);
+  assert.equal(i.revenue === undefined && i.profit === undefined && i.stuckCash === undefined, true, role + " does not see company revenue, profit or courier cash");
+  assert.equal(i.stock.length, 1, role + " still sees the stock move");
+}
+// a rule change shows up as an impact too
+const ruleAfter = structuredClone(s);
+ruleAfter.rules.creditOn = "lead";
+const ruleImpact = impactOf(s, ruleAfter);
+assert.equal(ruleImpact.pay.length > 0 && ruleImpact.profit !== undefined && ruleImpact.profit < 0, true, "Switching to pay on lead raises pay and lowers profit");
+
+console.log("ALL 26 ENGINE INVARIANTS PASSED.");
 
