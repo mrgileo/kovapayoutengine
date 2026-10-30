@@ -2678,3 +2678,210 @@ table.tbl {
     display: none;
   }
 }
+
+/* ─── Revenue flow funnel & leaks ───────────────────────────────────────────
+ * One green hue in six ordinal steps (light → dark = further along the flow). Both
+ * ramps were checked with the dataviz --ordinal validator: monotone lightness, step
+ * gaps ≥ 0.06 ΔL, light end ≥ 2:1 against the surface, single hue. */
+:root {
+  --flow-1: #94aa9c;
+  --flow-2: #799483;
+  --flow-3: #5e7f6a;
+  --flow-4: #416850;
+  --flow-5: #265237;
+  --flow-6: #0b3d1e;
+}
+:root[data-theme="dark"] {
+  --flow-1: #275f3e;
+  --flow-2: #2e784b;
+  --flow-3: #349057;
+  --flow-4: #3cad66;
+  --flow-5: #43c573;
+  --flow-6: #4ade80;
+}
+
+.flow {
+  padding: 8px 20px 14px;
+}
+.flow-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) minmax(96px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  outline-offset: -2px;
+}
+.flow-row:hover,
+.flow-row:focus-visible {
+  background: var(--hl-soft);
+}
+.flow-lbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.flow-lbl span {
+  font-weight: 600;
+  color: var(--ink);
+}
+.flow-lbl small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.flow-track {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  border-left: 1px solid var(--line-strong);
+}
+.flow-bar {
+  height: 14px;
+  border-radius: 0 4px 4px 0; /* square at the baseline, rounded data end */
+  transition: filter 140ms var(--ease-out), width 320ms var(--ease-out);
+}
+.flow-row:hover .flow-bar,
+.flow-row:focus-visible .flow-bar {
+  filter: brightness(1.12) saturate(1.1);
+}
+.flow-amt {
+  text-align: right;
+  font-weight: 600;
+}
+.flow-drops {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 1px 8px 1px 190px;
+}
+.flow-drop {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.flow-drop svg {
+  color: var(--neg);
+  flex: none;
+}
+.flow-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 8px 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.flow-table {
+  margin: 8px 8px 0;
+  font-size: 12px;
+}
+.flow-table summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.flow-table table {
+  margin-top: 6px;
+}
+
+.leak-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 20px 6px;
+  border-top: 1px solid var(--line);
+}
+.leaks section:first-child .leak-head {
+  border-top: 0;
+}
+.leak-head b {
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+.leak-head small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.leak-head .mono {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.leak-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 20px;
+}
+.leak-row:hover {
+  background: var(--hl-soft);
+}
+.leak-row.clear {
+  opacity: 0.6;
+}
+.leak-ico {
+  padding-top: 1px;
+}
+.leak-ico.pos {
+  color: var(--pos);
+}
+.leak-ico.neg {
+  color: var(--neg);
+}
+.leak-ico.warn {
+  color: var(--hl);
+}
+.leak-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.leak-main b {
+  font-size: 13px;
+}
+.leak-main small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.leak-main .leak-do {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.leak-amt {
+  text-align: right;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.leak-amt small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .flow {
+    padding: 6px 12px 12px;
+  }
+  .flow-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 4px;
+  }
+  .flow-track {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .flow-drops {
+    padding-left: 8px;
+  }
+  .leak-row,
+  .leak-head {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

@@ -609,6 +609,174 @@ export function adCost(s: DemoState, buyerId: string): AdCost {
   return { buyerId, spend, delivered, costPerOrder, overMax };
 }
 
+/* ------------------------------------------------------------------ revenue flow & leaks */
+
+export type FlowKey = "booked" | "confirmed" | "dispatched" | "delivered" | "kept" | "cash";
+
+export interface FlowDrop {
+  label: string;
+  orders: number;
+  value: number;
+}
+
+export interface FlowStep {
+  key: FlowKey;
+  orders: number;
+  value: number;
+  /** Share of the booked value that reached this step. */
+  share: number;
+  /** What fell out between the previous step and this one. */
+  drops: FlowDrop[];
+  drill: Drill;
+}
+
+export interface RevenueFlow {
+  cycleId: string;
+  steps: FlowStep[];
+  /** P&L delivered revenue minus the "kept" step: revenue from orders booked in earlier weeks. */
+  otherWeeksRevenue: number;
+}
+
+const failedCancel = (o: Order) => o.stage === "cancelled" && Boolean(o.failed);
+
+/** Where every order booked this week has got to, with the money at each step.
+ *  Each step is "reached this stage or beyond", so a step can only be smaller than the one before it. */
+export function revenueFlow(s: DemoState): RevenueFlow {
+  const C = openCycle(s).id;
+  const mine = s.orders.filter((o) => o.createdCycle === C);
+  const value = (os: Order[]) => sum(os.map(orderValue));
+  const reach: Record<FlowKey, (o: Order) => boolean> = {
+    booked: () => true,
+    confirmed: (o) => ["confirmed", "dispatched", "delivered", "returned"].includes(o.stage) || failedCancel(o),
+    dispatched: (o) => ["dispatched", "delivered", "returned"].includes(o.stage) || failedCancel(o),
+    delivered: (o) => o.stage === "delivered" || o.stage === "returned",
+    kept: (o) => o.stage === "delivered",
+    cash: (o) => o.stage === "delivered" && o.cashIn,
+  };
+  const dropsFor: Record<FlowKey, [string, (o: Order) => boolean][]> = {
+    booked: [],
+    confirmed: [
+      [L.flowDropWaitingConfirm, (o) => o.stage === "new"],
+      [L.flowDropCancelled, (o) => o.stage === "cancelled" && !o.failed],
+    ],
+    dispatched: [[L.flowDropWaitingDispatch, (o) => o.stage === "confirmed"]],
+    delivered: [
+      [L.flowDropOnTheRoad, (o) => o.stage === "dispatched"],
+      [L.flowDropFailed, failedCancel],
+    ],
+    kept: [[L.flowDropReturned, (o) => o.stage === "returned"]],
+    cash: [[L.flowDropCashWithCourier, (o) => o.stage === "delivered" && !o.cashIn]],
+  };
+  const stageNote = (o: Order) => (failedCancel(o) ? "Failed delivery" : o.stage === "delivered" && !o.cashIn ? "Delivered · cash still with courier" : `Now ${o.stage}`);
+
+  const bookedValue = value(mine);
+  const keys = Object.keys(reach) as FlowKey[];
+  const steps: FlowStep[] = keys.map((key) => {
+    const at = mine.filter(reach[key]);
+    const v = value(at);
+    return {
+      key,
+      orders: at.length,
+      value: v,
+      share: bookedValue > 0 ? v / bookedValue : 0,
+      drops: dropsFor[key]
+        .map(([label, test]) => {
+          const hit = mine.filter(test);
+          return { label, orders: hit.length, value: value(hit) };
+        })
+        .filter((d) => d.orders > 0),
+      drill: {
+        title: L.flowStepLabel[key],
+        subtitle: `Orders booked in ${C} that have ${L.flowStepHint[key]}`,
+        lines: at.map((o) => ({ ref: orderRef(o), label: `${o.customer} · ${o.sku} ×${o.qty}`, detail: stageNote(o), amount: orderValue(o) })),
+        total: v,
+      },
+    };
+  });
+  const kept = steps.find((x) => x.key === "kept")!;
+  return { cycleId: C, steps, otherWeeksRevenue: computePnl(s).revenue - kept.value };
+}
+
+export type LeakKind = "stuck" | "costing";
+
+export interface Leak {
+  key: "cash" | "blocked" | "returns" | "ads" | "payEarly" | "payKept";
+  kind: LeakKind;
+  /** Money. Zero means this leak is clear. */
+  amount: number;
+  count: number;
+  drill: Drill;
+}
+
+/** Money that is stuck on its way in, or that is costing you. Not additive to the P&L:
+ *  each row is a different lens on the same week, so there is deliberately no grand total. */
+export function leaks(s: DemoState): Leak[] {
+  const C = openCycle(s).id;
+  const make = (key: Leak["key"], kind: LeakKind, title: string, subtitle: string, lines: DrillLine[]): Leak => ({
+    key,
+    kind,
+    amount: sum(lines.map((l) => l.amount)),
+    count: lines.length,
+    drill: { title, subtitle, lines, total: sum(lines.map((l) => l.amount)) },
+  });
+
+  const cash = cashWithCourier(s);
+  const cashLeak = make("cash", "stuck", L.leak.cash.label, cash.subtitle ?? "", cash.lines);
+
+  const blockedLines: DrillLine[] = s.orders
+    .filter((o) => o.stage === "new")
+    .map((o) => ({ o, row: stockRow(s, productOf(s, o.sku)) }))
+    .filter(({ o, row }) => row.available < o.qty)
+    .map(({ o, row }) => ({
+      ref: orderRef(o),
+      label: `${o.customer} · ${o.sku} ×${o.qty}`,
+      detail: `${Math.max(0, row.available)} free, needs ${o.qty}${row.onOrder > 0 ? ` · ${row.onOrder} on order, due ${row.nextEta}` : " · no purchase order raised yet"}`,
+      amount: orderValue(o),
+    }));
+  const blockedLeak = make("blocked", "stuck", L.leak.blocked.label, "New orders that cannot be confirmed because the stock is not there", blockedLines);
+
+  const returnLines: DrillLine[] = [];
+  for (const o of s.orders) {
+    if (o.reversedCycle !== C) continue;
+    const trips = (o.deliveredCycle === C && o.stage === "returned" ? 1 : 0) + (o.stage === "returned" ? 1 : 0) + (failedCancel(o) ? 1 : 0);
+    if (trips > 0) {
+      returnLines.push({
+        ref: orderRef(o),
+        label: `${o.customer} · ${o.stage === "returned" ? "returned" : "failed delivery"}`,
+        detail: `${trips} delivery fee${trips === 1 ? "" : "s"} paid for nothing`,
+        amount: trips * DELIVERY_FEE,
+      });
+    }
+    if (o.stage === "returned" && o.deliveredCycle === C && o.returnCondition === "damaged") {
+      returnLines.push({ ref: orderRef(o), label: `${o.sku} ×${o.qty} ${L.damagedStock.toLowerCase()}`, detail: "Returned and can't be resold", amount: unitCost(s, o) });
+    }
+    if (o.stage === "returned" && o.deliveredCycle !== C) {
+      returnLines.push({ ref: orderRef(o), label: `${o.customer} · ${L.refunds.toLowerCase()}`, detail: `Delivered ${o.deliveredCycle}, returned ${C}`, amount: orderValue(o) });
+    }
+  }
+  const returnsLeak = make("returns", "costing", L.leak.returns.label, "Delivery fees, damaged stock and refunds on orders that came back or failed this week", returnLines);
+
+  const adLines: DrillLine[] = [];
+  for (const p of s.people.filter((x) => x.role === "buyer")) {
+    const c = adCost(s, p.id);
+    if (!c.overMax) continue;
+    adLines.push({
+      ref: "Sim. feed",
+      label: p.name,
+      detail: `₦${c.spend.toLocaleString()} spend ÷ ${c.delivered} delivered = ${c.costPerOrder === null ? "no delivered orders" : `₦${Math.round(c.costPerOrder).toLocaleString()} each`}; your max is ₦${s.maxCostPerOrder.toLocaleString()}. ${SIM_FEED_NOTE}`,
+      amount: c.spend - c.delivered * s.maxCostPerOrder,
+    });
+  }
+  const adLeak = make("ads", "costing", L.leak.ads.label, "Ad spend above your max cost per delivered order", adLines);
+
+  const early = paidOnUndelivered(s);
+  const payEarly = make("payEarly", "costing", L.leak.payEarly.label, early.subtitle ?? "", early.lines);
+  const kept = absorbedDrill(s);
+  const payKept = make("payKept", "costing", L.leak.payKept.label, kept.subtitle ?? "", kept.lines);
+
+  return [cashLeak, blockedLeak, returnsLeak, adLeak, payEarly, payKept];
+}
+
 export interface SkuEconomics {
   sku: string;
   name: string;

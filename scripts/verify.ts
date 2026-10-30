@@ -6,6 +6,9 @@ import { RULE_DEFS } from "../lib/rules.ts";
 import {
   actionsFor,
   adCost,
+  cashWithCourier,
+  leaks,
+  revenueFlow,
   profitPerOrder,
   campaignStats,
   skuEconomics,
@@ -168,6 +171,11 @@ const screenText = [
   ...s.people.map((p) => p.title),
   ...["tobi", "zainab"].flatMap((b) => drillText(campaignStats(s, b).marginDrill)),
   ...skuEconomics(s).flatMap((e) => drillText(e.drill)),
+  ...flatten(L.leak),
+  ...Object.values(L.flowStepLabel),
+  ...Object.values(L.flowStepHint),
+  ...revenueFlow(s).steps.flatMap((st) => [...drillText(st.drill), ...st.drops.map((d) => d.label)]),
+  ...leaks(s).flatMap((l) => drillText(l.drill)),
   ...closerStats(s, "amaka").contributionDrill.lines.flatMap((l) => [l.label, l.detail ?? ""]),
   ...openLines(s).map((l) => l.note),
 ];
@@ -290,5 +298,67 @@ if (messy.ok) {
   assert.equal(o.campaign, "Promo, big");
 }
 
-console.log("ALL 23 ENGINE INVARIANTS PASSED.");
+// 24. Revenue flow: each step is "reached this stage or beyond", drop-offs explain every gap, and it ties to the P&L
+const flow = revenueFlow(s);
+assert.deepEqual(
+  flow.steps.map((st) => [st.key, st.orders, st.value]),
+  [
+    ["booked", 13, 1850000],
+    ["confirmed", 11, 1589500],
+    ["dispatched", 9, 1003500],
+    ["delivered", 6, 606000],
+    ["kept", 5, 532500],
+    ["cash", 3, 347000],
+  ],
+);
+for (let i = 1; i < flow.steps.length; i++) {
+  const prev = flow.steps[i - 1];
+  const cur = flow.steps[i];
+  assert.equal(cur.orders <= prev.orders && cur.value <= prev.value, true, cur.key + " cannot exceed the step before it");
+  assert.equal(prev.value - cur.value, sum(cur.drops.map((d) => d.value)), "Drop-offs explain every naira lost before " + cur.key);
+  assert.equal(prev.orders - cur.orders, sum(cur.drops.map((d) => d.orders)), "Drop-offs explain every order lost before " + cur.key);
+}
+for (const st of flow.steps) assert.equal(st.drill.total, st.value, st.key + " drill total matches the figure");
+assert.equal(flow.steps.find((x) => x.key === "kept")!.value, computePnl(s).revenue, "Delivered and kept ties to delivered revenue in the P&L");
+assert.equal(flow.otherWeeksRevenue, 0);
+// moving cash in moves only the last step
+const sCash = structuredClone(s);
+transition(sCash, 1047, "cash");
+transition(sCash, 1050, "cash");
+assert.equal(revenueFlow(sCash).steps.find((x) => x.key === "cash")!.value, 532500, "Marking cash received lifts the last step");
+// a brand-new empty week is safe (no NaN, no crash)
+const sNext = structuredClone(s);
+closeCycle(sNext, "chidinma", "2026-11-02T09:00:00Z");
+const emptyFlow = revenueFlow(sNext);
+assert.equal(emptyFlow.steps[0].orders, 0);
+assert.equal(emptyFlow.steps.every((st) => st.share === 0 && Number.isFinite(st.value)), true);
+
+// 25. Leaks: stuck vs costing, each with a drill that adds up; there is deliberately no grand total
+const lk = leaks(s);
+const by = (k: string) => lk.find((l) => l.key === k)!;
+assert.deepEqual(
+  lk.map((l) => [l.key, l.kind, Math.round(l.amount)]),
+  [
+    ["cash", "stuck", 185500],
+    ["blocked", "stuck", 187000],
+    ["returns", "costing", 7000],
+    ["ads", "costing", 261000],
+    ["payEarly", "costing", 0],
+    ["payKept", "costing", 0],
+  ],
+);
+for (const l of lk) assert.equal(Math.abs(l.drill.total - l.amount) < 1e-6, true, l.key + " drill total matches");
+assert.equal(by("cash").amount, cashWithCourier(s).total, "Cash leak is the same figure as the courier tile");
+assert.equal(by("returns").amount, 2 * DELIVERY_FEE, "#1046 cost two delivery fees");
+assert.equal(by("ads").amount, 185000 - 2 * 4000 + (96000 - 3 * 4000), "Ad leak is spend above max × delivered orders");
+const sFix = structuredClone(s);
+sFix.maxCostPerOrder = 100000;
+assert.equal(leaks(sFix).find((l) => l.key === "ads")!.amount, 0, "A higher max clears the ad leak");
+sFix.products.find((p) => p.sku === "VAC-21")!.onHand = 10;
+assert.equal(leaks(sFix).find((l) => l.key === "blocked")!.amount, 0, "Stock arriving clears the blocked orders");
+const sLead2 = structuredClone(s);
+sLead2.rules.creditOn = "lead";
+assert.equal(Math.round(leaks(sLead2).find((l) => l.key === "payEarly")!.amount), 34210, "Pay before delivery shows up under the Lead rule");
+
+console.log("ALL 25 ENGINE INVARIANTS PASSED.");
 

@@ -271,6 +271,39 @@ try {
   assert.equal(overAfter, 0, "Raising the max clears the over-max flags");
   console.log("✓ [7b] Ad budget card: simulated feed label, profit per order, max cost per order flags update live");
 
+  // 7c. Revenue flow funnel and leaks panel: figures tie out, drill-downs open, the table view exists
+  const flowInfo = await evaluate(`
+    const flow = document.querySelector(".flow");
+    return flow ? {
+      text: flow.innerText,
+      rows: flow.querySelectorAll(".flow-row").length,
+      table: Boolean(flow.querySelector("details.flow-table table")),
+      leakRows: document.querySelectorAll(".leak-row").length,
+      leakClear: document.querySelectorAll(".leak-row.clear").length,
+    } : null;
+  `);
+  assert.ok(flowInfo, "Revenue flow funnel should render on the founder view");
+  assert.equal(flowInfo.rows, 6, "Six funnel steps");
+  assert.ok(flowInfo.text.includes("1,850,000") && flowInfo.text.includes("532,500"), "Funnel shows booked and kept values: " + flowInfo.text);
+  assert.ok(flowInfo.text.includes("equals the delivered revenue"), "Funnel ties to the delivered revenue in the P&L");
+  assert.equal(flowInfo.table, true, "A table view of the funnel exists");
+  assert.equal(flowInfo.leakRows, 6, "Six leak checks");
+  // Scenario 7b raised the max cost per order to ₦100,000, so the ad-spend leak is clear too (2 clear on the seed + ads).
+  assert.equal(flowInfo.leakClear, 3, "Pay-before-delivery, pay-kept and (after 7b) ad spend are clear");
+  await evaluate(`document.querySelector(".leak-row .fig, .leak-row [data-fig], .leak-row .leak-amt > *")?.click();`);
+  await sleep(300);
+  const leakDrill = await evaluate(`return document.querySelector(".drawer h2")?.innerText || "";`);
+  assert.ok(leakDrill.includes("Cash still with the courier"), "Clicking a leak figure opens its orders, got: " + leakDrill);
+  await evaluate(`document.querySelector('.drawer button[aria-label="Close drill-down"]').click();`);
+  await sleep(200);
+  await evaluate(`document.querySelector(".flow-row .flow-amt > *")?.click();`);
+  await sleep(300);
+  const stepDrill = await evaluate(`return document.querySelector(".drawer h2")?.innerText || "";`);
+  assert.ok(stepDrill.includes("Booked"), "Clicking a funnel figure opens its orders, got: " + stepDrill);
+  await evaluate(`document.querySelector('.drawer button[aria-label="Close drill-down"]').click();`);
+  await sleep(200);
+  console.log("✓ [7c] Revenue flow funnel + leaks panel: figures tie to the P&L, drill-downs open, table view present");
+
   // 8. No discounts anywhere; five rules visible; founder price change applies to new orders only
   await evaluate(`document.querySelector('#tab-founder').click();`);
   await sleep(200);

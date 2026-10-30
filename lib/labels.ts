@@ -30,6 +30,39 @@ export const L = {
   simulatedFeed: "Simulated Meta feed",
   simulatedFeedNote: "Demo figures. This is not a live Meta connection.",
 
+  // Revenue flow (funnel) and leaks
+  flowDropWaitingConfirm: "Waiting to be confirmed",
+  flowDropCancelled: "Cancelled before shipping",
+  flowDropWaitingDispatch: "Confirmed, waiting for the warehouse",
+  flowDropOnTheRoad: "Out for delivery",
+  flowDropFailed: "Failed deliveries",
+  flowDropReturned: "Returned by the customer",
+  flowDropCashWithCourier: "Delivered, cash still with the courier",
+  flowStepLabel: {
+    booked: "Booked",
+    confirmed: "Confirmed",
+    dispatched: "Sent out",
+    delivered: "Delivered",
+    kept: "Delivered and kept",
+    cash: "Cash received",
+  },
+  flowStepHint: {
+    booked: "been booked",
+    confirmed: "been confirmed or gone further",
+    dispatched: "been sent out or gone further",
+    delivered: "reached the customer",
+    kept: "reached the customer and not been returned",
+    cash: "reached the customer, been kept, and had the cash received",
+  },
+  leak: {
+    cash: { label: "Cash still with the courier", why: "Delivered, but the courier hasn't handed over the money.", action: "Chase the courier, then mark the cash received." },
+    blocked: { label: "Orders waiting on stock", why: "Booked, but there's no stock to confirm them.", action: "Raise a purchase order for the SKU." },
+    returns: { label: "Returns and failed deliveries", why: "Delivery fees, damaged stock and refunds on orders that came back or failed.", action: "Look at which closer and product the returns come from." },
+    ads: { label: "Ad spend above your max", why: "Ad spend beyond your max cost per delivered order.", action: "Pause or fix the campaigns that cost the most per delivered order." },
+    payEarly: { label: "Sales pay before delivery", why: "Sales pay going out on orders that haven't reached the customer.", action: "Pay on delivery or on cash received instead." },
+    payKept: { label: "Pay kept on returned orders", why: "Staff kept their pay on orders that came back and the business took the loss.", action: "Set Pay taken back to Take back now." },
+  },
+
   // Customer money vs staff money are different things
   payTakenBack: "Pay taken back",
   payTakenBackNextWeek: "Pay to be taken back next week",

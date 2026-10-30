@@ -15,6 +15,7 @@ import { pct } from "@/lib/format";
 import { L, PNL_TEXT as P } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { AdBudget } from "./AdBudget";
+import { FlowFunnel, LeaksPanel } from "./RevenueFlow";
 import { CloserScorecard } from "./CloserScorecard";
 import { Card, Fig, Tile, useMoney } from "./ui";
 import type { PnLKey } from "@/lib/types";
@@ -140,6 +141,11 @@ export function FounderView() {
           </div>
         </div>
       </section>
+
+      <div className="grid-2">
+        <FlowFunnel />
+        <LeaksPanel />
+      </div>
 
       {/* Key founder tiles */}
       <dl className="tiles">
