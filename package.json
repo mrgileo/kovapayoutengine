@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings scripts/verify.ts"
+    "test": "node --experimental-strip-types --no-warnings scripts/verify.ts",
+    "verify": "npm run test"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 
 const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const PORT = 9229;
@@ -15,7 +17,7 @@ const proc = spawn(
     "--disable-gpu",
     "--no-first-run",
     "--no-default-browser-check",
-    "--user-data-dir=C:\\Users\\K-LEE\\.gemini\\antigravity\\brain\\e1898e82-246a-421b-b147-2b04962931de\\scratch\\chrome-profile",
+    `--user-data-dir=${path.join(os.tmpdir(), "kova-e2e-chrome")}`,
     "--window-size=1440,900",
     URL,
   ],

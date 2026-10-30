@@ -1,7 +1,7 @@
 import type { DemoState, Order, Person, Product, Rules, RuleKey, Stamp } from "./types.ts";
 import { closeCycle, lockCycle, log, markPaid } from "./engine.ts";
 
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 
 const people: Person[] = [
   { id: "amaka", name: "Amaka Obi", role: "closer", title: "Closer", monthlyBase: 70000, reportsTo: "ngozi" },
@@ -15,7 +15,7 @@ const people: Person[] = [
 
 const products: Product[] = [
   { sku: "AIR-12", name: "Air fryer 5.5L", onHand: 4, reorder: 3, cost: 78000, leadDays: 7 },
-  { sku: "BLN-07", name: "Blender Pro 1200W", onHand: 11, reorder: 4, cost: 34000, leadDays: 5 },
+  { sku: "BLN-07", name: "Blender Pro 1200W", onHand: 12, reorder: 4, cost: 34000, leadDays: 5 },
   { sku: "KET-03", name: "Electric kettle 1.7L", onHand: 2, reorder: 5, cost: 19500, leadDays: 4 },
   { sku: "VAC-21", name: "Handheld vacuum", onHand: 2, reorder: 3, cost: 96000, leadDays: 10 },
   { sku: "STM-09", name: "Garment steamer", onHand: 9, reorder: 3, cost: 52000, leadDays: 6 },

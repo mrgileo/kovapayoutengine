@@ -44,7 +44,7 @@ The interface is built around a high-contrast **Yellow + Carbon Black + Crisp Wh
 >
 > **• Multi-Currency Display Switcher:** Located in the sidebar footer. Converts all displayed figures live between **NGN (\`₦\`, rate \`1:1\`)**, **USD (\`\$\`, \`₦1,600 = \$1\`)**, and **GBP (\`£\`, \`₦2,050 = £1\`)**.
 >
-> **• Automatic State Persistence:** All rule changes, order transitions, discounts, returns, purchase orders, and cycle closures persist automatically in localStorage under kova-payout-engine-v3 (with SEED_VERSION = 5). Clicking **Reset demo state** restores the clean factory seed.
+> **• Automatic State Persistence:** All rule changes, order transitions, discounts, returns, purchase orders, and cycle closures persist automatically in localStorage under kova-payout-engine (with SEED_VERSION = 6). Clicking **Reset demo state** restores the clean factory seed.
 
 # **2. Role Personas, Org Structure & Segregation of Duties**
 
@@ -95,7 +95,7 @@ The **Payout & Operating Rules** card sits at the top of the workspace on every 
 | **2. When a paid order comes back** (onReturn) | Claw back · Offset next cycle · Absorb | Claw back       | Governs what happens when an order returns: • **Unpaid accrual (same cycle):** Reverses immediately under Claw back or Offset; kept by staff under Absorb. • **Post-close return (paid in prior open-window cycle like W43):** Claw back deducts the paid commission immediately in the current open cycle (W44). Offset next cycle schedules the deduction into the next cycle's carryIn when W44 closes. Absorb leaves the paid commission untouched. • **Locked cycle (\`W42\`):** Always final — never clawed back under any policy. |
 | **3. Two closers, one order** (split)          | First touch · Last touch · 50-50       | Last touch      | Applies when order.openedBy !== order.closer (e.g. **Order \#1053**, opened by Amaka, closed by Chidi): • **First touch (\`first\`):** 100% of closer commission goes to openedBy (Amaka). • **Last touch (\`last\`):** 100% of closer commission goes to closer (Chidi). • **50-50 (\`half\`):** 50% (2.0%) to openedBy and 50% (2.0%) to closer.                                                                                                                                                                                       |
 | **4. Discount floor** (discountFloor)          | 5% · 10% · 15%                         | 10%             | 1\. Commission is **always** calculated on the discounted price orderValue = round(list \* (1 - discount)), never list price. 2. If order.discount \> discountFloor, the closer's commission rate on that order is **halved (\`× 0.5\`)** (e.g., **Order \#1049** has a 15% discount above the 10% floor, cutting Amaka's closer rate from 4.0% to 2.0%).                                                                                                                                                                                |
-| **5. Return-rate quality gate** (returnCap)    | Off · 30% cap · 20% cap                | Off (100%)      | Calculates each closer's resolved return rate across all cycles: returned / (delivered + returned). • Amaka is at 37.5% (3 returned / 8 resolved); Chidi is at 14.3% (1 returned / 7 resolved). • When set to 30% cap or 20% cap, any closer whose return rate exceeds the cap has their commission halved (× 0.5) across the cycle (stacking with the discount guardrail down to 0.25× if both are breached).                                                                                                                           |
+| **5. Return-rate quality gate** (returnCap)    | Off · 30% cap · 20% cap                | Off (100%)      | Calculates each closer's resolved return rate across all cycles: returned / (delivered + returned). • Amaka is at 33.3% (3 returned / 9 resolved); Chidi is at 12.5% (1 returned / 8 resolved). • When set to 30% cap or 20% cap, any closer whose return rate exceeds the cap has their commission halved (× 0.5) across the cycle (stacking with the discount guardrail down to 0.25× if both are breached).                                                                                                                           |
 | **6. Pay structure** (payModel)                | Commission only · Base + variable      | Base + variable | • **Base + variable (\`base_plus\`):** Folds weekly pro-rated base salaries (₦122,307/wk) into staff payslips and P&L payroll. Target payroll ceiling = 35% of delivered revenue. • **Commission only (\`commission\`):** Zero base pay (₦0); staff earn variable commission only. Target payroll ceiling = 10%.                                                                                                                                                                                                                         |
 
 # **4. True Operating P&L Engine & Financial Formulas**
@@ -121,7 +121,7 @@ The **Founder & CEO View** opens with the **Executive Reality Check Headline** a
 | **Variable commission** (commission) | −        | ₦29,088 (6.5%)         | Sum of variable commission + post-close clawback adjustments in W44 (6.5% × ₦447,500 = ₦29,087.50, rounded to ₦29,088).                                                                                                                                       |
 | **Fixed base pay** (base)            | −        | ₦122,307               | Weekly pro-rated base salary across the 5 sales staff (Amaka ₦16,154, Chidi ₦16,154, Tobi ₦27,692, Zainab ₦27,692, Ngozi ₦34,615). Drops to ₦0 if Pay Structure is switched to Commission only.                                                               |
 | **Meta ad spend** (adSpend)          | −        | ₦281,000               | Cycle W44 campaign spend: **Tobi Ade · Prospecting** (₦185,000) + **Zainab Bello · Retargeting** (₦96,000) = ₦281,000.                                                                                                                                        |
-| **Courier leg fees** (logistics)     | −        | ₦24,500                | ₦3,500 per physical courier trip: 1 leg for dispatched/delivered/failed-delivery orders (5 delivered in W44 = 5 legs) + 2 legs (outbound + return trip) for returned orders (#1046 returned in W44 = 2 legs). Total = 7 legs × ₦3,500 = ₦24,500.              |
+| **Courier leg fees** (logistics)     | −        | ₦24,500                | ₦3,500 per completed courier trip: 1 outbound leg for each order delivered in W44 (#1041, #1042, #1044, #1047, #1050, plus #1046, which landed before it came back = 6 legs), 1 leg for each failed delivery attempt, and 1 return leg for each order returned in W44 (#1046 = 1 leg). Total = 7 legs × ₦3,500 = ₦24,500. Orders still in transit (#1043, #1052, #1053) are not charged until the courier completes or fails the attempt.              |
 
 # **5. Payout Cycle Lifecycle, Clawbacks & Negative Payslip Protection**
 
@@ -152,7 +152,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 > **• Executive Reality Check Banner (\`.headline\`):** Displays the live commission ratio (6.5%), the net operating loss (−₦231,895), narrative links to every cost driver, and 4 comparison cards (Naive 'Net after commission', Core actual, Full operating net, and Total payroll %).
 >
-> **• 5 Founder KPI Tiles (\`.tiles\`):** Delivered revenue (₦447,500), Cash still with courier (₦210,000 from \#1047 and \#1050), Paid on undelivered orders (₦0 under Delivery, jumps to ₦24,571 under Lead), Commission kept on returns / Scheduled next-cycle offsets, and SKUs needing reorder (3 SKUs: AIR-12, KET-03, VAC-21).
+> **• 5 Founder KPI Tiles (\`.tiles\`):** Delivered revenue (₦447,500), Cash still with courier (₦210,000 from \#1047 and \#1050), Paid on undelivered orders (₦0 under Delivery, jumps to ₦31,404 under Lead), Commission kept on returns / Scheduled next-cycle offsets, and SKUs needing reorder (3 SKUs: AIR-12, KET-03, VAC-21).
 >
 > **• True Operating P&L Waterfall & Payout Ratio Meter:** Visual horizontal bar chart of all 8 P&L lines plus a segmented progress meter comparing Variable commission (yellow) + Fixed base pay (dark green) against the target ceiling (35% for Base + variable, 10% for Commission only).
 >
@@ -166,13 +166,13 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 >
 > **• Phone Hero Banner (\`.phone-hero\`):** Shows Delivery certified by Warehouse lock badge, Amaka's live **Net take-home accruing this week** (₦27,354), and a 3-column split (Weekly Base: ₦16,154, Commission: ₦11,200, Clawbacks / Carry: ₦0).
 >
-> **• 4 Personal Closer Tiles:** In your open pipeline (₦28,020 potential commission if open orders land), Your return rate (38% — 3 returned out of 8 resolved), Discounted orders (1), and Stock-blocked orders (2 orders waiting on warehouse PO).
+> **• 4 Personal Closer Tiles:** In your open pipeline (₦32,845 potential commission if open orders land), Your return rate (33% — 3 returned out of 9 resolved), Discounted orders (1), and Stock-blocked orders (2 orders waiting on warehouse PO).
 >
 > **• Stacked Mobile Order Cards (\`.ocard\`):** Replaces the wide desktop table with vertical cards showing Order ID, customer, city, SKU, list vs discounted price, stage pills, **Your closer share**, a yellow warehouse lock note (Only Warehouse (Dayo) can mark dispatched parcels delivered or returned), and allowed closer action buttons (Confirm order, Discount, Cancel).
 
 ## **6.3 Media Buyer View (\`Tobi Ade\`)**
 
-> **• 5 Media Buyer KPI Tiles:** Net payout this cycle (₦32,470), Campaign ad spend (₦185,000), Delivered revenue (₦216,500), ROAS on delivery (1.17× vs booked ROAS 6.70×), and Campaign net margin (−₦99,778 after COGS, ad spend, courier legs, and commission).
+> **• 5 Media Buyer KPI Tiles:** Net payout this cycle (₦30,940 = ₦27,692 base + ₦3,248 buyer commission), Campaign ad spend (₦185,000), Delivered revenue (₦216,500), ROAS on delivery (1.17× vs booked ROAS 6.65×), and Campaign net margin (−₦80,573 after COGS, ad spend, courier legs, and commission).
 >
 > **• Campaign Economics Table:** Compares **Tobi Ade (Prospecting)** and **Zainab Bello (Retargeting)** across Ad spend, Booked vol., Booked ROAS, Delivered rev., Delivered ROAS, Net margin (after COGS), and Cycle pay. Demonstrates why media buyers celebrating 6.70× booked ROAS are actually losing money when orders fail to deliver.
 
@@ -184,9 +184,9 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 ## **6.5 Warehouse & Inventory View (\`Dayo Aremu\`)**
 
-> **• 5 Warehouse KPI Tiles:** SKUs needing reorder (3), Units committed (7 units reserved across confirmed/dispatched orders), Stock on hand (at cost) (₦1,419,000), Open POs inbound (₦0 initially), and Restocked from returns (4 resellable units).
+> **• 5 Warehouse KPI Tiles:** SKUs needing reorder (3), Units committed (6 units reserved across confirmed/dispatched orders), Stock on hand (at cost) (₦1,419,000), Open POs inbound (₦0 initially), and Restocked from returns (4 resellable units).
 >
-> **• Actionable Stock Alert Banner:** Highlights AIR-12: 1 avail, KET-03: 2 avail, VAC-21: 0 avail with a 1-click **Raise POs for all (3)** button. Raising POs moves units into On order with supplier ETAs (leadDays), recalculates Projected = Available + On order, and flips the banner to a dark-green **Stock loop closed** confirmation.
+> **• Actionable Stock Alert Banner:** Highlights AIR-12: 2 avail, KET-03: 2 avail, VAC-21: 0 avail with a 1-click **Raise POs for all (3)** button. Raising POs moves units into On order with supplier ETAs (leadDays), recalculates Projected = Available + On order, and flips the banner to a dark-green **Stock loop closed** confirmation.
 >
 > **• Warehouse Stock Book Table:** Columns for SKU, Product, On hand, Committed, Available, On order, Projected, Reorder at, Status (Out of stock, Reorder now, PO inbound, Healthy), Value at cost, and per-SKU **Raise PO (+qty)** / **Receive PO** buttons.
 >
@@ -200,8 +200,8 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 | **SKU** | **Product Name**     | **Unit Cost (COGS)** | **Typical List Price** | **On Hand** | **Committed (W44)**     | **Available**    | **Reorder Point** | **Lead Time** |
 |---------|----------------------|----------------------|------------------------|-------------|-------------------------|------------------|-------------------|---------------|
-| AIR-12  | Air fryer 5.5L       | ₦78,000              | ₦198,000               | 4           | 3 (#1043,#1049,#1041\*) | 2 (Reorder)      | 3                 | 7 days        |
-| BLN-07  | Blender Pro 1200W    | ₦34,000              | ₦73,500                | 11          | 1 (#1053)               | 10 (Healthy)     | 4                 | 5 days        |
+| AIR-12  | Air fryer 5.5L       | ₦78,000              | ₦198,000               | 4           | 2 (#1043,#1049)         | 2 (Reorder)      | 3                 | 7 days        |
+| BLN-07  | Blender Pro 1200W    | ₦34,000              | ₦73,500                | 12          | 1 (#1053)               | 11 (Healthy)     | 4                 | 5 days        |
 | KET-03  | Electric kettle 1.7L | ₦19,500              | ₦42,000                | 2           | 0                       | 2 (Reorder)      | 5                 | 4 days        |
 | VAC-21  | Handheld vacuum      | ₦96,000              | ₦185,000               | 2           | 2 (#1045 ×2)            | 0 (Out of stock) | 3                 | 10 days       |
 | STM-09  | Garment steamer      | ₦52,000              | ₦112,000               | 9           | 1 (#1052)               | 8 (Healthy)      | 3                 | 6 days        |
@@ -243,9 +243,9 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | app/globals.css                | Adaptive Light/Dark mode design tokens (light-dark()), fixed collapsible sidebar, spotlight cards, spring segmented controls, and resizable table headers.    |
 | lib/types.ts                   | Strict TypeScript interfaces for Role, Stage, CreditOn, OnReturn, SplitRule, PayModel, Rules, Order, Cycle, PayLine, PurchaseOrder, Drill, and PnL.           |
 | lib/engine.ts                  | Pure, zero-React calculation and mutation engine (computePnl, commissionLines, payslip, whatIf, applyOrderAction, closeCycle, raisePO, receivePO, payoutCsv). |
-| lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 5) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
+| lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 6) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
 | lib/rules.ts                   | Metadata and dynamic explanations for the 6 payout and operating rules.                                                                                       |
-| lib/store.ts                   | Zustand reactive store with localStorage persistence (kova-payout-engine-v3) and action dispatchers.                                                          |
+| lib/store.ts                   | Zustand reactive store with localStorage persistence (kova-payout-engine) and action dispatchers.                                                          |
 | components/App.tsx             | Application shell, fixed collapsible sidebar, WAI-ARIA role tabs, directional View Transitions, top utility bar, and walkthrough guide.                       |
 | components/ui.tsx              | Reusable primitives: \<Fig /\> (number tweening + drill trigger), \<Tile /\>, \<Card /\> (pointer spotlight), \<StagePill /\>, and useTableColumnResize().    |
 | components/RulesStrip.tsx      | 6-rule governance strip with live what-if payout badges, spring-animated active thumb, role lock, and founder audit stamps.                                   |
@@ -257,5 +257,5 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
 | components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, DiscountDialog, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray.                                                       |
-| scripts/verify.ts              | Automated 10-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
+| scripts/verify.ts              | Automated 15-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
 | scripts/e2e.mjs                | Automated 10-scenario headless Chrome E2E test suite verifying DOM, 390px mobile layout, modals, and persistence.                                             |

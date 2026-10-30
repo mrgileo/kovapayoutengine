@@ -4,6 +4,7 @@ import {
   actionsFor,
   canEditRules,
   closeCycle,
+  DELIVERY_FEE,
   closerStats,
   commissionLines,
   computePnl,
@@ -11,10 +12,13 @@ import {
   needsAttention,
   openCycle,
   openLines,
+  paidOnUndelivered,
   payslip,
   raisePO,
   receivePO,
   reversals,
+  stockRows,
+  sum,
   transition,
   whatIf,
 } from "../lib/engine.ts";
@@ -108,5 +112,30 @@ const chidiGated = payslip(openLines(s, { ...s.rules, returnCap: 0.3 }), "chidi"
 assert.equal(Math.round(amakaGated), Math.round(amakaUngated * 0.5), "30% return cap halves Amaka's commission");
 assert.equal(Math.round(chidiGated), Math.round(chidiUngated), "30% return cap leaves Chidi untouched");
 
-console.log("ALL 10 ENGINE INVARIANTS PASSED.");
+// 11. Stock on hand at cost reconciles to the spec (BLN-07 holds 12 after #1046's resellable return)
+assert.equal(sum(s.products.map((p) => p.onHand * p.cost)), 1419000, "Stock on hand at cost should be ₦1,419,000");
+assert.equal(s.products.find((p) => p.sku === "BLN-07")!.onHand, 12, "BLN-07 on hand should be 12");
+
+// 12. Committed stock counts confirmed/dispatched orders only (delivered #1041 is not committed)
+const air = stockRows(s).find((r) => r.product.sku === "AIR-12")!;
+assert.equal(air.committed, 2, "AIR-12 committed = #1043 (dispatched) + #1049 (confirmed)");
+assert.equal(air.available, 2, "AIR-12 available = 4 on hand − 2 committed");
+assert.equal(sum(stockRows(s).map((r) => r.committed)), 6, "Units committed across SKUs should be 6");
+
+// 13. Tobi net payout = pro-rated base + 1.5% of the ₦216,500 he delivered
+const tobiSlip = payslip(openLines(s), "tobi");
+assert.equal(tobiSlip.base, 27692);
+assert.equal(tobiSlip.commission, 216500 * 0.015);
+assert.equal(Math.round(tobiSlip.payable), 30940, "Tobi net payout should be ₦30,940");
+
+// 14. Courier legs: 5 delivered + #1046 return leg + #1046 outbound = 7. Dispatched-not-delivered orders are not charged yet.
+assert.equal(computePnl(s).logistics, 7 * DELIVERY_FEE, "W44 courier fees should be 7 legs × ₦3,500");
+
+// 15. Commission paid on orders that have not landed: none under Delivery, ₦31,404 under Lead
+assert.equal(paidOnUndelivered(s).total, 0, "No pre-delivery payout under the Delivery trigger");
+const sLead = structuredClone(s);
+sLead.rules.creditOn = "lead";
+assert.equal(Math.round(paidOnUndelivered(sLead).total), 31404, "Paid on undelivered under Lead should be ₦31,404");
+
+console.log("ALL 15 ENGINE INVARIANTS PASSED.");
 
