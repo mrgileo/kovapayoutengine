@@ -14,6 +14,7 @@ import {
 import { pct } from "@/lib/format";
 import { L, PNL_TEXT as P } from "@/lib/labels";
 import { useData } from "@/lib/store";
+import { AdBudget } from "./AdBudget";
 import { CloserScorecard } from "./CloserScorecard";
 import { Card, Fig, Tile, useMoney } from "./ui";
 import type { PnLKey } from "@/lib/types";
@@ -188,6 +189,8 @@ export function FounderView() {
           <span className="num">{stockAlerts.length}</span>
         </Tile>
       </dl>
+
+      <AdBudget />
 
       <div className="grid-2">
         {/* True P&L Waterfall */}

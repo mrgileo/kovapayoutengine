@@ -1,8 +1,9 @@
 "use client";
 
-import { campaignStats, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
+import { SIM_FEED_NOTE, campaignStats, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
 import { L, PAY_LINE_TEXT } from "@/lib/labels";
 import { useData } from "@/lib/store";
+import { AdBudget } from "./AdBudget";
 import { CloserScorecard } from "./CloserScorecard";
 import { Avatar, Card, Fig, Tile } from "./ui";
 import type { Drill } from "@/lib/types";
@@ -19,7 +20,7 @@ export function BuyerView() {
 
   const payslipDrill: Drill = {
     title: `Tobi Ade · ${open.id} Payslip Breakdown`,
-    subtitle: "Media buyer · Prospecting campaign",
+    subtitle: "Media buyer",
     lines: ps.lines.map((l) => ({
       ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
       label: l.kind === "base" ? PAY_LINE_TEXT.base : PAY_LINE_TEXT.commission(l.orderId),
@@ -35,12 +36,12 @@ export function BuyerView() {
         <Tile label="Net payout this cycle" note="Base + 1.5% on credited orders" tone="pos">
           <Fig amount={ps.payable} drill={payslipDrill} />
         </Tile>
-        <Tile label="Campaign ad spend" note={`Prospecting · ${open.id}`}>
+        <Tile label="Ad spend" note={`${L.simulatedFeed} · ${open.id}`}>
           <Fig
             amount={cs.spend}
             drill={{
               title: `Tobi Ade · ${open.id} Ad Spend`,
-              lines: [{ ref: "Meta", label: "Prospecting campaign spend", amount: cs.spend }],
+              lines: [{ ref: "Sim. feed", label: "Ad spend", detail: SIM_FEED_NOTE, amount: cs.spend }],
               total: cs.spend,
             }}
           />
@@ -52,7 +53,7 @@ export function BuyerView() {
           <Fig
             amount={cs.deliveredRev}
             drill={{
-              title: "Delivered Revenue · Prospecting",
+              title: "Delivered revenue",
               lines: delivered.map((o) => ({
                 ref: `#${o.id}`,
                 label: `${o.customer} · ${o.sku} ×${o.qty}`,
@@ -71,13 +72,15 @@ export function BuyerView() {
           <span className="num">{L.perNaira(cs.deliveredRoas)}</span>
         </Tile>
         <Tile
-          label="Campaign net margin"
+          label="Left after product, ads, pay"
           note="After product cost, ads, delivery fees and sales pay"
           tone={cs.netMargin < 0 ? "neg" : "pos"}
         >
           <Fig amount={cs.netMargin} sign drill={cs.marginDrill} />
         </Tile>
       </dl>
+
+      <AdBudget />
 
       <Card
         title="Campaign results · booked sales vs what's really left"
@@ -89,7 +92,6 @@ export function BuyerView() {
             <thead>
               <tr>
                 <th>Media buyer</th>
-                <th>Campaign</th>
                 <th className="r">Ad spend</th>
                 <th className="r">Booked vol.</th>
                 <th className="r">{L.bookedSalesPerAdNaira}</th>
@@ -114,13 +116,12 @@ export function BuyerView() {
                         <b>{p.name}</b>
                       </div>
                     </td>
-                    <td>{c.campaign}</td>
                     <td className="r mono">
                       <Fig
                         amount={c.spend}
                         drill={{
                           title: `${p.name} · Ad Spend`,
-                          lines: [{ ref: "Meta", label: p.title, amount: c.spend }],
+                          lines: [{ ref: "Sim. feed", label: p.name, detail: SIM_FEED_NOTE, amount: c.spend }],
                           total: c.spend,
                         }}
                       />

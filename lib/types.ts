@@ -65,7 +65,8 @@ export interface Order {
   /** Last touch: who closed the sale. */
   closer: string;
   buyer: string;
-  campaign: string;
+  /** Optional free-text label. Any media buyer can run any campaign. */
+  campaign?: string;
   stage: Stage;
   /** Courier has remitted the cash (COD). */
   cashIn: boolean;
@@ -145,8 +146,10 @@ export interface DemoState {
   cycles: Cycle[];
   rules: Rules;
   rulesMeta: Record<RuleKey, Stamp>;
-  /** cycle id -> buyer id -> ad spend */
+  /** cycle id -> buyer id -> ad spend (simulated Meta feed in this demo) */
   spend: Record<string, Record<string, number>>;
+  /** Ad spend per delivered order above which a media buyer is flagged. Founder-set; never affects pay. */
+  maxCostPerOrder: number;
   pos: PurchaseOrder[];
   audit: AuditEntry[];
   seq: number;

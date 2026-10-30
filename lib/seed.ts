@@ -1,13 +1,14 @@
 import type { DemoState, Order, Person, Product, Rules, RuleKey, Stamp } from "./types.ts";
 import { closeCycle, lockCycle, log, markPaid } from "./engine.ts";
 
-export const SEED_VERSION = 6;
+export const SEED_VERSION = 7;
+export const DEFAULT_MAX_COST_PER_ORDER = 4000;
 
 const people: Person[] = [
   { id: "amaka", name: "Amaka Obi", role: "closer", title: "Closer", monthlyBase: 70000, reportsTo: "ngozi" },
   { id: "chidi", name: "Chidi Nwosu", role: "closer", title: "Closer", monthlyBase: 70000, reportsTo: "ngozi" },
-  { id: "tobi", name: "Tobi Ade", role: "buyer", title: "Media buyer · Prospecting", monthlyBase: 120000 },
-  { id: "zainab", name: "Zainab Bello", role: "buyer", title: "Media buyer · Retargeting", monthlyBase: 120000 },
+  { id: "tobi", name: "Tobi Ade", role: "buyer", title: "Media buyer", monthlyBase: 120000 },
+  { id: "zainab", name: "Zainab Bello", role: "buyer", title: "Media buyer", monthlyBase: 120000 },
   { id: "ngozi", name: "Ngozi Eze", role: "lead", title: "Team lead · Sales", monthlyBase: 150000 },
   { id: "dayo", name: "Dayo Aremu", role: "stock", title: "Inventory · Lagos warehouse", monthlyBase: 0 },
   { id: "chidinma", name: "Chidinma Okoro", role: "founder", title: "Founder & CEO", monthlyBase: 0 },
@@ -22,7 +23,6 @@ const products: Product[] = [
 ];
 
 type Seed = Partial<Order> & Pick<Order, "id" | "customer" | "city" | "sku" | "list" | "closer" | "buyer" | "stage">;
-const CAMPAIGN: Record<string, string> = { tobi: "Prospecting", zainab: "Retargeting" };
 
 function mk(cycle: string, x: Seed): Order {
   const landed = x.stage === "delivered" || x.stage === "returned";
@@ -30,7 +30,6 @@ function mk(cycle: string, x: Seed): Order {
     qty: 1,
     discount: 0,
     openedBy: x.closer,
-    campaign: CAMPAIGN[x.buyer],
     cashIn: landed,
     createdCycle: cycle,
     deliveredCycle: landed ? cycle : undefined,
@@ -94,6 +93,7 @@ export function buildSeed(): DemoState {
     rules: { ...rules },
     rulesMeta: structuredClone(rulesMeta),
     spend: { W42: { tobi: 160000, zainab: 88000 } },
+    maxCostPerOrder: DEFAULT_MAX_COST_PER_ORDER,
     pos: [],
     audit: [],
     seq: 0,

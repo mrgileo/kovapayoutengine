@@ -46,6 +46,9 @@ export const PERSONA: Record<Role, string> = {
 };
 export const MAX_DISCOUNT = 0.2;
 
+/** Ad spend is a demo figure, never a live Meta connection. */
+export const SIM_FEED_NOTE = "Simulated Meta feed (demo figures, not a live connection)";
+
 /* ------------------------------------------------------------------ lookups */
 
 export const orderValue = (o: Order) => Math.round(o.list * (1 - o.discount));
@@ -131,7 +134,7 @@ export function commissionLines(s: DemoState, o: Order, rules: Rules, cycleId: s
   } else {
     addCloser(o.closer, pool, `Closer ${pctTxt(closerRate)}`);
   }
-  add(o.buyer, "commission", v * r.buyer, `Media buyer ${pctTxt(r.buyer)} · ${o.campaign}`);
+  add(o.buyer, "commission", v * r.buyer, `Media buyer ${pctTxt(r.buyer)}${o.campaign ? ` · ${o.campaign}` : ""}`);
   const lead = personOf(s, o.closer).reportsTo;
   if (lead) add(lead, "commission", v * r.lead, `${L.teamBonus} ${pctTxt(r.lead)}`);
   return out;
@@ -292,9 +295,9 @@ export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
 
   const spend = s.spend[C] ?? {};
   const spendL: DrillLine[] = Object.entries(spend).map(([id, amt]) => ({
-    ref: "Meta",
-    label: `${personOf(s, id).name} · ${personOf(s, id).title.replace("Media buyer · ", "")}`,
-    detail: "Ad spend synced for this cycle",
+    ref: "Sim. feed",
+    label: personOf(s, id).name,
+    detail: SIM_FEED_NOTE,
     amount: amt,
   }));
 
@@ -501,7 +504,6 @@ export function closerStats(s: DemoState, personId: string): CloserStats {
 
 export interface CampaignStats {
   buyerId: string;
-  campaign: string;
   spend: number;
   bookedRev: number;
   bookedRoas: number;
@@ -517,7 +519,6 @@ export interface CampaignStats {
 export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
   const c = openCycle(s);
   const spend = s.spend[c.id]?.[buyerId] ?? 0;
-  const campaign = buyerId === "tobi" ? "Prospecting" : "Retargeting";
   const ords = s.orders.filter((o) => o.buyer === buyerId && o.createdCycle === c.id);
   const del = ords.filter((o) => o.stage === "delivered");
   const ret = s.orders.filter((o) => o.buyer === buyerId && o.stage === "returned" && o.reversedCycle === c.id);
@@ -539,12 +540,11 @@ export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
     { ref: "−", label: L.productCost, detail: "What the delivered items cost", amount: -cogs },
     { ref: "−", label: L.deliveryFees, detail: `${del.length} delivered, ${ret.length} returned, ${failed.length} failed`, amount: -logistics },
     { ref: "−", label: L.salesPay, detail: "Closer + media buyer + team bonus", amount: -comm },
-    { ref: "−", label: "Meta ad spend", detail: `${campaign} campaign`, amount: -spend },
+    { ref: "−", label: L.adSpend, detail: SIM_FEED_NOTE, amount: -spend },
   ];
 
   return {
     buyerId,
-    campaign,
     spend,
     bookedRev,
     bookedRoas: spend > 0 ? bookedRev / spend : 0,
@@ -555,12 +555,73 @@ export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
     commission: comm,
     netMargin,
     marginDrill: {
-      title: `${campaign} Campaign · True Contribution Margin (${c.id})`,
+      title: `${personOf(s, buyerId).name} · What is really left from ads (${c.id})`,
       subtitle: `Managed by ${personOf(s, buyerId).name} · sales per ₦1 of ads, before product cost and returns, can mislead`,
       lines: drillLines,
       total: netMargin,
     },
   };
+}
+
+/* ------------------------------------------------------------------ profit per order & ad cost */
+
+/** Orders that landed in the open cycle and stayed landed. The same set as the revenue line. */
+export const deliveredInCycle = (s: DemoState): Order[] => {
+  const C = openCycle(s).id;
+  return s.orders.filter((o) => o.deliveredCycle === C && !(o.stage === "returned" && o.reversedCycle === C));
+};
+
+export interface ProfitPerOrder {
+  orders: number;
+  /** (revenue − product cost − ad spend) ÷ delivered orders */
+  before: number;
+  /** The same, after fixed salary and sales pay */
+  after: number;
+  beforeDrill: Drill;
+  afterDrill: Drill;
+}
+
+export function profitPerOrder(s: DemoState, rules: Rules = s.rules): ProfitPerOrder {
+  const p = computePnl(s, rules);
+  const n = deliveredInCycle(s).length;
+  const per = (x: number) => (n > 0 ? x / n : 0);
+  const note = (x: number) => `₦${Math.round(x).toLocaleString()} ÷ ${n} delivered order${n === 1 ? "" : "s"}`;
+  const baseLines: DrillLine[] = [
+    { ref: "+", label: L.revenue, detail: note(p.revenue), amount: per(p.revenue) },
+    { ref: "−", label: L.productCost, detail: note(p.cogs), amount: -per(p.cogs) },
+    { ref: "−", label: L.adSpend, detail: `${note(p.adSpend)} · ${SIM_FEED_NOTE}`, amount: -per(p.adSpend) },
+  ];
+  const before = sum(baseLines.map((l) => l.amount));
+  const payLines: DrillLine[] = [
+    { ref: "−", label: L.salesPay, detail: note(p.commission), amount: -per(p.commission) },
+    { ref: "−", label: L.fixedSalary, detail: note(p.base), amount: -per(p.base) },
+  ];
+  const after = before + sum(payLines.map((l) => l.amount));
+  return {
+    orders: n,
+    before,
+    after,
+    beforeDrill: { title: L.profitPerOrderBeforePay, subtitle: "Delivery fees are not included", lines: baseLines, total: before },
+    afterDrill: { title: L.profitPerOrderAfterPay, subtitle: "Delivery fees are not included", lines: [...baseLines, ...payLines], total: after },
+  };
+}
+
+export interface AdCost {
+  buyerId: string;
+  spend: number;
+  delivered: number;
+  /** null when ads ran but nothing was delivered yet */
+  costPerOrder: number | null;
+  overMax: boolean;
+}
+
+/** Ad spend ÷ delivered orders for one media buyer. Flags against the founder's max; pay is untouched. */
+export function adCost(s: DemoState, buyerId: string): AdCost {
+  const spend = s.spend[openCycle(s).id]?.[buyerId] ?? 0;
+  const delivered = deliveredInCycle(s).filter((o) => o.buyer === buyerId).length;
+  const costPerOrder = delivered > 0 ? spend / delivered : null;
+  const overMax = spend > 0 && (costPerOrder === null || costPerOrder > s.maxCostPerOrder + 1e-9);
+  return { buyerId, spend, delivered, costPerOrder, overMax };
 }
 
 export interface SkuEconomics {
@@ -903,7 +964,6 @@ export function createOrder(
     openedBy: input.openedBy,
     closer: input.closer,
     buyer: input.buyer,
-    campaign: input.buyer === "tobi" ? "Prospecting" : "Retargeting",
     stage: "new",
     cashIn: false,
     createdCycle: c.id,

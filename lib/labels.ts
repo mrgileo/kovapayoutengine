@@ -22,6 +22,14 @@ export const L = {
   bookedSalesPerAdNaira: "Booked sales per ₦1 of ads",
   deliveredSalesPerAdNaira: "Delivered sales per ₦1 of ads",
 
+  profitPerOrder: "Profit per order",
+  profitPerOrderBeforePay: "Profit per order, before staff pay",
+  profitPerOrderAfterPay: "Profit per order, after staff pay",
+  maxCostPerOrder: "Max cost per order",
+  costPerOrder: "Ad cost per delivered order",
+  simulatedFeed: "Simulated Meta feed",
+  simulatedFeedNote: "Demo figures. This is not a live Meta connection.",
+
   // Customer money vs staff money are different things
   payTakenBack: "Pay taken back",
   payTakenBackNextWeek: "Pay to be taken back next week",
@@ -49,7 +57,7 @@ export const PNL_TEXT = {
   writeoffs: { label: "− Damaged stock", sub: "Returned and can't be resold" },
   commission: { label: "− Sales pay", sub: "After pay taken back" },
   base: { label: "− Fixed salary", sub: "Sales staff, one week's share" },
-  adSpend: { label: "− Meta ad spend", sub: "Prospecting + Retargeting" },
+  adSpend: { label: "− Meta ad spend", sub: "Simulated Meta feed" },
   logistics: { label: "− Delivery fees", sub: "Delivery, failed and return trips" },
   actual: { label: "= Real profit", sub: "After product, pay, ads and delivery" },
 } as const;

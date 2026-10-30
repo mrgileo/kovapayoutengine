@@ -340,14 +340,14 @@ export function OrderLedger() {
                             <GitFork size={11} /> {firstName(data, o.openedBy)} opened → {firstName(data, o.closer)} closed
                           </span>
                           <span className="sub">
-                            {o.campaign} · {firstName(data, o.buyer)}
+                            {o.campaign ? `${o.campaign} · ` : ""}{firstName(data, o.buyer)}
                           </span>
                         </div>
                       ) : (
                         <div>
                           <b>{firstName(data, o.closer)}</b>
                           <span className="sub">
-                            {o.campaign} · {firstName(data, o.buyer)}
+                            {o.campaign ? `${o.campaign} · ` : ""}{firstName(data, o.buyer)}
                           </span>
                         </div>
                       )}

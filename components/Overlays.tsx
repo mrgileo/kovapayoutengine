@@ -397,14 +397,14 @@ export function NewOrderDialog() {
             </select>
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600, gridColumn: "1 / -1" }}>
-            <span>Campaign / Media buyer</span>
+            <span>Media buyer</span>
             <select
               value={buyer}
               onChange={(e) => setBuyer(e.target.value)}
               style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line-strong)", font: "inherit" }}
             >
-              <option value="tobi">Tobi Ade · Prospecting</option>
-              <option value="zainab">Zainab Bello · Retargeting</option>
+              <option value="tobi">Tobi Ade</option>
+              <option value="zainab">Zainab Bello</option>
             </select>
           </label>
         </div>

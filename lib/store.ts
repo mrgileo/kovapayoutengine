@@ -27,6 +27,7 @@ import {
 } from "./engine";
 import { SEED_VERSION, buildSeed } from "./seed";
 import { RULE_DEFS, ruleOptionLabel } from "./rules";
+import { L } from "./labels";
 
 export interface Toast {
   id: number;
@@ -57,6 +58,7 @@ interface Store {
   setGuide: (open: boolean) => void;
 
   setRule: <K extends RuleKey>(key: K, value: Rules[K]) => void;
+  setMaxCostPerOrder: (amount: number) => void;
   act: (orderId: number, action: ActionKey, opts?: { condition?: "resellable" | "damaged"; discount?: number }) => void;
   createOrder: (input: {
     customer: string;
@@ -131,6 +133,21 @@ export const useStore = create<Store>()(
         setDiscountFor: (discountFor) => set({ discountFor }),
         setNewOrderOpen: (newOrderOpen) => set({ newOrderOpen }),
         setGuide: (guideOpen) => set({ guideOpen }),
+
+        setMaxCostPerOrder: (amount) => {
+          if (!canEditRules(get().role)) {
+            get().toast("err", "Only the founder can change the max cost per order.");
+            return;
+          }
+          const next = Math.max(0, Math.round(amount));
+          const prev = get().data.maxCostPerOrder;
+          if (!Number.isFinite(next) || next === prev) return;
+          const res = mutate((d) => {
+            d.maxCostPerOrder = next;
+            log(d, { at: now(), actor: actor(), kind: "rule", text: `${L.maxCostPerOrder}: ₦${prev.toLocaleString()} → ₦${next.toLocaleString()}. Flag only, pay is unchanged.` });
+          });
+          if (res) get().toast("ok", `${L.maxCostPerOrder} set to ₦${next.toLocaleString()}.`);
+        },
 
         setRule: (key, value) => {
           if (!canEditRules(get().role)) {

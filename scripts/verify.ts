@@ -4,6 +4,8 @@ import { L, PNL_TEXT, RULE_TEXT, PAY_LINE_TEXT } from "../lib/labels.ts";
 import { RULE_DEFS } from "../lib/rules.ts";
 import {
   actionsFor,
+  adCost,
+  profitPerOrder,
   campaignStats,
   skuEconomics,
   canEditRules,
@@ -142,7 +144,7 @@ sLead.rules.creditOn = "lead";
 assert.equal(Math.round(paidOnUndelivered(sLead).total), 31404, "Paid on undelivered under Lead should be ₦31,404");
 
 // 16. Plain language: none of the old accounting terms reach the screen via labels, rules or drills
-const OLD_TERMS = /COGS|cost of goods|naive|core actual|full operating|variable commission|fixed base|base pay|override|ROAS|clawback|claw back|clawed|write-off|courier leg|payout ratio|credit a sale|refund.*(staff|commission)/i;
+const OLD_TERMS = /COGS|cost of goods|naive|core actual|full operating|variable commission|fixed base|base pay|override|ROAS|clawback|claw back|clawed|write-off|courier leg|payout ratio|credit a sale|refund.*(staff|commission)|prospecting|retargeting/i;
 const flatten = (v: unknown): string[] =>
   typeof v === "string" ? [v] : typeof v === "function" ? [] : v && typeof v === "object" ? Object.values(v).flatMap(flatten) : [];
 const drillText = (d: { title: string; subtitle?: string; lines: { ref: string; label: string; detail?: string }[] }) =>
@@ -158,6 +160,9 @@ const screenText = [
   L.deliveryFeeNote(3500),
   ...RULE_DEFS.flatMap((d) => [d.label, ...d.options.map((o) => o.label), d.explain(s.rules)]),
   ...Object.values(pnlNow.drills).flatMap(drillText),
+  ...drillText(profitPerOrder(s).beforeDrill),
+  ...drillText(profitPerOrder(s).afterDrill),
+  ...s.people.map((p) => p.title),
   ...["tobi", "zainab"].flatMap((b) => drillText(campaignStats(s, b).marginDrill)),
   ...skuEconomics(s).flatMap((e) => drillText(e.drill)),
   ...closerStats(s, "amaka").contributionDrill.lines.flatMap((l) => [l.label, l.detail ?? ""]),
@@ -167,5 +172,27 @@ for (const text of screenText) assert.equal(OLD_TERMS.test(text), false, "Old ac
 assert.equal(L.realProfit, "Real profit");
 assert.equal(`${L.payTakenBack}|${L.refunds}`, "Pay taken back|Refunds", "Pay taken back (staff) and Refunds (customers) stay separate terms");
 
-console.log("ALL 16 ENGINE INVARIANTS PASSED.");
+// 17. Profit per order = (revenue − product cost − ad spend) ÷ delivered orders, before and after staff pay
+const ppo = profitPerOrder(s);
+assert.equal(ppo.orders, 5, "W44 has 5 delivered orders");
+assert.equal(ppo.before, (447500 - 222500 - 281000) / 5, "Profit per order before staff pay should be −₦11,200");
+assert.equal(ppo.after, ppo.before - (computePnl(s).commission + computePnl(s).base) / 5, "After staff pay subtracts sales pay and fixed salary per order");
+assert.equal(Math.round(ppo.after), -41479);
+assert.equal(Math.abs(ppo.beforeDrill.total - ppo.before) < 1e-6 && Math.abs(ppo.afterDrill.total - ppo.after) < 1e-6, true, "Drill totals match the figures");
+
+// 18. Any media buyer can run any campaign; max cost per order is a flag and never moves pay
+assert.equal(s.maxCostPerOrder, 4000, "Default max cost per order is ₦4,000");
+assert.equal(s.orders.some((o) => o.campaign !== undefined), false, "No fixed campaign labels on seed orders");
+const tobiCost = adCost(s, "tobi");
+const zainabCost = adCost(s, "zainab");
+assert.equal(tobiCost.costPerOrder, 185000 / 2);
+assert.equal(zainabCost.costPerOrder, 96000 / 3);
+assert.equal(tobiCost.overMax && zainabCost.overMax, true, "Both buyers are over ₦4,000 per delivered order on the seed");
+const sLoose = structuredClone(s);
+sLoose.maxCostPerOrder = 100000;
+assert.equal(adCost(sLoose, "tobi").overMax || adCost(sLoose, "zainab").overMax, false, "A higher max clears the flags");
+assert.equal(computePnl(sLoose).payout, computePnl(s).payout, "Max cost per order does not change pay");
+assert.equal(computePnl(sLoose).actual, computePnl(s).actual, "Max cost per order does not change real profit");
+
+console.log("ALL 18 ENGINE INVARIANTS PASSED.");
 

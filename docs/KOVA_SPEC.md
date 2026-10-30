@@ -44,7 +44,7 @@ The interface is built around a high-contrast **Yellow + Carbon Black + Crisp Wh
 >
 > **• Multi-Currency Display Switcher:** Located in the sidebar footer. Converts all displayed figures live between **NGN (\`₦\`, rate \`1:1\`)**, **USD (\`\$\`, \`₦1,600 = \$1\`)**, and **GBP (\`£\`, \`₦2,050 = £1\`)**.
 >
-> **• Automatic State Persistence:** All rule changes, order transitions, discounts, returns, purchase orders, and cycle closures persist automatically in localStorage under kova-payout-engine (with SEED_VERSION = 6). Clicking **Reset demo state** restores the clean factory seed.
+> **• Automatic State Persistence:** All rule changes, order transitions, discounts, returns, purchase orders, and cycle closures persist automatically in localStorage under kova-payout-engine (with SEED_VERSION = 7). Clicking **Reset demo state** restores the clean factory seed.
 
 ## **1.4 Plain-Language Glossary (`lib/labels.ts`)**
 
@@ -78,8 +78,8 @@ A critical flaw in naive operations dashboards is giving every user 'God Mode.' 
 | chidinma | **Chidinma Okoro** | founder      | Founder & CEO                   | ₦0               | ₦0 (Owner equity)        |
 | amaka    | **Amaka Obi**      | closer       | Sales Closer (Reports to Ngozi) | ₦70,000          | ₦16,154 / wk             |
 | chidi    | **Chidi Nwosu**    | closer       | Sales Closer (Reports to Ngozi) | ₦70,000          | ₦16,154 / wk             |
-| tobi     | **Tobi Ade**       | buyer        | Media Buyer · Prospecting       | ₦120,000         | ₦27,692 / wk             |
-| zainab   | **Zainab Bello**   | buyer        | Media Buyer · Retargeting       | ₦120,000         | ₦27,692 / wk             |
+| tobi     | **Tobi Ade**       | buyer        | Media Buyer                     | ₦120,000         | ₦27,692 / wk             |
+| zainab   | **Zainab Bello**   | buyer        | Media Buyer                     | ₦120,000         | ₦27,692 / wk             |
 | ngozi    | **Ngozi Eze**      | lead         | Sales Team Lead (1.0% team bonus) | ₦150,000         | ₦34,615 / wk             |
 | dayo     | **Dayo Aremu**     | stock        | Inventory · Lagos Warehouse     | ₦0               | ₦0 (Ops payroll)         |
 
@@ -141,7 +141,7 @@ The **Founder & CEO View** opens with the **Founder summary Headline** and the *
 | **Damaged stock** (writeoffs)   | −        | ₦0 (Until triggered)   | Unit cost × quantity for orders returned in W44 with warehouse inspection condition set to **Damaged in transit** (returnCondition === 'damaged').                                                                                                            |
 | **Sales pay** (commission) | −        | ₦29,088 (6.5%)         | Sum of sales pay minus any pay taken back in W44 (6.5% × ₦447,500 = ₦29,087.50, rounded to ₦29,088).                                                                                                                                       |
 | **Fixed salary** (base)            | −        | ₦122,307               | Weekly pro-rated base salary across the 5 sales staff (Amaka ₦16,154, Chidi ₦16,154, Tobi ₦27,692, Zainab ₦27,692, Ngozi ₦34,615). Drops to ₦0 if Pay Structure is switched to Commission only.                                                               |
-| **Meta ad spend** (adSpend)          | −        | ₦281,000               | Cycle W44 campaign spend: **Tobi Ade · Prospecting** (₦185,000) + **Zainab Bello · Retargeting** (₦96,000) = ₦281,000.                                                                                                                                        |
+| **Meta ad spend** (adSpend)          | −        | ₦281,000               | Cycle W44 ad spend from the **Simulated Meta feed** (demo figures, not a live connection): **Tobi Ade** (₦185,000) + **Zainab Bello** (₦96,000) = ₦281,000. Any media buyer can run any campaign.                                                                                                                                        |
 | **Delivery fees** (logistics)     | −        | ₦24,500                | ₦3,500 per completed delivery trip: 1 outbound leg for each order delivered in W44 (#1041, #1042, #1044, #1047, #1050, plus #1046, which landed before it came back = 6 legs), 1 leg for each failed delivery attempt, and 1 return leg for each order returned in W44 (#1046 = 1 leg). Total = 7 legs × ₦3,500 = ₦24,500. Orders still in transit (#1043, #1052, #1053) are not charged until the courier completes or fails the attempt.              |
 
 # **5. Payout Cycle Lifecycle, Pay Taken Back & Negative Payslip Protection**
@@ -181,6 +181,9 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 >
 > **• Full Visibility:** The Founder tab also renders the **Payout Cycles & Settlement** bar, the full **Order Ledger** table, the **Warehouse Stock Book & SKU Unit Economics** tables, and the **Immutable Audit & Event Log**.
 
+> **• Profit per order & Ad Cost Card (`AdBudget.tsx`, founder and media buyer tabs):** Labelled **Simulated Meta feed**: the ad spend is demo data and there is no live Meta connection. Shows **Profit per order, before staff pay** = (delivered revenue − product cost − ad spend) ÷ delivered orders = (₦447,500 − ₦222,500 − ₦281,000) ÷ 5 = **−₦11,200**, and **after staff pay** = that minus (sales pay + fixed salary) ÷ delivered orders = −₦11,200 − ₦151,394.50 ÷ 5 = **−₦41,479**. Delivery fees are not included in either figure. Each media buyer's **ad cost per delivered order** (ad spend ÷ their delivered orders: Tobi ₦185,000 ÷ 2 = ₦92,500, Zainab ₦96,000 ÷ 3 = ₦32,000) is flagged against the founder's **Max cost per order** (default ₦4,000, `maxCostPerOrder`, editable by the founder only, written to the audit log). The max is a flag only; it never changes pay or profit.
+>
+
 ## **6.2 Closer Phone-First Console (\`Amaka Obi\`)**
 
 > **• Designed for a 390px Smartphone Screen in Lagos Traffic:** Verified at 390×844 viewport with zero horizontal scroll (scrollWidth === 390px).
@@ -193,9 +196,9 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 ## **6.3 Media Buyer View (\`Tobi Ade\`)**
 
-> **• 5 Media Buyer KPI Tiles:** Net payout this cycle (₦30,940 = ₦27,692 base + ₦3,248 buyer commission), Campaign ad spend (₦185,000), Delivered revenue (₦216,500), Sales per ₦1 of ads, delivered (₦1.17 vs ₦6.65 on booked orders), and Campaign net margin (−₦80,573 after product cost, ad spend, courier legs, and commission).
+> **• 5 Media Buyer KPI Tiles:** Net payout this cycle (₦30,940 = ₦27,692 base + ₦3,248 buyer commission), Ad spend from the Simulated Meta feed (₦185,000), Delivered revenue (₦216,500), Sales per ₦1 of ads, delivered (₦1.17 vs ₦6.65 on booked orders), and Left after product, ads, pay (−₦80,573 after product cost, ad spend, courier legs, and commission).
 >
-> **• Campaign Economics Table:** Compares **Tobi Ade (Prospecting)** and **Zainab Bello (Retargeting)** across Ad spend, Booked vol., Booked sales per ₦1 of ads, Delivered rev., Delivered sales per ₦1 of ads, Net margin (after product cost), and Cycle pay. Demonstrates why media buyers celebrating 6.70× booked sales per ₦1 of ads are actually losing money when orders fail to deliver.
+> **• Campaign Economics Table:** Compares **Tobi Ade** and **Zainab Bello** (any buyer can run any campaign) across Ad spend, Booked vol., Booked sales per ₦1 of ads, Delivered rev., Delivered sales per ₦1 of ads, Net margin (after product cost), and Cycle pay. Demonstrates why media buyers celebrating 6.70× booked sales per ₦1 of ads are actually losing money when orders fail to deliver.
 
 ## **6.4 Sales Team Lead View (\`Ngozi Eze\`)**
 
@@ -250,7 +253,7 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 >
 > **• 3. Return Inspection & Reversal Modal (\`ReturnDialog\`):** Opens when clicking **Process return** on a delivered order. Requires selecting the warehouse inspection condition: • **Resellable · Return to shelf:** Increments available stock (+qty) and charges only the ₦3,500 return courier leg. • **Damaged in transit · Write off product cost:** Does not increment stock and writes off unitCost × qty on the P&L (Damaged write-offs). Also previews the exact **Commission consequence** based on whether the order was credited in the current open cycle, a paid cycle (W43), or a locked cycle (W42).
 >
-> **• 4. Live Lead Intake Modal (\`NewOrderDialog\`):** Opens when clicking **+ New lead** in the Order Ledger or Command Palette. Allows creating a live order with custom Customer name, Delivery city (Lagos, Abuja, Port Harcourt, Ibadan, Enugu, Kano), Product SKU, Quantity (1–3), Opened by (First touch), Closed by (Last touch), and Campaign / Media buyer, while previewing warehouse availability and total commission pool.
+> **• 4. Live Lead Intake Modal (\`NewOrderDialog\`):** Opens when clicking **+ New lead** in the Order Ledger or Command Palette. Allows creating a live order with custom Customer name, Delivery city (Lagos, Abuja, Port Harcourt, Ibadan, Enugu, Kano), Product SKU, Quantity (1–3), Opened by (First touch), Closed by (Last touch), and Media buyer, while previewing warehouse availability and total commission pool.
 >
 > **• 5. Quick Command Palette (\`CommandPalette\` — \`⌘K\` / \`Ctrl+K\`):** Keyboard-driven spotlight modal with instant search filter to switch themes (Light, Dark, System), jump to any role persona, create a new lead, toggle any founder rule, close the active payout cycle, or reset demo state.
 >
@@ -264,7 +267,8 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | app/globals.css                | Adaptive Light/Dark mode design tokens (light-dark()), fixed collapsible sidebar, spotlight cards, spring segmented controls, and resizable table headers.    |
 | lib/types.ts                   | Strict TypeScript interfaces for Role, Stage, CreditOn, OnReturn, SplitRule, PayModel, Rules, Order, Cycle, PayLine, PurchaseOrder, Drill, and PnL.           |
 | lib/engine.ts                  | Pure, zero-React calculation and mutation engine (computePnl, commissionLines, payslip, whatIf, applyOrderAction, closeCycle, raisePO, receivePO, payoutCsv). |
-| lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 6) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
+| components/AdBudget.tsx        | Profit per order, simulated Meta feed label, and each media buyer's ad cost per delivered order against the founder's max.                                |
+| lib/seed.ts                    | Deterministic factory seed (SEED_VERSION = 7) replaying cycles W42 (Locked), W43 (Paid), and W44 (Open) through the engine.                                   |
 | lib/rules.ts                   | Metadata and dynamic explanations for the 6 payout and operating rules.                                                                                       |
 | lib/store.ts                   | Zustand reactive store with localStorage persistence (kova-payout-engine) and action dispatchers.                                                          |
 | components/App.tsx             | Application shell, fixed collapsible sidebar, WAI-ARIA role tabs, directional View Transitions, top utility bar, and walkthrough guide.                       |
@@ -278,5 +282,5 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
 | components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, DiscountDialog, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray.                                                       |
-| scripts/verify.ts              | Automated 15-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
+| scripts/verify.ts              | Automated 18-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
 | scripts/e2e.mjs                | Automated 10-scenario headless Chrome E2E test suite verifying DOM, 390px mobile layout, modals, and persistence.                                             |

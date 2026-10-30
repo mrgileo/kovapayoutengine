@@ -208,6 +208,30 @@ try {
   assert.ok(stockAfter.includes("Stock loop closed"), `Raising POs should clear stock alert, got: ${stockAfter}`);
   console.log("✓ [7/10] Inventory PO loop closed:", stockAfter);
 
+  // 7b. Ad budget card: simulated feed label, profit per order, flags against the founder max
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(200);
+  const adCard = await evaluate(`
+    const card = Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Profit per order and ad cost"));
+    return card ? { text: card.innerText, over: Array.from(card.querySelectorAll(".pill")).filter(p => p.innerText.includes("Over max")).length } : null;
+  `);
+  assert.ok(adCard, "Ad budget card should render on the founder view");
+  assert.ok(adCard.text.includes("Simulated Meta feed"), "Ad spend must be labelled as a simulated feed");
+  assert.ok(!/Prospecting|Retargeting/.test(adCard.text), "No fixed campaign labels");
+  assert.equal(adCard.over, 2, "Both buyers are over the max on the seed");
+  await evaluate(`
+    const input = document.querySelector('input[aria-label="Max cost per order"]');
+    input.focus();
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    set.call(input, "100000");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.blur();
+  `);
+  await sleep(250);
+  const overAfter = await evaluate(`return Array.from(document.querySelectorAll(".pill")).filter(p => p.innerText.includes("Over max")).length;`);
+  assert.equal(overAfter, 0, "Raising the max clears the over-max flags");
+  console.log("✓ [7b] Ad budget card: simulated feed label, profit per order, max cost per order flags update live");
+
   // 8. Switch to Founder, test Discount Guardrail modal on #1048
   await evaluate(`document.querySelector('#tab-founder').click();`);
   await sleep(150);
