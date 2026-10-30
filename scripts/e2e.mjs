@@ -5,7 +5,8 @@ import path from "node:path";
 
 const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const PORT = 9229;
-const URL = "http://localhost:3000";
+// Defaults to the local server; set KOVA_URL to run the same suite against a deployment.
+const URL = process.env.KOVA_URL || "http://localhost:3000";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -29,7 +30,7 @@ async function getWsUrl() {
     try {
       const res = await fetch(`http://127.0.0.1:${PORT}/json/list`);
       const tabs = await res.json();
-      const page = tabs.find((t) => t.type === "page" && t.url.includes("localhost:3000")) || tabs.find((t) => t.type === "page");
+      const page = tabs.find((t) => t.type === "page" && t.url.startsWith(URL)) || tabs.find((t) => t.type === "page");
       if (page?.webSocketDebuggerUrl) {
         console.log("Connected to tab:", page.url);
         return page.webSocketDebuggerUrl;
