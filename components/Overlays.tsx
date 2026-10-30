@@ -6,7 +6,6 @@ import {
   DELIVERY_FEE,
   PERSONA,
   RATES,
-  RETAIL_PRICE,
   canEditRules,
   cycleById,
   orderValue,
@@ -83,104 +82,6 @@ export function DrillDrawer() {
           <span className="mono">{drill.lines.length} line(s)</span>
         </footer>
       </aside>
-    </>
-  );
-}
-
-export function DiscountDialog() {
-  const data = useData();
-  const orderId = useStore((s) => s.discountFor);
-  const close = useStore((s) => s.setDiscountFor);
-  const act = useStore((s) => s.act);
-  const m = useMoney();
-
-  const order = data.orders.find((o) => o.id === orderId);
-  const [disc, setDisc] = useState(0);
-
-  useEffect(() => {
-    if (order) setDisc(order.discount);
-  }, [order]);
-
-  if (!order) return null;
-
-  const opts = [0, 0.05, 0.1, 0.15, 0.2];
-  const activeIdx = Math.max(0, opts.findIndex((v) => Math.abs(disc - v) < 0.001));
-  const segStyle = { "--n": opts.length, "--i": activeIdx } as CSSProperties;
-
-  const floor = data.rules.discountFloor;
-  const halved = disc > floor + 1e-9;
-  const baseRate = RATES[data.rules.creditOn].closer;
-  const effectiveRate = baseRate * (halved ? 0.5 : 1);
-  const discountedPrice = Math.round(order.list * (1 - disc));
-  const closerComm = discountedPrice * effectiveRate;
-  const fullComm = order.list * baseRate;
-
-  return (
-    <>
-      <div className="scrim" onClick={() => close(null)} aria-hidden="true" />
-      <div className="dialog" role="dialog" aria-modal="true" aria-label="Apply discount with guardrail">
-        <div>
-          <div className="eyebrow">Discount Guardrail · Order #{order.id}</div>
-          <h2>{order.customer}</h2>
-          <p>
-            Sales pay is worked out on the <b>discounted price</b>, never the list price. Discounting past the{" "}
-            <b>{Math.round(floor * 100)}% floor</b> halves the closer&apos;s rate on this order.
-          </p>
-        </div>
-
-        <div className="seg has-thumb" style={segStyle} role="group" aria-label="Select discount percentage">
-          {opts.map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={Math.abs(disc - v) < 0.001}
-              onClick={() => setDisc(v)}
-            >
-              <span>{Math.round(v * 100)}%</span>
-              <span className="wi">{v > floor + 1e-9 ? "½ rate" : "full rate"}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="calc">
-          <div>
-            <span>List price ({order.sku} ×{order.qty})</span>
-            <span className="mono">{m(order.list)}</span>
-          </div>
-          <div>
-            <span>Customer pays (−{Math.round(disc * 100)}%)</span>
-            <span className="mono">{m(discountedPrice)}</span>
-          </div>
-          <div>
-            <span>Closer sales-pay rate</span>
-            <span className={"mono " + (halved ? "neg" : "pos")}>
-              {(effectiveRate * 100).toFixed(2)}% {halved ? `(halved from ${(baseRate * 100).toFixed(1)}%)` : "(full rate)"}
-            </span>
-          </div>
-          <div className="tot">
-            <span>Closer sales pay on this order</span>
-            <span className={"mono " + (halved ? "neg" : "pos")}>
-              {m(closerComm)} <span className="muted" style={{ fontWeight: 400 }}>(vs {m(fullComm)} at list)</span>
-            </span>
-          </div>
-        </div>
-
-        <div className="dialog-foot">
-          <button type="button" className="btn ghost" onClick={() => close(null)}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              act(order.id, "discount", { discount: disc });
-              close(null);
-            }}
-          >
-            Apply {Math.round(disc * 100)}% discount
-          </button>
-        </div>
-      </div>
     </>
   );
 }
@@ -305,8 +206,7 @@ export function NewOrderDialog() {
 
   const p = productOf(data, sku);
   const sr = stockRow(data, p);
-  const unitRetail = RETAIL_PRICE[sku] ?? p.cost * 2;
-  const totalList = unitRetail * qty;
+  const totalList = p.price * qty;
   const r = RATES[data.rules.creditOn];
 
   return (
@@ -619,7 +519,7 @@ export function AuditLogCard() {
   return (
     <Card
       title="Immutable Audit & Event Log"
-      sub="Every rule change, order transition, discount, PO, and cycle settlement — stamped with who did it, when, and the exact payout delta."
+      sub="Every rule change, order transition, price change, PO, and cycle settlement — stamped with who did it, when, and the exact payout delta."
       actions={
         <button type="button" className="btn sm ghost" onClick={reset}>
           <RotateCcw size={13} /> Reset demo data

@@ -11,7 +11,6 @@ import {
   closeCycle as closeCycleFx,
   computePnl,
   cycleById,
-  discountPenalty,
   firstName,
   lockCycle as lockFx,
   log,
@@ -20,6 +19,7 @@ import {
   openLines,
   payslip,
   raisePO as raisePOFx,
+  setProductPrice as setProductPriceFx,
   receivePO as receivePOFx,
   createOrder as createOrderFx,
   salesPeople,
@@ -42,7 +42,6 @@ interface Store {
   drill: Drill | null;
   toasts: Toast[];
   returnFor: number | null;
-  discountFor: number | null;
   newOrderOpen: boolean;
   guideOpen: boolean;
 
@@ -53,13 +52,13 @@ interface Store {
   toast: (tone: Toast["tone"], text: string) => void;
   dismiss: (id: number) => void;
   setReturnFor: (id: number | null) => void;
-  setDiscountFor: (id: number | null) => void;
   setNewOrderOpen: (open: boolean) => void;
   setGuide: (open: boolean) => void;
 
   setRule: <K extends RuleKey>(key: K, value: Rules[K]) => void;
   setMaxCostPerOrder: (amount: number) => void;
-  act: (orderId: number, action: ActionKey, opts?: { condition?: "resellable" | "damaged"; discount?: number }) => void;
+  act: (orderId: number, action: ActionKey, opts?: { condition?: "resellable" | "damaged" }) => void;
+  setProductPrice: (sku: string, price: number) => void;
   createOrder: (input: {
     customer: string;
     city: string;
@@ -115,7 +114,6 @@ export const useStore = create<Store>()(
         drill: null,
         toasts: [],
         returnFor: null,
-        discountFor: null,
         newOrderOpen: false,
         guideOpen: false,
 
@@ -130,10 +128,24 @@ export const useStore = create<Store>()(
         },
         dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
         setReturnFor: (returnFor) => set({ returnFor }),
-        setDiscountFor: (discountFor) => set({ discountFor }),
         setNewOrderOpen: (newOrderOpen) => set({ newOrderOpen }),
         setGuide: (guideOpen) => set({ guideOpen }),
 
+        setProductPrice: (sku, price) => {
+          if (!canEditRules(get().role)) {
+            get().toast("err", "Only the founder can change prices.");
+            return;
+          }
+          const prev = get().data.products.find((p) => p.sku === sku)?.price;
+          const next = Math.round(price);
+          if (prev === undefined || next === prev) return;
+          const res = mutate((d) => {
+            const err = setProductPriceFx(d, sku, next);
+            if (err) return err;
+            log(d, { at: now(), actor: actor(), kind: "stock", text: `${sku} price: ₦${prev.toLocaleString()} → ₦${next.toLocaleString()} · applies to new orders only` });
+          });
+          if (res) get().toast("ok", `${sku} is now ₦${next.toLocaleString()}. New orders only.`);
+        },
         setMaxCostPerOrder: (amount) => {
           if (!canEditRules(get().role)) {
             get().toast("err", "Only the founder can change the max cost per order.");
@@ -213,16 +225,9 @@ export const useStore = create<Store>()(
               case "cancel":
                 text = `Order ${o.id} cancelled`;
                 break;
-              case "discount": {
-                const pen = discountPenalty(o, d.rules);
-                text = o.discount
-                  ? `Order ${o.id} discounted ${Math.round(o.discount * 100)}%${pen ? " · past the floor, closer rate halved" : ""}`
-                  : `Order ${o.id} discount removed`;
-                break;
-              }
             }
             const before = get().data;
-            log(d, { at: now(), actor: actor(), kind: action === "discount" ? "discount" : "order", text, deltas: peopleDeltas(before, d) });
+            log(d, { at: now(), actor: actor(), kind: "order", text, deltas: peopleDeltas(before, d) });
           });
           if (!res) return;
           const deltas = peopleDeltas(res.before, res.after);
@@ -296,7 +301,7 @@ export const useStore = create<Store>()(
           }
         },
         reset: () => {
-          set({ data: buildSeed(), drill: null, returnFor: null, discountFor: null, newOrderOpen: false });
+          set({ data: buildSeed(), drill: null, returnFor: null, newOrderOpen: false });
           get().toast("ok", "Demo reset to the seed data.");
         },
       };

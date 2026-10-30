@@ -92,12 +92,6 @@ export const RULE_TEXT = {
       half: "The closer pay is split evenly between the person who opened it and the one who closed it.",
     },
   },
-  discountFloor: {
-    label: "Discount floor",
-    options: { "0.05": "5%", "0.1": "10%", "0.15": "15%" },
-    explain: (floor: number) =>
-      `Pay is always worked out on the price the customer paid. Discount more than ${floor}% and the closer's rate halves on that order.`,
-  },
   returnCap: {
     label: "Return-rate gate",
     options: { "1": "Off", "0.3": "30% cap", "0.2": "20% cap" },

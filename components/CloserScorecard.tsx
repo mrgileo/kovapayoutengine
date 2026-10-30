@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import { closerStats, openLines, payslip, personOf } from "@/lib/engine";
+import { closerStats, openLines, orderValue, payslip, personOf } from "@/lib/engine";
 import { pct } from "@/lib/format";
 import { PAY_LINE_TEXT } from "@/lib/labels";
 import { useData } from "@/lib/store";
@@ -13,6 +13,9 @@ export function CloserScorecard() {
   const closers = ["amaka", "chidi"];
   const lines = openLines(data);
   const cap = data.rules.returnCap ?? 1;
+  const [worst, best] = closers
+    .map((id) => ({ id, name: personOf(data, id).name.split(" ")[0], rate: closerStats(data, id).returnRate }))
+    .sort((a, b) => b.rate - a.rate);
 
   function buildCloserDrill(id: string): Drill {
     const p = personOf(data, id);
@@ -52,7 +55,6 @@ export function CloserScorecard() {
               <th>Closer</th>
               <th className="r">Delivered vol.</th>
               <th>Return rate</th>
-              <th className="r">Avg discount</th>
               <th className="r">This week's pay</th>
               <th className="r">Profit contributed</th>
             </tr>
@@ -89,8 +91,8 @@ export function CloserScorecard() {
                             .map((o) => ({
                               ref: `#${o.id}`,
                               label: `${o.customer} · ${o.sku} ×${o.qty}`,
-                              detail: `Delivered in ${o.deliveredCycle}${o.discount ? ` (${Math.round(o.discount * 100)}% off)` : ""}`,
-                              amount: Math.round(o.list * (1 - o.discount)),
+                              detail: `Delivered in ${o.deliveredCycle}`,
+                              amount: orderValue(o),
                             })),
                           total: st.deliveredValue,
                         }}
@@ -119,13 +121,6 @@ export function CloserScorecard() {
                   </td>
 
                   <td className="r mono">
-                    <b>{st.discounted ? pct(st.avgDiscount, 0) : "0%"}</b>
-                    <span className="sub">
-                      {st.discounted ? `${st.discounted} order${st.discounted === 1 ? "" : "s"} discounted` : "List price held"}
-                    </span>
-                  </td>
-
-                  <td className="r mono">
                     <b style={{ fontSize: 14 }}>
                       <Fig amount={ps.gross} drill={() => buildCloserDrill(id)} />
                     </b>
@@ -151,7 +146,7 @@ export function CloserScorecard() {
         <div className="insight">
           <AlertTriangle size={17} />
           <div>
-            <b>Why this matters:</b> Amaka books higher volume, but <b>37.5% of her resolved orders come back</b> (vs Chidi&apos;s 14.3%) and she discounted Order #1049 by 15% (past the 10% guardrail). Set <b>Return-rate gate → 30% cap</b> in the rules above to halve her sales pay until her return rate drops.
+            <b>Why this matters:</b> Volume alone hides quality: <b>{pct(worst.rate, 0)} of {worst.name}&apos;s resolved orders come back</b> (vs {best.name}&apos;s {pct(best.rate, 0)}). Set <b>Return-rate gate → 30% cap</b> in the rules above to halve a closer&apos;s sales pay until their return rate drops.
           </div>
         </div>
       </div>

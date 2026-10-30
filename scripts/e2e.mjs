@@ -152,11 +152,11 @@ try {
     const cards = document.querySelectorAll(".ocard").length;
     return { segLocked, disabledBtns, banner, cards };
   `);
-  assert.equal(closerChecks.segLocked, 6, "All 6 rule groups must have .locked class for closer");
-  assert.ok(closerChecks.disabledBtns >= 13, "All rule buttons must be disabled for closer");
+  assert.equal(closerChecks.segLocked, 5, "All 5 rule groups must have .locked class for closer");
+  assert.ok(closerChecks.disabledBtns >= 12, "All rule buttons must be disabled for closer");
   assert.ok(closerChecks.banner.includes("Set by the founder"), "Lock banner must display founder audit message");
   assert.ok(closerChecks.cards > 0, "Closer view must render stacked order cards (.ocard)");
-  console.log(`✓ [4/10] Closer view: ${closerChecks.segLocked} locked rule strips, ${closerChecks.cards} phone order cards, banner="${closerChecks.banner}"`);
+  console.log(`✓ [4/10] Closer view: ${closerChecks.segLocked} locked rules, ${closerChecks.cards} phone order cards, banner="${closerChecks.banner}"`);
 
   // 5. Mobile 390px horizontal overflow check on Closer view
   await send("Emulation.setDeviceMetricsOverride", {
@@ -232,28 +232,36 @@ try {
   assert.equal(overAfter, 0, "Raising the max clears the over-max flags");
   console.log("✓ [7b] Ad budget card: simulated feed label, profit per order, max cost per order flags update live");
 
-  // 8. Switch to Founder, test Discount Guardrail modal on #1048
+  // 8. No discounts anywhere; five rules visible; founder price change applies to new orders only
   await evaluate(`document.querySelector('#tab-founder').click();`);
-  await sleep(150);
-  await evaluate(`
-    const row1048 = Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1048"));
-    const discBtn = Array.from(row1048.querySelectorAll("button")).find(b => b.innerText.includes("Discount"));
-    discBtn.click();
+  await sleep(200);
+  const noDisc = await evaluate(`
+    const body = document.body.innerText;
+    return {
+      discountButtons: Array.from(document.querySelectorAll("button")).filter(b => /discount/i.test(b.innerText)).length,
+      mentionsDiscount: /discount/i.test(body),
+      ruleGroups: document.querySelectorAll(".rules-grid .rule").length,
+      advanced: /advanced/i.test(document.querySelector(".rules-grid")?.parentElement?.innerText || ""),
+      row1043: Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1043"))?.innerText || "",
+    };
   `);
-  await sleep(150);
-  const dialogOpen = await evaluate(`return document.querySelector(".dialog h2")?.innerText;`);
-  assert.equal(dialogOpen, "Tunde Bakare", "Discount modal should open for Order #1048");
+  assert.equal(noDisc.discountButtons, 0, "No Discount button anywhere");
+  assert.equal(noDisc.mentionsDiscount, false, "The word discount must not appear on screen");
+  assert.equal(noDisc.ruleGroups, 5, "Rules strip shows exactly five rules");
+  assert.equal(noDisc.advanced, false, "No Advanced section in the rules strip");
+  assert.ok(noDisc.row1043.includes("212,000"), "Order #1043 is priced at the company price");
   await evaluate(`
-    const btn15 = Array.from(document.querySelectorAll(".dialog .seg button")).find(b => b.innerText.startsWith("15%"));
-    btn15.click();
+    const input = document.querySelector('input[aria-label="AIR-12 company price"]');
+    input.focus();
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    set.call(input, "230000");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.blur();
   `);
-  await sleep(100);
-  await evaluate(`
-    const applyBtn = Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Apply"));
-    applyBtn.click();
-  `);
-  await sleep(150);
-  console.log("✓ [8/10] Discount Guardrail modal applied 15% discount (½ closer rate)");
+  await sleep(250);
+  const afterPrice = await evaluate(`return Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1043"))?.innerText || "";`);
+  assert.ok(afterPrice.includes("212,000") && !afterPrice.includes("230,000"), "A price change must not re-price an existing order");
+  console.log("✓ [8/10] No discounts, five rules visible, price change leaves existing orders alone");
 
   // 9. Post-close return on W43 order #1033 & Close cycle W44
   await evaluate(`

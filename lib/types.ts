@@ -18,8 +18,6 @@ export interface Rules {
   creditOn: CreditOn;
   onReturn: OnReturn;
   split: SplitRule;
-  /** Discount above this fraction halves the closer's rate on that order. */
-  discountFloor: number;
   /** Return rate above this fraction halves the closer's variable commission on the cycle. */
   returnCap: number;
   payModel: PayModel;
@@ -47,6 +45,8 @@ export interface Product {
   onHand: number;
   reorder: number;
   cost: number;
+  /** Company selling price per unit. Set by the founder; closers cannot change it. */
+  price: number;
   leadDays: number;
 }
 
@@ -56,10 +56,8 @@ export interface Order {
   city: string;
   sku: string;
   qty: number;
-  /** List value of the order (all units) before discount. */
-  list: number;
-  /** Fraction 0..0.2 */
-  discount: number;
+  /** Company unit price when the order was created. A later price change only affects new orders. */
+  unitPrice: number;
   /** First touch: who opened the conversation. */
   openedBy: string;
   /** Last touch: who closed the sale. */
@@ -132,7 +130,7 @@ export interface AuditEntry {
   at: string;
   actor: string;
   cycle: string;
-  kind: "order" | "rule" | "cycle" | "stock" | "discount" | "system";
+  kind: "order" | "rule" | "cycle" | "stock" | "system";
   text: string;
   /** Money movements caused by this event, stored in naira and formatted at render. */
   deltas?: { label: string; amount: number }[];

@@ -4,7 +4,6 @@ import { Smartphone, Lock, AlertTriangle } from "lucide-react";
 import {
   closerStats,
   commissionLines,
-  discountPenalty,
   openCycle,
   openLines,
   orderValue,
@@ -60,11 +59,10 @@ export function CloserView() {
         (l) => l.personId === "amaka",
       );
       const amt = sum(ls.map((l) => l.amount));
-      const pen = discountPenalty(o, data.rules);
       return {
         ref: `#${o.id}`,
         label: `${o.customer} · ${o.sku} ×${o.qty} (${o.stage})`,
-        detail: ls[0]?.note ?? (pen ? "Rate halved due to discount" : "No closer share under current split rule"),
+        detail: ls[0]?.note ?? "No closer share under current split rule",
         amount: amt,
       };
     }),
@@ -127,13 +125,6 @@ export function CloserView() {
           tone={st.returnRate > 0.25 ? "neg" : "pos"}
         >
           <span className="num">{pct(st.returnRate, 0)}</span>
-        </Tile>
-        <Tile
-          label="Discounted orders"
-          note={`Floor is ${pct(data.rules.discountFloor, 0)} — above that your rate halves`}
-          tone={st.discounted > 0 ? "warn" : undefined}
-        >
-          <span className="num">{st.discounted}</span>
         </Tile>
         <Tile
           label="Stock-blocked orders"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GitFork, Lock, Percent, Plus, RotateCcw, Search } from "lucide-react";
+import { GitFork, Lock, Plus, RotateCcw, Search } from "lucide-react";
 import {
   ACTION_LABEL,
   ActionKey,
@@ -9,7 +9,6 @@ import {
   blockedNote,
   commissionLines,
   cycleById,
-  discountPenalty,
   firstName,
   isCredited,
   openCycle,
@@ -28,7 +27,6 @@ export function OrderLedger() {
   const role = useStore((s) => s.role);
   const act = useStore((s) => s.act);
   const setReturnFor = useStore((s) => s.setReturnFor);
-  const setDiscountFor = useStore((s) => s.setDiscountFor);
   const setNewOrderOpen = useStore((s) => s.setNewOrderOpen);
   const m = useMoney();
 
@@ -56,10 +54,6 @@ export function OrderLedger() {
   function handleAction(o: Order, a: ActionKey) {
     if (a === "return") {
       setReturnFor(o.id);
-      return;
-    }
-    if (a === "discount") {
-      setDiscountFor(o.id);
       return;
     }
     act(o.id, a);
@@ -138,7 +132,7 @@ export function OrderLedger() {
       tone: creditedNow ? "pos" : "muted",
       drill: {
         title: `Order #${o.id} · Sales pay split`,
-        subtitle: `${o.customer} · Credited value ${m(val)}${o.discount ? ` (${Math.round(o.discount * 100)}% off list ${m(o.list)})` : ""}`,
+        subtitle: `${o.customer} · Credited value ${m(val)}`,
         lines: lines.map((l) => ({
           ref: personOf(data, l.personId).role.toUpperCase(),
           label: personOf(data, l.personId).name,
@@ -156,7 +150,7 @@ export function OrderLedger() {
       sub={
         role === "closer"
           ? "Designed for a 390px phone screen in Lagos traffic — zero horizontal scroll, clear personal earnings, and strict delivery controls."
-          : "Move orders forward, test discounts (#1049), inspect split-credit (#1053), or return a paid order from W43 (#1033) to see pay taken back."
+          : "Move orders forward, inspect split-credit (#1053), or return a paid order from W43 (#1033) to see pay taken back."
       }
       actions={
         <div className="filters" role="group" aria-label="Filter orders" style={{ alignItems: "center" }}>
@@ -214,7 +208,6 @@ export function OrderLedger() {
               (l) => l.personId === "amaka",
             );
             const myShare = sum(myLines.map((l) => l.amount));
-            const pen = discountPenalty(o, data.rules);
             const isSplit = o.openedBy !== o.closer;
 
             return (
@@ -230,7 +223,6 @@ export function OrderLedger() {
                   </div>
                   <div className="ocard-val">
                     <span className="big">{m(val)}</span>
-                    {o.discount > 0 && <s>{m(o.list)}</s>}
                   </div>
                 </div>
 
@@ -238,11 +230,6 @@ export function OrderLedger() {
                   <StagePill stage={o.stage} failed={o.failed} cashIn={o.cashIn} />
                   <span className="pill plain">{o.createdCycle}</span>
                   {thin && <span className="pill neg">No stock</span>}
-                  {o.discount > 0 && (
-                    <span className={"pill " + (pen ? "neg" : "warn")}>
-                      −{Math.round(o.discount * 100)}%{pen ? " · rate halved" : ""}
-                    </span>
-                  )}
                   {isSplit && (
                     <span className="pill info">
                       <GitFork size={11} /> {firstName(data, o.openedBy)} → {firstName(data, o.closer)}
@@ -308,11 +295,10 @@ export function OrderLedger() {
                 const thin = sr.available <= 0 && o.stage !== "delivered" && o.stage !== "returned" && o.stage !== "cancelled";
                 const acts = actionsFor(data, role, o);
                 const comm = orderCommissionInfo(o);
-                const pen = discountPenalty(o, data.rules);
                 const isSplit = o.openedBy !== o.closer;
 
                 return (
-                  <tr key={o.id} className={isSplit || o.discount > 0 ? "hl" : ""}>
+                  <tr key={o.id} className={isSplit ? "hl" : ""}>
                     <td>
                       <b className="mono">#{o.id}</b>
                       <span className="sub">
@@ -354,11 +340,6 @@ export function OrderLedger() {
                     </td>
                     <td className="r mono">
                       <b>{m(val)}</b>
-                      {o.discount > 0 && (
-                        <span className={"sub " + (pen ? "neg" : "warn-t")}>
-                          <s>{m(o.list)}</s> (−{Math.round(o.discount * 100)}%{pen ? " · ½ rate" : ""})
-                        </span>
-                      )}
                     </td>
                     <td>
                       <StagePill stage={o.stage} failed={o.failed} cashIn={o.cashIn} />
@@ -397,7 +378,6 @@ export function OrderLedger() {
                               }
                               onClick={() => handleAction(o, a)}
                             >
-                              {a === "discount" && <Percent size={11} />}
                               {a === "return" && <RotateCcw size={11} />}
                               {ACTION_LABEL[a]}
                             </button>

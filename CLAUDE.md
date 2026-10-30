@@ -26,7 +26,7 @@ node scripts/e2e.mjs  # headless-Chrome CDP smoke test; needs `npm run dev` runn
 
 - `lib/types.ts`: the domain model. `DemoState` is the single persisted blob (people, products, orders, cycles, rules, spend, POs, audit log).
 - `lib/engine.ts`: crediting rules (`isCredited`, `commissionLines`, `reversals`), payslips, `computePnl`, `whatIf` (recompute under hypothetical rules), per-closer/campaign/SKU stats, stock status, the order state machine (`transition`, `actionsFor`) and the cycle lifecycle (`closeCycle` → `markPaid` → `lockCycle`). Mutators take a draft `DemoState` plus `actor`/`at` and write audit entries via `log`.
-- `lib/rules.ts`: UI definitions (labels, options, explanatory copy) for the six tunable `Rules`. It imports rates from the engine, so explanatory text stays in sync with the numbers.
+- `lib/rules.ts`: UI definitions (labels, options, explanatory copy) for the five tunable `Rules`; the wording itself lives in `lib/labels.ts`, the single source of display text (internal keys never change, only labels). It imports rates from the engine, so explanatory text stays in sync with the numbers.
 - `lib/seed.ts`: `buildSeed()` produces the demo dataset, including closed past cycles built by running the real engine. **Bump `SEED_VERSION` whenever the seed or the `DemoState` shape changes**: the store's persist `migrate` just discards stored data and re-seeds.
 - `lib/store.ts`: Zustand store with `persist` to localStorage (key `kova-payout-engine`; only `data`, `role`, `ccy` are persisted). Actions wrap engine mutators, enforce role permissions, and emit toasts. UI-only state (open drill, modals) is not persisted.
 - `components/`: `App.tsx` is the shell and routes by `role`; there is one view per persona (`PERSONA` in the engine maps role → default person: closer=amaka, buyer=tobi, lead=ngozi, stock=dayo, founder=chidinma). `Overlays.tsx` holds the drill-down, return/discount dialogs, new-order and guide modals. `ui.tsx` has shared primitives.
@@ -35,7 +35,7 @@ node scripts/e2e.mjs  # headless-Chrome CDP smoke test; needs `npm run dev` runn
 ## Domain rules to preserve
 
 - Crediting is driven by `rules.creditOn` (`lead` | `delivered` | `cash`), with different rate tables in `RATES`; `onReturn` (`clawback` | `offset` | `absorb`) decides what happens to commission on already-credited orders that return. Offsets become `carryIn` lines on the next cycle.
-- Commission is on the discounted price; a discount above `discountFloor` halves the closer's rate on that order, and `returnCap` halves a closer's cycle commission if their return rate exceeds it.
+- There are no discounts. Each SKU has one company `Product.price`; every order stores `unitPrice` at creation and `orderValue = unitPrice × qty`, so a founder price change only affects new orders. `returnCap` halves a closer's cycle sales pay (1.0× or 0.5× only) if their return rate exceeds it.
 - Segregation of duties is enforced in `actionsFor` (e.g. a closer cannot mark their own order delivered; only the founder can edit rules via `canEditRules`). `scripts/verify.ts` asserts these, so update it alongside behaviour changes.
 - Closed cycles freeze `lines` and `pnl`; the open cycle is always recomputed live.
 

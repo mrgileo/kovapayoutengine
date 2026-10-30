@@ -10,11 +10,13 @@ import {
   skuEconomics,
   canEditRules,
   closeCycle,
+  createOrder,
+  orderValue,
+  setProductPrice,
   DELIVERY_FEE,
   closerStats,
   commissionLines,
   computePnl,
-  discountPenalty,
   needsAttention,
   openCycle,
   openLines,
@@ -41,9 +43,9 @@ assert.equal(actionsFor(s, "stock", dispatchedOrder).includes("deliver"), true, 
 
 // 2. Real P&L vs naive net
 const pnlCommOnly = computePnl(s, { ...s.rules, payModel: "commission" });
-assert.equal(pnlCommOnly.revenue, 447500, "Delivered revenue in W44 should be ₦447,500");
+assert.equal(pnlCommOnly.revenue, 532500, "Delivered revenue in W44 should be ₦532,500");
 assert.equal(pnlCommOnly.cogs, 222500, "COGS in W44 should be ₦222,500");
-assert.equal(Math.round(pnlCommOnly.commission), 29088, "Commission in W44 should be ₦29,088");
+assert.equal(Math.round(pnlCommOnly.commission), 34613, "Sales pay in W44 should be ₦34,613");
 assert.equal(pnlCommOnly.adSpend, 281000, "Ad spend in W44 should be ₦281,000");
 assert.equal(pnlCommOnly.actual < 0, true, "Business is underwater once real costs are counted");
 
@@ -67,20 +69,20 @@ const amakaStats = closerStats(s, "amaka");
 const chidiStats = closerStats(s, "chidi");
 assert.equal(amakaStats.returnRate > chidiStats.returnRate, true, "Amaka has higher return rate than Chidi");
 
-// 5. Discount guardrail on #1049 (15% > 10% floor)
+// 5. One company price per SKU: no discounts, order value = unit price × qty, closer pay is 4% of it
 const o1049 = s.orders.find((o) => o.id === 1049)!;
-assert.equal(discountPenalty(o1049, s.rules), true, "Order 1049 breaches the 10% discount floor");
+assert.equal(orderValue(o1049), 212000, "AIR-12 sells at the company price");
 const lines1049 = commissionLines(s, { ...o1049, stage: "delivered" }, s.rules, "W44");
-const amaka1049 = lines1049.find((l) => l.personId === "amaka")!;
-assert.equal(amaka1049.amount, Math.round(245000 * 0.85) * 0.02, "Closer rate halves from 4% to 2% on discounted value");
+assert.equal(lines1049.find((l) => l.personId === "amaka")!.amount, 212000 * 0.04, "Closer rate is a flat 4%, nothing halves it");
+assert.equal("discount" in o1049 || "list" in o1049, false, "Orders carry no discount or list-price fields");
 
 // 6. Split credit on #1053 (opened by Amaka, closed by Chidi)
 const o1053 = s.orders.find((o) => o.id === 1053)!;
 const firstTouch = commissionLines(s, { ...o1053, stage: "delivered" }, { ...s.rules, split: "first" }, "W44");
 const lastTouch = commissionLines(s, { ...o1053, stage: "delivered" }, { ...s.rules, split: "last" }, "W44");
 const halfTouch = commissionLines(s, { ...o1053, stage: "delivered" }, { ...s.rules, split: "half" }, "W44");
-assert.equal(firstTouch.some((l) => l.personId === "amaka" && l.amount === 88000 * 0.04), true);
-assert.equal(lastTouch.some((l) => l.personId === "chidi" && l.amount === 88000 * 0.04), true);
+assert.equal(firstTouch.some((l) => l.personId === "amaka" && l.amount === 73500 * 0.04), true);
+assert.equal(lastTouch.some((l) => l.personId === "chidi" && l.amount === 73500 * 0.04), true);
 assert.equal(halfTouch.filter((l) => l.personId === "amaka" || l.personId === "chidi").length, 2);
 
 // 7. Inventory loop: Raise PO clears alert, Receive PO adds onHand
@@ -128,20 +130,20 @@ assert.equal(air.committed, 2, "AIR-12 committed = #1043 (dispatched) + #1049 (c
 assert.equal(air.available, 2, "AIR-12 available = 4 on hand − 2 committed");
 assert.equal(sum(stockRows(s).map((r) => r.committed)), 6, "Units committed across SKUs should be 6");
 
-// 13. Tobi net payout = pro-rated base + 1.5% of the ₦216,500 he delivered
+// 13. Tobi net payout = pro-rated base + 1.5% of the ₦202,000 he delivered
 const tobiSlip = payslip(openLines(s), "tobi");
 assert.equal(tobiSlip.base, 27692);
-assert.equal(tobiSlip.commission, 216500 * 0.015);
-assert.equal(Math.round(tobiSlip.payable), 30940, "Tobi net payout should be ₦30,940");
+assert.equal(tobiSlip.commission, 202000 * 0.015);
+assert.equal(Math.round(tobiSlip.payable), 30722, "Tobi net payout should be ₦30,722");
 
 // 14. Courier legs: 5 delivered + #1046 return leg + #1046 outbound = 7. Dispatched-not-delivered orders are not charged yet.
 assert.equal(computePnl(s).logistics, 7 * DELIVERY_FEE, "W44 courier fees should be 7 legs × ₦3,500");
 
-// 15. Commission paid on orders that have not landed: none under Delivery, ₦31,404 under Lead
+// 15. Commission paid on orders that have not landed: none under Delivery, ₦34,210 under Lead
 assert.equal(paidOnUndelivered(s).total, 0, "No pre-delivery payout under the Delivery trigger");
 const sLead = structuredClone(s);
 sLead.rules.creditOn = "lead";
-assert.equal(Math.round(paidOnUndelivered(sLead).total), 31404, "Paid on undelivered under Lead should be ₦31,404");
+assert.equal(Math.round(paidOnUndelivered(sLead).total), 34210, "Paid on undelivered under Lead should be ₦34,210");
 
 // 16. Plain language: none of the old accounting terms reach the screen via labels, rules or drills
 const OLD_TERMS = /COGS|cost of goods|naive|core actual|full operating|variable commission|fixed base|base pay|override|ROAS|clawback|claw back|clawed|write-off|courier leg|payout ratio|credit a sale|refund.*(staff|commission)|prospecting|retargeting/i;
@@ -175,9 +177,9 @@ assert.equal(`${L.payTakenBack}|${L.refunds}`, "Pay taken back|Refunds", "Pay ta
 // 17. Profit per order = (revenue − product cost − ad spend) ÷ delivered orders, before and after staff pay
 const ppo = profitPerOrder(s);
 assert.equal(ppo.orders, 5, "W44 has 5 delivered orders");
-assert.equal(ppo.before, (447500 - 222500 - 281000) / 5, "Profit per order before staff pay should be −₦11,200");
+assert.equal(ppo.before, (532500 - 222500 - 281000) / 5, "Profit per order before staff pay should be +₦5,800");
 assert.equal(ppo.after, ppo.before - (computePnl(s).commission + computePnl(s).base) / 5, "After staff pay subtracts sales pay and fixed salary per order");
-assert.equal(Math.round(ppo.after), -41479);
+assert.equal(Math.round(ppo.after), -25584);
 assert.equal(Math.abs(ppo.beforeDrill.total - ppo.before) < 1e-6 && Math.abs(ppo.afterDrill.total - ppo.after) < 1e-6, true, "Drill totals match the figures");
 
 // 18. Any media buyer can run any campaign; max cost per order is a flag and never moves pay
@@ -194,5 +196,29 @@ assert.equal(adCost(sLoose, "tobi").overMax || adCost(sLoose, "zainab").overMax,
 assert.equal(computePnl(sLoose).payout, computePnl(s).payout, "Max cost per order does not change pay");
 assert.equal(computePnl(sLoose).actual, computePnl(s).actual, "Max cost per order does not change real profit");
 
-console.log("ALL 18 ENGINE INVARIANTS PASSED.");
+// 19. Prices: every seed order is exactly its SKU price × qty; a price change only affects new orders
+for (const o of s.orders) {
+  const price = s.products.find((p) => p.sku === o.sku)!.price;
+  assert.equal(orderValue(o), price * o.qty, "Order " + o.id + " value must equal unit price × qty");
+}
+const sPrice = structuredClone(s);
+assert.equal(setProductPrice(sPrice, "AIR-12", 230000), null);
+assert.equal(orderValue(sPrice.orders.find((o) => o.id === 1041)!), 212000, "Existing orders keep the price they were created at");
+const fresh = createOrder(sPrice, { customer: "Test", city: "Lagos", sku: "AIR-12", qty: 2, openedBy: "amaka", closer: "amaka", buyer: "tobi" });
+assert.equal(orderValue(fresh), 460000, "New orders use the updated price");
+assert.notEqual(setProductPrice(sPrice, "AIR-12", 0), null, "A zero price is rejected");
+
+// 20. The pay rules are exactly five, none of them a discount rule; the return-rate gate is 1.0× or 0.5× only
+assert.deepEqual(RULE_DEFS.map((d) => d.key), ["creditOn", "onReturn", "split", "payModel", "returnCap"]);
+assert.equal("discountFloor" in s.rules || "discountFloor" in s.rulesMeta, false);
+const gated = commissionLines(structuredClone(s), s.orders.find((o) => o.id === 1045)!, { ...s.rules, returnCap: 0.3 }, "W44");
+const ungated = commissionLines(structuredClone(s), s.orders.find((o) => o.id === 1045)!, { ...s.rules, returnCap: 1 }, "W44");
+const ratio = gated.find((l) => l.personId === "amaka")!.amount / ungated.find((l) => l.personId === "amaka")!.amount;
+assert.equal(ratio, 0.5, "Gate halves a breaching closer once, never 0.25×");
+// segregation of duties: nobody can discount, and closers still cannot certify their own deliveries
+for (const role of ["founder", "closer", "buyer", "lead", "stock"] as const) {
+  for (const o of s.orders) assert.equal((actionsFor(s, role, o) as string[]).includes("discount"), false);
+}
+
+console.log("ALL 20 ENGINE INVARIANTS PASSED.");
 

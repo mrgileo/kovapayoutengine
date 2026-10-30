@@ -14,7 +14,6 @@ import { OrderLedger } from "./OrderLedger";
 import {
   AuditLogCard,
   CommandPalette,
-  DiscountDialog,
   DrillDrawer,
   NewOrderDialog,
   ReturnDialog,
@@ -443,7 +442,7 @@ export function App() {
                     <b>Pay taken back after a week closes:</b> In the Order Ledger, click the <b>Paid in W42/W43</b> filter and process a return on <b>Order #1033</b> (paid in W43). Toggle <b>Pay taken back</b> between <i>Take back now</i>, <i>Take back next week</i>, and <i>Business absorbs</i> — then try returning <b>Order #1024</b> from locked cycle W42.
                   </li>
                   <li>
-                    <b>Discount Guardrail &amp; Split Credit:</b> Inspect <b>Order #1049</b> (15% discount past the 10% floor halves Amaka&apos;s rate) and <b>Order #1053</b> (opened by Amaka, closed by Chidi — toggle <i>First touch · Last touch · 50-50</i>).
+                    <b>Split credit:</b> Inspect <b>Order #1053</b> (opened by Amaka, closed by Chidi — toggle <i>First touch · Last touch · 50-50</i>).
                   </li>
                   <li>
                     <b>Close the Inventory Loop:</b> Switch to <b>Dayo (Inventory)</b> and click <b>Raise PO</b> on <span className="mono">KET-03</span> or <span className="mono">VAC-21</span>. Units move to <i>On order</i> with an ETA, alerts clear, and receiving the PO unblocks order confirmation.
@@ -479,7 +478,6 @@ export function App() {
 
       {/* Modals, Drawer, Command Palette & Toasts */}
       <DrillDrawer />
-      <DiscountDialog />
       <ReturnDialog />
       <NewOrderDialog />
       <CommandPalette

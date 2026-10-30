@@ -4,6 +4,7 @@ import { PackagePlus, CheckCircle, AlertTriangle } from "lucide-react";
 import { STOCK_LABEL, needsAttention, personOf, skuEconomics, stockRows, sum } from "@/lib/engine";
 import { dateTime, pct, shortDate, shortName } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
+import { PriceBook } from "./PriceBook";
 import { Card, Fig, Tile, useMoney } from "./ui";
 
 const TONE_MAP = {
@@ -272,6 +273,8 @@ export function StockBook() {
           </div>
         </Card>
       )}
+
+      <PriceBook />
 
       <Card
         title="SKU Unit Economics & Return Bleed"

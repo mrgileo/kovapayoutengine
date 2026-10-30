@@ -52,14 +52,13 @@ export const RULE_DEFS: RuleDef[] = [
     explain: (r) => T.split.explain[r.split],
   },
   {
-    key: "discountFloor",
-    label: T.discountFloor.label,
+    key: "payModel",
+    label: T.payModel.label,
     options: [
-      { value: 0.05, label: T.discountFloor.options["0.05"] },
-      { value: 0.1, label: T.discountFloor.options["0.1"] },
-      { value: 0.15, label: T.discountFloor.options["0.15"] },
+      { value: "commission", label: T.payModel.options.commission },
+      { value: "base_plus", label: T.payModel.options.base_plus },
     ],
-    explain: (r) => T.discountFloor.explain(Math.round(r.discountFloor * 100)),
+    explain: (r) => T.payModel.explain[r.payModel],
   },
   {
     key: "returnCap",
@@ -70,15 +69,6 @@ export const RULE_DEFS: RuleDef[] = [
       { value: 0.2, label: T.returnCap.options["0.2"] },
     ],
     explain: (r) => (r.returnCap >= 1 ? T.returnCap.explain.off : T.returnCap.explain.on(Math.round(r.returnCap * 100))),
-  },
-  {
-    key: "payModel",
-    label: T.payModel.label,
-    options: [
-      { value: "commission", label: T.payModel.options.commission },
-      { value: "base_plus", label: T.payModel.options.base_plus },
-    ],
-    explain: (r) => T.payModel.explain[r.payModel],
   },
 ];
 

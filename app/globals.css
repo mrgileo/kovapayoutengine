@@ -990,6 +990,10 @@ button.fig:focus-visible {
   gap: 1px;
   background: var(--line);
 }
+/* Five rules in a 3-column grid: let the last one fill the row instead of leaving a hole. */
+.rules-grid > .rule:last-child:nth-child(3n + 2) {
+  grid-column: span 2;
+}
 .rule {
   background: var(--surface-solid);
   padding: 14px 16px;
@@ -2641,6 +2645,9 @@ table.tbl {
   }
   .rules-grid {
     grid-template-columns: 1fr;
+  }
+  .rules-grid > .rule:last-child:nth-child(3n + 2) {
+    grid-column: auto;
   }
 }
 
