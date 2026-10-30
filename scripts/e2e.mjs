@@ -248,7 +248,7 @@ try {
 
   // 7b. Ad budget card: simulated feed label, profit per order, flags against the founder max
   await evaluate(`document.querySelector('#tab-founder').click();`);
-  await sleep(200);
+  for (let i = 0; i < 30 && !(await evaluate(`return Array.from(document.querySelectorAll("section")).some(s => s.innerText.includes("Profit per order and ad cost"));`)); i++) await sleep(150);
   const adCard = await evaluate(`
     const card = Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Profit per order and ad cost"));
     return card ? { text: card.innerText, over: Array.from(card.querySelectorAll(".pill")).filter(p => p.innerText.includes("Over max")).length } : null;
