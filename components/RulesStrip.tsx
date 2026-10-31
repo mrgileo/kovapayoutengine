@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useDeferredValue, useMemo, type CSSProperties } from "react";
 import { Lock } from "lucide-react";
 import { RULE_DEFS } from "@/lib/rules";
 import { canEditRules, personOf, whatIf } from "@/lib/engine";
@@ -15,6 +15,13 @@ export function RulesStrip() {
   const setRule = useStore((s) => s.setRule);
   const m = useMoney();
   const editable = canEditRules(role);
+
+  // Fourteen what-if recalculations. They run once per data change, and after the click has already updated the screen, so a big import stays responsive.
+  const lagging = useDeferredValue(data);
+  const sims = useMemo(
+    () => new Map(RULE_DEFS.flatMap((def) => def.options.map((o) => [`${def.key}:${String(o.value)}`, whatIf(lagging, { [def.key]: o.value } as Partial<Rules>)] as const))),
+    [lagging],
+  );
 
   // Latest rule edit across all keys for the header audit stamp
   const latestKey = (Object.keys(data.rulesMeta) as RuleKey[]).reduce((best, k) =>
@@ -72,7 +79,7 @@ export function RulesStrip() {
               >
                 {def.options.map((opt) => {
                   const active = current === opt.value;
-                  const sim = whatIf(data, { [def.key]: opt.value } as Partial<Rules>);
+                  const sim = sims.get(`${def.key}:${String(opt.value)}`)!;
                   return (
                     <button
                       key={String(opt.value)}

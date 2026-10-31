@@ -6,6 +6,9 @@ import { RULE_DEFS } from "../lib/rules.ts";
 import { buildDeepLink, isEmptyLink, parseDeepLink } from "../lib/deeplink.ts";
 import {
   actionsFor,
+  cloneState,
+  markPaid,
+  lockCycle,
   adCost,
   PERSONA,
   canApprove,
@@ -60,7 +63,7 @@ assert.equal(actionsFor(s, "stock", dispatchedOrder).includes("deliver"), true, 
 const pnlCommOnly = computePnl(s, { ...s.rules, payModel: "commission" });
 assert.equal(pnlCommOnly.revenue, 532500, "Delivered revenue in W44 should be ₦532,500");
 assert.equal(pnlCommOnly.cogs, 222500, "COGS in W44 should be ₦222,500");
-assert.equal(Math.round(pnlCommOnly.commission), 34613, "Sales pay in W44 should be ₦34,613");
+assert.equal(Math.round(pnlCommOnly.commission), 34613, "Commission in W44 should be ₦34,613");
 assert.equal(pnlCommOnly.adSpend, 281000, "Ad spend in W44 should be ₦281,000");
 assert.equal(pnlCommOnly.actual < 0, true, "Business is underwater once real costs are counted");
 
@@ -198,7 +201,7 @@ assert.equal(`${L.payTakenBack}|${L.refunds}`, "Pay taken back|Refunds", "Pay ta
 const ppo = profitPerOrder(s);
 assert.equal(ppo.orders, 5, "W44 has 5 delivered orders");
 assert.equal(ppo.before, (532500 - 222500 - 281000) / 5, "Profit per order before staff pay should be +₦5,800");
-assert.equal(ppo.after, ppo.before - (computePnl(s).commission + computePnl(s).base) / 5, "After staff pay subtracts sales pay and fixed salary per order");
+assert.equal(ppo.after, ppo.before - (computePnl(s).commission + computePnl(s).base) / 5, "After staff pay subtracts commission and fixed salary per order");
 assert.equal(Math.round(ppo.after), -25584);
 assert.equal(Math.abs(ppo.beforeDrill.total - ppo.before) < 1e-6 && Math.abs(ppo.afterDrill.total - ppo.after) < 1e-6, true, "Drill totals match the figures");
 
@@ -385,7 +388,7 @@ assert.equal(
   "The pay deltas add up to the change in total staff pay",
 );
 assert.equal(imp1043.revenue, 212000, "Delivered revenue rises by the order value");
-assert.equal(imp1043.profit, 212000 - 78000 - 13780 - DELIVERY_FEE, "Real profit moves by revenue − product cost − sales pay − delivery fee");
+assert.equal(imp1043.profit, 212000 - 78000 - 13780 - DELIVERY_FEE, "Real profit moves by revenue − product cost − commission − delivery fee");
 assert.equal(imp1043.stuckCash, 212000, "Delivered but cash not yet in: cash with the courier rises");
 assert.deepEqual(imp1043.stock, [{ sku: "AIR-12", onHand: [4, 3], available: [2, 2] }], "On hand drops, free stock is unchanged because the unit was already reserved");
 
@@ -496,5 +499,30 @@ const built = buildDeepLink("https://x.test/", "founder", custom, seedRules);
 assert.equal(built, "https://x.test/?role=founder&creditOn=lead&returnCap=0.2", "Only rules that differ from the demo default are in the link");
 assert.deepEqual(parseDeepLink(built.slice(built.indexOf("?"))).rules, { creditOn: "lead", returnCap: 0.2 }, "A built link round-trips");
 
-console.log("ALL 28 ENGINE INVARIANTS PASSED.");
+// 29. cloneState is a safe copy: no engine mutator may touch the state it was cloned from (the store relies on this to skip a 200 ms deep clone).
+{
+  const base = buildSeed();
+  const frozen = structuredClone(base);
+  const AT = "2026-11-02T09:00:00Z";
+  const probe = (label: string, fn: (c: typeof base) => unknown) => {
+    const c = cloneState(base);
+    fn(c);
+    assert.deepEqual(base, frozen, `${label} changed the state it was cloned from`);
+    assert.notEqual(c.orders, base.orders, "a clone has its own orders");
+  };
+  probe("deliver", (c) => transition(c, 1043, "deliver"));
+  probe("return a paid-week order", (c) => transition(c, 1033, "return", { condition: "damaged" }));
+  probe("cancel", (c) => transition(c, 1045, "cancel"));
+  probe("cash", (c) => transition(c, 1047, "cash"));
+  probe("confirm", (c) => transition(c, 1051, "confirm"));
+  probe("rule change", (c) => { c.rules.creditOn = "lead"; c.rulesMeta.creditOn = { by: "chidinma", at: AT }; });
+  probe("close, pay and lock a week", (c) => { closeCycle(c, "chidinma", AT); markPaid(c, "W44", "bisi", AT); lockCycle(c, "W44", "bisi", AT); });
+  probe("raise and receive a PO", (c) => { raisePO(c, "VAC-21", 10, "dayo", AT); receivePO(c, c.pos[0].id, AT); });
+  probe("price change", (c) => setProductPrice(c, "AIR-12", 150000));
+  probe("new order", (c) => createOrder(c, { customer: "Test", city: "Lagos", sku: "KET-03", qty: 1, openedBy: "amaka", closer: "amaka", buyer: "tobi" }));
+  const cl = cloneState(base);
+  assert.deepEqual(cl, base, "a fresh clone equals the original");
+}
+
+console.log("ALL 29 ENGINE INVARIANTS PASSED.");
 

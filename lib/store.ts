@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist, type PersistStorage } from "zustand/middleware";
 import type { DemoState, Drill, Role, RuleKey, Rules } from "./types";
 import type { Currency } from "./format";
 import {
@@ -11,6 +11,7 @@ import {
   canRecordCash,
   canSettle,
   actionsFor,
+  cloneState,
   closeCycle as closeCycleFx,
   computePnl,
   cycleById,
@@ -92,6 +93,65 @@ interface Store {
 }
 
 let toastSeq = 0;
+
+/**
+ * localStorage, but written once things go quiet instead of on every change (turning a 5,000-order state into JSON takes ~130 ms), flushed when the page is hidden,
+ * and loud about a full quota instead of failing silently.
+ */
+function savedStateStorage(): PersistStorage<unknown> {
+  const ls = (() => {
+    try {
+      return typeof window !== "undefined" && typeof window.localStorage?.getItem === "function" ? window.localStorage : null;
+    } catch {
+      return null;
+    }
+  })();
+  let pending: { name: string; value: unknown } | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let warned = false;
+
+  const flush = () => {
+    clearTimeout(timer);
+    if (!pending || !ls) return;
+    const { name, value } = pending;
+    pending = null;
+    try {
+      ls.setItem(name, JSON.stringify(value));
+      warned = false;
+    } catch {
+      if (!warned) {
+        warned = true;
+        useStore.getState().toast("err", "Your browser's storage is full, so your latest changes will not survive a reload. Back to demo data frees the space.");
+      }
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
+  }
+
+  return {
+    getItem: (name) => {
+      try {
+        const raw = ls?.getItem(name);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (name, value) => {
+      pending = { name, value };
+      clearTimeout(timer);
+      timer = setTimeout(flush, 250);
+    },
+    removeItem: (name) => {
+      if (pending?.name === name) pending = null;
+      try {
+        ls?.removeItem(name);
+      } catch {}
+    },
+  };
+}
 const now = () => new Date().toISOString();
 
 /** Per-person movement in the open cycle between two states. */
@@ -111,7 +171,7 @@ export const useStore = create<Store>()(
     (set, get) => {
       const mutate = (fn: (d: DemoState) => string | void) => {
         const before = get().data;
-        const d = structuredClone(before);
+        const d = cloneState(before);
         const err = fn(d);
         if (typeof err === "string") {
           get().toast("err", err);
@@ -187,7 +247,7 @@ export const useStore = create<Store>()(
           const prev = get().data.rules[key];
           if (prev === value) return;
           const res = mutate((d) => {
-            const pre = structuredClone(d);
+            const pre = cloneState(d);
             const pb = computePnl(d);
             d.rules[key] = value;
             d.rulesMeta[key] = { by: actor(), at: now() };
@@ -238,8 +298,8 @@ export const useStore = create<Store>()(
                 const cond = o.returnCondition === "damaged" ? `damaged, written off` : `${p} +${o.qty} restocked`;
                 const policy = credited
                   ? credited.status === "locked"
-                    ? ` · ${credited.id} locked, sales pay is final`
-                    : ` · sales pay was paid in ${credited.id} → ${ruleOptionLabel("onReturn", d.rules.onReturn)}`
+                    ? ` · ${credited.id} locked, commission is final`
+                    : ` · commission was paid in ${credited.id} → ${ruleOptionLabel("onReturn", d.rules.onReturn)}`
                   : "";
                 text = `Order ${o.id} returned · ${cond}${policy}`;
                 break;
@@ -279,7 +339,7 @@ export const useStore = create<Store>()(
           let total = 0;
           let done = 0;
           const res = mutate((d) => {
-            const before = structuredClone(d);
+            const before = cloneState(d);
             for (const id of orderIds) {
               const o = d.orders.find((x) => x.id === id);
               if (!o || o.stage !== "delivered" || o.cashIn) continue;
@@ -303,7 +363,7 @@ export const useStore = create<Store>()(
           if (!canSettle(get().role)) return;
           mutate((d) => {
             lockFx(d, cycleId, actor(), now());
-            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, sales pay is final` });
+            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, commission is final` });
           });
           get().toast("ok", `${cycleId} locked. Later returns no longer touch its payouts.`);
         },
@@ -392,11 +452,7 @@ export const useStore = create<Store>()(
     {
       name: "kova-payout-engine",
       version: SEED_VERSION,
-      storage: createJSONStorage(() =>
-        typeof window !== "undefined" && window.localStorage && typeof window.localStorage.getItem === "function"
-          ? window.localStorage
-          : { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-      ),
+      storage: savedStateStorage(),
       partialize: (s) => ({ data: s.data, role: s.role, ccy: s.ccy, dataSource: s.dataSource, importSummary: s.importSummary }),
       migrate: () => ({ data: buildSeed(), role: "founder" as Role, ccy: "NGN" as Currency }),
     },

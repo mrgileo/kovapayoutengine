@@ -117,7 +117,7 @@ export function ReturnDialog() {
           </h2>
           <p>
             Delivered in <b>{order.deliveredCycle}</b> ({m(orderValue(order))}). Specify warehouse condition and see how the{" "}
-            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule handles the sales pay.
+            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule handles the commission.
           </p>
         </div>
 
@@ -152,7 +152,7 @@ export function ReturnDialog() {
             <span className="mono">{ruleOptionLabel("onReturn", data.rules.onReturn)}</span>
           </div>
           <div className="tot">
-            <span>What happens to the sales pay</span>
+            <span>What happens to the commission</span>
             <span className="mono">
               {!creditedCycle
                 ? data.rules.onReturn === "absorb"
@@ -222,7 +222,7 @@ export function NewOrderDialog() {
           <div className="eyebrow">Live Lead Intake</div>
           <h2>Create New Customer Order</h2>
           <p>
-            Test split attribution (different opener vs closer), stock availability checks, or sales pay paid straight away under the{" "}
+            Test split attribution (different opener vs closer), stock availability checks, or commission paid straight away under the{" "}
             <b>{data.rules.creditOn}</b> trigger.
           </p>
         </div>
@@ -329,7 +329,7 @@ export function NewOrderDialog() {
             </span>
           </div>
           <div className="tot">
-            <span>Total sales pay ({((r.closer + r.buyer + r.lead) * 100).toFixed(2)}%)</span>
+            <span>Total commission ({((r.closer + r.buyer + r.lead) * 100).toFixed(2)}%)</span>
             <span className="mono">{m(totalList * (r.closer + r.buyer + r.lead))}</span>
           </div>
         </div>

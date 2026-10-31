@@ -28,15 +28,15 @@ Use this table as the source for posts. Left: what the founder lives with. Right
 | 2 | **Staff are paid on orders that never land.** Pay on "lead" or "booked" means closers and buyers are rewarded for orders that get cancelled or returned. | One rule, "Pay staff when": on lead, on delivery, or on cash received. The app shows how much is being paid on undelivered orders (₦0 on delivery; ₦34,210 on lead in the demo). | Pay rules strip; "Paid on undelivered orders" tile |
 | 3 | **A return three weeks later starts an argument.** The commission was already paid. Do you take it back, wait, or eat it? | One rule, "Pay taken back": take back now, take back next week, or business absorbs. The week's payout shows exactly what was taken back and from whom. Locked weeks are never touched. | Pay rules strip; returns on the order ledger; payslips |
 | 4 | **Two people touch one order and both want the credit.** Opener versus closer. | One rule, "Two closers, one order": first touch, last touch, or 50-50. Order #1053 in the demo shows all three. | Pay rules strip; team lead's "split-credit orders" |
-| 5 | **Pay structure is guesswork.** Is salary plus commission sustainable? | "Pay structure" switches between salary plus sales pay and sales pay only, with the pay-as-%-of-sales meter against a ceiling (35% or 10%). | Pay rules strip; pay meter |
-| 6 | **High-return closers cost you money and nobody sees it.** | "Return-rate gate": above a 30% or 20% return rate, a closer's sales pay is halved for the week. A scorecard shows return rate and net margin contribution per closer. | Pay rules strip; closer scorecard |
+| 5 | **Pay structure is guesswork.** Is salary plus commission sustainable? | "Pay structure" switches between salary plus commission and commission only, with the pay-as-%-of-sales meter against a ceiling (35% or 10%). | Pay rules strip; pay meter |
+| 6 | **High-return closers cost you money and nobody sees it.** | "Return-rate gate": above a 30% or 20% return rate, a closer's commission is halved for the week. A scorecard shows return rate and net margin contribution per closer. | Pay rules strip; closer scorecard |
 | 7 | **You can't test a rule before you change it.** | Every option on every rule shows what the payout would be under that option, on your own numbers, before you click. | Pay rules strip (small figure under each option) |
 | 8 | **Media buyers celebrate booked sales, not delivered sales.** "₦6.81 back per ₦1 of ads" is really ₦1.09 once only delivered orders count. | Ad results shown on booked and on delivered orders side by side, cost per delivered order against a limit you set, and profit per order before and after staff pay. | Media buyer view; Ad cost card |
 | 9 | **Courier cash goes missing in the gap.** Delivered, but the money is still with the rider. | A "cash with courier" figure everywhere it matters, an accountant desk to record cash received by week and by city, and an Overdue flag after a week. | Founder tiles; Accountant view |
 | 10 | **Stock-outs surprise you.** Orders get confirmed for product you don't have. | Stock book with on hand, committed, available and on order. A stock-out raises a purchase order in one click; receiving it unblocks the waiting orders. Orders blocked by stock show up in the leaks panel. | Warehouse view; stock book; leaks panel |
 | 11 | **Nobody knows where the money is stuck.** | A funnel (booked, confirmed, sent out, delivered, delivered and kept, cash received) with the money at each step and the reason for each drop. Beside it, a leaks panel of six checks, each with a ₦ figure and what to do. | Founder view, top |
 | 12 | **Payroll day is messy and risky.** One person calculates, approves, pays and records. | Pay is closed and approved by the founder, then paid and locked by the accountant, with a bank-ready payout file. Negative balances are never paid; they carry into next week. Everything is in an audit log by name and time. | Cycle bar; Accountant view; audit log |
-| 13 | **Staff don't trust the numbers or can't see their own.** | Each person sees their own pay accrue as orders are delivered, with a plain breakdown (salary, sales pay, pay taken back). | Closer, buyer and team lead views |
+| 13 | **Staff don't trust the numbers or can't see their own.** | Each person sees their own pay accrue as orders are delivered, with a plain breakdown (salary, commission, pay taken back). | Closer, buyer and team lead views |
 | 14 | **Roles blur.** The person who sells also marks things delivered. | A closer can't mark their own order delivered. Only the founder approves pay. Only the warehouse and founder process returns. The accountant can't touch orders, prices or rules. | Order actions in every view |
 
 ## 4. How it all connects (the story to tell in the video)
@@ -85,7 +85,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 
 **Try it with your orders:** upload an orders CSV (optionally ad spend and products). Weeks are worked out from your dates and replayed through the same engine. The data never leaves the browser. "Back to demo data" resets.
 
-**60-second CEO tour:** a short guided walkthrough built into the app.
+**Take the tour:** a six-step guided tour that *acts*. It resets the demo, then delivers an order as the warehouse and switches to the closer so her pay visibly moves, flips the pay rule to "Lead" and quotes what that costs, returns an order paid last week, raises purchase orders, and hands the approved week to the accountant. Each step outlines the result and says in one or two sentences what just happened. It is the quickest way for a prospect to see how everything connects without you narrating, and a good basis for a 60-second clip. Reload the page (or Reset demo state) to run it again from the start.
 
 ## 7. The five rules as founder questions (post and video material)
 
@@ -93,7 +93,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 2. *A return comes back after pay was sent. Who carries it?* Take back now, take back next week, or business absorbs. The app shows the exact amount and the person, and a locked week is never reopened.
 3. *Two people on one order?* First touch, last touch, or 50-50, with a live order (#1053) to try it on.
 4. *Salary plus commission, or commission only?* The pay meter shows the share of sales going to people against a ceiling.
-5. *When does a closer's return rate cost them?* The gate halves their sales pay above your limit.
+5. *When does a closer's return rate cost them?* The gate halves their commission above your limit.
 
 Honest framing for posts: Kova doesn't tell a founder which option is right. It shows what each one costs them on their own numbers, so they can choose with eyes open.
 
@@ -103,7 +103,7 @@ Honest framing for posts: Kova doesn't tell a founder which option is right. It 
 |---|---|
 | Delivered revenue | ₦532,500 |
 | Product cost | ₦222,500 |
-| Sales pay (6.5% of sales on the delivery rule) | ₦34,613 |
+| Commission paid (6.5% of sales on the delivery rule) | ₦34,613 |
 | Fixed salary (weekly share) | ₦122,307 |
 | Ad spend (simulated feed) | ₦281,000 |
 | Delivery fees (7 legs × ₦3,500) | ₦24,500 |
@@ -115,7 +115,7 @@ Honest framing for posts: Kova doesn't tell a founder which option is right. It 
 | Ads: sales per ₦1 on booked orders vs delivered | ₦6.81 vs ₦1.09 (one buyer) |
 | Profit per order, before / after staff pay | +₦5,800 / −₦25,584 |
 | Stock on hand at cost | ₦1,419,000 |
-| Example clawback (return on a W43 order) | ₦13,780 of sales pay taken back |
+| Example clawback (return on a W43 order) | ₦13,780 of commission taken back |
 
 ## 9. What Kova is not (say this, it builds trust)
 
@@ -164,6 +164,9 @@ Rules to know: a link that sets rules **starts from the fresh demo company** so 
 Link previews: pasting the address into WhatsApp, LinkedIn or X shows a card with the "sales report versus what you really made" headline and "Demo data".
 
 ## 13. Loom run-down: suggested order (8–10 minutes)
+
+*Short on time? Open the demo, click **Take the tour**, and talk over it: it covers steps 1 to 7 below in about a minute and a half.*
+
 
 1. The question: "does my business actually make money?" Headline banner (1 min).
 2. Where every order is: funnel and leaks (1 min).

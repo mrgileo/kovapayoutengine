@@ -142,7 +142,22 @@ export function App() {
   }, []);
 
   if (!hydrated) {
-    return <div className="skeleton">Loading Kova Payout &amp; Operations Engine…</div>;
+    // Rendered on the server too, so the first paint is the shape of the page rather than a blank line while the data loads.
+    return (
+      <div className="skeleton" role="status" aria-busy="true" aria-label="Loading Kova">
+        <div className="sk-bar" />
+        <div className="sk-body">
+          <div className="sk-title" />
+          <div className="sk-tiles">
+            {[0, 1, 2, 3].map((n) => (
+              <div key={n} className="sk-tile" />
+            ))}
+          </div>
+          <div className="sk-card" />
+          <div className="sk-card tall" />
+        </div>
+      </div>
+    );
   }
 
   const resolvedScheme: ThemeChoice = themeChoice;

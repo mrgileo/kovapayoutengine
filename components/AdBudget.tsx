@@ -46,7 +46,7 @@ export function AdBudget() {
         >
           <Fig amount={ppo.before} sign drill={ppo.beforeDrill} />
         </Tile>
-        <Tile label={L.profitPerOrderAfterPay} note="The same, after fixed salary and sales pay" tone={ppo.after < 0 ? "neg" : "pos"}>
+        <Tile label={L.profitPerOrderAfterPay} note="The same, after fixed salary and commission" tone={ppo.after < 0 ? "neg" : "pos"}>
           <Fig amount={ppo.after} sign drill={ppo.afterDrill} />
         </Tile>
       </dl>

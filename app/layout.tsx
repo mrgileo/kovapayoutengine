@@ -7,18 +7,18 @@ const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Kova · Payout, P&L and stock engine",
-  description: "How sales pay, returns, cash collection and stock connect in a COD e-commerce business. Demo data.",
+  description: "How commission, returns, cash collection and stock connect in a COD e-commerce business. Demo data.",
   metadataBase: new URL("https://kovadash.vercel.app"),
   openGraph: {
     type: "website",
     siteName: "Kova",
     title: "Your sales report says you made money. Did you?",
-    description: "One view of sales pay, returns, courier cash and stock for COD e-commerce teams. Try the demo.",
+    description: "One view of commission, returns, courier cash and stock for COD e-commerce teams. Try the demo.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Your sales report says you made money. Did you?",
-    description: "One view of sales pay, returns, courier cash and stock for COD e-commerce teams. Try the demo.",
+    description: "One view of commission, returns, courier cash and stock for COD e-commerce teams. Try the demo.",
   },
 };
 

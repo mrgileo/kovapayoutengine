@@ -73,7 +73,7 @@ export function BuyerView() {
         </Tile>
         <Tile
           label="Left after product, ads, pay"
-          note="After product cost, ads, delivery fees and sales pay"
+          note="After product cost, ads, delivery fees and commission"
           tone={cs.netMargin < 0 ? "neg" : "pos"}
         >
           <Fig amount={cs.netMargin} sign drill={cs.marginDrill} />
@@ -84,7 +84,7 @@ export function BuyerView() {
 
       <Card
         title="Campaign results · booked sales vs what's really left"
-        sub="Ad managers report sales per ₦1 of ads on orders booked. You pay the bills from what's left after product cost, delivery fees, sales pay and ads."
+        sub="Ad managers report sales per ₦1 of ads on orders booked. You pay the bills from what's left after product cost, delivery fees, commission and ads."
         flush
       >
         <div className="tbl-wrap">

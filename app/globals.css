@@ -2556,12 +2556,56 @@ table.tbl {
 
 .skeleton {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  color: var(--hl);
-  font-family: var(--font-mono), monospace;
-  font-size: 13px;
   background: var(--bg);
+}
+.sk-bar {
+  height: 64px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.sk-body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 16px;
+  display: grid;
+  gap: 16px;
+}
+.sk-title,
+.sk-tile,
+.sk-card {
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 200% 100%;
+}
+.sk-title {
+  height: 34px;
+  width: min(420px, 70%);
+}
+.sk-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.sk-tile {
+  height: 92px;
+}
+.sk-card {
+  height: 160px;
+}
+.sk-card.tall {
+  height: 280px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sk-title,
+  .sk-tile,
+  .sk-card {
+    animation: sk-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes sk-shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
 }
 
 /* ─── Reduced Motion Accessibility (modern-web-guidance: motion) ─── */

@@ -26,7 +26,7 @@ const STEPS: Step[] = [
     run: () => st().setRole("founder"),
     target: ".headline",
     text: () =>
-      "Founder view. Sales pay looks fine as a share of sales, yet after product cost, ads, salaries and courier fees the week is a loss. Click any figure to see the orders behind it.",
+      "Founder view. Commission looks fine as a share of sales, yet after product cost, ads, salaries and courier fees the week is a loss. Click any figure to see the orders behind it.",
   },
   {
     title: "One delivery, everyone sees it",
@@ -48,7 +48,7 @@ const STEPS: Step[] = [
     target: "#tour-rules",
     text: (d) => {
       const early = leaks(d).find((l) => l.key === "payEarly")?.amount ?? 0;
-      return `Pay staff when is now Lead. Sales pay is going out on orders that have not been delivered: ${naira(early)} this week. Switch it back to Delivery and it drops to ₦0.`;
+      return `Pay staff when is now Lead. Commission is going out on orders that have not been delivered: ${naira(early)} this week. Switch it back to Delivery and it drops to ₦0.`;
     },
   },
   {

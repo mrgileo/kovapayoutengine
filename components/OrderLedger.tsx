@@ -78,7 +78,7 @@ export function OrderLedger() {
           tone: "warn",
           drill: {
             title: `Order #${o.id} · Post-Lock Return`,
-            subtitle: `Credited in ${pc.id} (Locked) · Sales pay is final`,
+            subtitle: `Credited in ${pc.id} (Locked) · Commission is final`,
             lines: paidLines.map((l) => ({
               ref: pc.id,
               label: personOf(data, l.personId).name,
@@ -132,7 +132,7 @@ export function OrderLedger() {
       label: o.creditedCycle ? `Paid in ${o.creditedCycle}` : creditedNow ? "Accrued" : "Not yet credited",
       tone: creditedNow ? "pos" : "muted",
       drill: {
-        title: `Order #${o.id} · Sales pay split`,
+        title: `Order #${o.id} · Commission split`,
         subtitle: `${o.customer} · Credited value ${m(val)}`,
         lines: lines.map((l) => ({
           ref: personOf(data, l.personId).role.toUpperCase(),
@@ -241,7 +241,7 @@ export function OrderLedger() {
                 </div>
 
                 <div className="ocard-earn">
-                  <span>Your sales pay ({isCredited(o, data.rules) ? "credited" : "when landed"}):</span>
+                  <span>Your commission ({isCredited(o, data.rules) ? "credited" : "when landed"}):</span>
                   <b className={isCredited(o, data.rules) ? "pos" : ""}>
                     <Fig amount={myShare} drill={comm.drill} />
                   </b>
@@ -286,7 +286,7 @@ export function OrderLedger() {
                 <th>Touch / Attribution</th>
                 <th className="r">Value</th>
                 <th>Stage</th>
-                <th className="r">Sales pay</th>
+                <th className="r">Commission</th>
                 <th className="r">Actions ({role})</th>
               </tr>
             </thead>

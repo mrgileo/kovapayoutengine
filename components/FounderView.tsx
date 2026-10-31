@@ -93,7 +93,7 @@ export function FounderView() {
                 amount={naiveNet}
                 drill={{
                   title: L.salesReport,
-                  subtitle: "Sales minus sales pay. Ignores product cost and ads.",
+                  subtitle: "Sales minus commission. Ignores product cost and ads.",
                   lines: [
                     { ref: "+", label: "Delivered revenue", amount: pnl.revenue },
                     { ref: "−", label: L.salesPay, amount: -pnl.commission },
@@ -102,7 +102,7 @@ export function FounderView() {
                 }}
               />
             </b>
-            <em>Sales {m(pnl.revenue)} − sales pay {m(pnl.commission)}</em>
+            <em>Sales {m(pnl.revenue)} − commission {m(pnl.commission)}</em>
           </div>
           <div className="hl-stat">
             <span>{L.afterProductAndAds}</span>
@@ -112,7 +112,7 @@ export function FounderView() {
                 sign
                 drill={{
                   title: L.afterProductAndAds,
-                  subtitle: "Sales minus product cost, sales pay and ad spend",
+                  subtitle: "Sales minus product cost, commission and ad spend",
                   lines: [
                     { ref: "+", label: "Delivered revenue", amount: pnl.revenue },
                     { ref: "−", label: L.productCost, amount: -pnl.cogs },
@@ -136,7 +136,7 @@ export function FounderView() {
             <span>{L.payAsPctOfSales}</span>
             <b className={pnl.payoutRatio > targetRatio ? "bad" : "ok"}>{pct(pnl.payoutRatio)}</b>
             <em>
-              Sales pay alone: {pct(pnl.commissionRatio)} (aim for {pct(TARGETS.commissionRatio, 0)} or less)
+              Commission alone: {pct(pnl.commissionRatio)} (aim for {pct(TARGETS.commissionRatio, 0)} or less)
             </em>
           </div>
         </div>
@@ -161,7 +161,7 @@ export function FounderView() {
         </Tile>
         <Tile
           label="Paid on undelivered orders"
-          note={undelivered.total > 0 ? "Sales pay going out before the order arrives" : "No sales pay going out before delivery"}
+          note={undelivered.total > 0 ? "Commission going out before the order arrives" : "No commission going out before delivery"}
           tone={undelivered.total > 0 ? "neg" : "pos"}
         >
           <Fig amount={undelivered.total} drill={undelivered} />
@@ -248,7 +248,7 @@ export function FounderView() {
           <div className="meter">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>
-                {L.payAsPctOfSales} (fixed salary + sales pay vs delivered revenue)
+                {L.payAsPctOfSales} (fixed salary + commission vs delivered revenue)
               </span>
               <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>
                 {pct(pnl.payoutRatio)} <span className="muted" style={{ fontSize: 11.5 }}>(target &le; {pct(targetRatio, 0)})</span>

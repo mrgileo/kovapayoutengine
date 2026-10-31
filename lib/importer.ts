@@ -41,6 +41,8 @@ export interface ImportFiles {
 export const MAX_ROWS = 5000;
 export const MAX_WEEKS = 26;
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
+/** Size of the saved state, in characters, above which the browser's storage quota is at risk. */
+export const MAX_STORED_CHARS = 4_200_000;
 const MAX_ERRORS = 200;
 
 /** The one media buyer every imported order is credited to (the file has no buyer column). */
@@ -519,6 +521,13 @@ export function importData(files: ImportFiles): ImportResult {
     });
   } catch (e) {
     errors.push({ file: "orders", line: 0, message: `The data could not be turned into pay cycles: ${e instanceof Error ? e.message : String(e)}` });
+    return fail();
+  }
+
+  // Browsers keep about 5 MB per site. Stop here, with a clear message, rather than let the save fail silently later.
+  const stored = JSON.stringify(d).length;
+  if (stored > MAX_STORED_CHARS) {
+    errors.push({ file: "orders", line: 0, message: `This data is too big to keep in your browser (${(stored / 1e6).toFixed(1)} MB; the limit is ${(MAX_STORED_CHARS / 1e6).toFixed(1)} MB). Try fewer orders or shorter customer and campaign names.` });
     return fail();
   }
 

@@ -52,7 +52,7 @@ export function CloserView() {
   };
 
   const potentialDrill: Drill = {
-    title: "Sales pay on your open orders",
+    title: "Commission on your open orders",
     subtitle: "If all currently open orders land and clear",
     lines: openOrders.map((o) => {
       const ls = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(

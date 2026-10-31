@@ -44,12 +44,12 @@ export function CycleBar() {
     const people = salesPeople(data);
     return {
       title: `${c.id} Payout Breakdown (${STATUS_LABEL[c.status]})`,
-      subtitle: `${shortDate(c.start)} – ${shortDate(c.end)} · Fixed salary + sales pay, less any pay taken back`,
+      subtitle: `${shortDate(c.start)} – ${shortDate(c.end)} · Fixed salary + commission, less any pay taken back`,
       lines: people.map((p) => {
         const ps = payslip(lines, p.id);
         const parts: string[] = [];
         if (ps.base) parts.push(`Salary: ₦${ps.base.toLocaleString()}`);
-        if (ps.commission) parts.push(`Sales pay: ₦${Math.round(ps.commission).toLocaleString()}`);
+        if (ps.commission) parts.push(`Commission: ₦${Math.round(ps.commission).toLocaleString()}`);
         if (ps.adjustments) parts.push(`Pay taken back: ₦${Math.round(ps.adjustments).toLocaleString()}`);
         if (ps.carry) parts.push(`Carry: ₦${Math.round(ps.carry).toLocaleString()}`);
         return {

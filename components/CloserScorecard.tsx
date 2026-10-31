@@ -43,7 +43,7 @@ export function CloserScorecard() {
       title="Closer Quality, Return Rate & Net Contribution"
       sub={
         cap < 1
-          ? `Quality gate active (${Math.round(cap * 100)}% return cap): closers above the cap have their sales pay halved automatically.`
+          ? `Quality gate active (${Math.round(cap * 100)}% return cap): closers above the cap have their commission halved automatically.`
           : "Paying on volume alone encourages over-promising on the phone. Turn on the Return-rate gate above to penalise closers whose orders keep coming back."
       }
       flush
@@ -125,7 +125,7 @@ export function CloserScorecard() {
                       <Fig amount={ps.gross} drill={() => buildCloserDrill(id)} />
                     </b>
                     <span className="sub">
-                      Sales pay: <Fig amount={st.earnedThisCycle} drill={() => buildCloserDrill(id)} />
+                      Commission: <Fig amount={st.earnedThisCycle} drill={() => buildCloserDrill(id)} />
                     </span>
                   </td>
 
@@ -146,7 +146,7 @@ export function CloserScorecard() {
         <div className="insight">
           <AlertTriangle size={17} />
           <div>
-            <b>Why this matters:</b> Volume alone hides quality: <b>{pct(worst.rate, 0)} of {worst.name}&apos;s resolved orders come back</b> (vs {best.name}&apos;s {pct(best.rate, 0)}). Set <b>Return-rate gate → 30% cap</b> in the rules above to halve a closer&apos;s sales pay until their return rate drops.
+            <b>Why this matters:</b> Volume alone hides quality: <b>{pct(worst.rate, 0)} of {worst.name}&apos;s resolved orders come back</b> (vs {best.name}&apos;s {pct(best.rate, 0)}). Set <b>Return-rate gate → 30% cap</b> in the rules above to halve a closer&apos;s commission until their return rate drops.
           </div>
         </div>
       </div>

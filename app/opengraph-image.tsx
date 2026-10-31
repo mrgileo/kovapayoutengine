@@ -38,7 +38,7 @@ export default function Image() {
           <Amount sign="-" value="152,420" color={YELLOW} />
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 28, color: "#b9b9b2" }}>
-          <div>Sales pay, returns, courier cash and stock in one view</div>
+          <div>Commission, returns, courier cash and stock in one view</div>
           <div>Demo data</div>
         </div>
       </div>

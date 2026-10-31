@@ -12,7 +12,7 @@ export const L = {
   refunds: "Refunds",
   productCost: "Product cost",
   damagedStock: "Damaged stock",
-  salesPay: "Sales pay",
+  salesPay: "Commission paid",
   cashWithCourier: "Cash with courier",
   fixedSalary: "Fixed salary",
   adSpend: "Meta ad spend",
@@ -60,7 +60,7 @@ export const L = {
     blocked: { label: "Orders waiting on stock", why: "Booked, but there's no stock to confirm them.", action: "Raise a purchase order for the SKU." },
     returns: { label: "Returns and failed deliveries", why: "Delivery fees, damaged stock and refunds on orders that came back or failed.", action: "Look at which closer and product the returns come from." },
     ads: { label: "Ad spend above your max", why: "Ad spend beyond your max cost per delivered order.", action: "Pause or fix the campaigns that cost the most per delivered order." },
-    payEarly: { label: "Sales pay before delivery", why: "Sales pay going out on orders that haven't reached the customer.", action: "Pay on delivery or on cash received instead." },
+    payEarly: { label: "Commission before delivery", why: "Commission going out on orders that haven't reached the customer.", action: "Pay on delivery or on cash received instead." },
     payKept: { label: "Pay kept on returned orders", why: "Staff kept their pay on orders that came back and the business took the loss.", action: "Set Pay taken back to Take back now." },
   },
 
@@ -72,9 +72,9 @@ export const L = {
   // Plain-language sentences used in several places
   perNaira: (n: number) => `₦${n.toFixed(2)}`,
   deliveryFeeNote: (fee: number) => `₦${fee.toLocaleString()} per delivery trip`,
-  headline: (ratio: string) => `Sales pay is a healthy ${ratio} of sales, yet the business is`,
+  headline: (ratio: string) => `Commission is a healthy ${ratio} of sales, yet the business is`,
   headlineBody: {
-    intro: "A basic sales report shows sales minus sales pay and calls the week profitable. Once you also take off",
+    intro: "A basic sales report shows sales minus commission and calls the week profitable. Once you also take off",
     productCost: "product cost",
     adSpend: "ad spend",
     fixedSalary: "fixed salaries",
@@ -89,7 +89,7 @@ export const PNL_TEXT = {
   refunds: { label: "− Refunds", sub: "Customer returns from earlier weeks" },
   cogs: { label: "− Product cost", sub: "What the delivered goods cost us" },
   writeoffs: { label: "− Damaged stock", sub: "Returned and can't be resold" },
-  commission: { label: "− Sales pay", sub: "After pay taken back" },
+  commission: { label: "− Commission paid", sub: "After pay taken back" },
   base: { label: "− Fixed salary", sub: "Sales staff, one week's share" },
   adSpend: { label: "− Meta ad spend", sub: "Simulated Meta feed" },
   logistics: { label: "− Delivery fees", sub: "Delivery, failed and return trips" },
@@ -131,15 +131,15 @@ export const RULE_TEXT = {
     options: { "1": "Off", "0.3": "30% cap", "0.2": "20% cap" },
     explain: {
       off: "No penalty for returns. A closer keeps the full rate even when 35% or more of their deliveries come back.",
-      on: (cap: number) => `If more than ${cap}% of a closer's orders come back, their sales pay is halved for the week.`,
+      on: (cap: number) => `If more than ${cap}% of a closer's orders come back, their commission is halved for the week.`,
     },
   },
   payModel: {
     label: "Pay structure",
-    options: { commission: "Sales pay only", base_plus: "Salary + sales pay" },
+    options: { commission: "Commission only", base_plus: "Salary + commission" },
     explain: {
-      commission: "Staff earn sales pay only. It costs less in a bad week, but it rewards volume over quality.",
-      base_plus: "Closers, media buyers and the team lead get a fixed salary (one week's share each week) plus sales pay on top.",
+      commission: "Staff earn commission only. It costs less in a bad week, but it rewards volume over quality.",
+      base_plus: "Closers, media buyers and the team lead get a fixed salary (one week's share each week) plus commission on top.",
     },
   },
 } as const;
@@ -150,6 +150,6 @@ export const PAY_LINE_TEXT = {
   commission: (orderId: number | undefined) => `Order #${orderId}`,
   adjustment: (kind: string) => (kind === "clawback" ? "Pay taken back" : kind === "offset" ? "Pay taken back (next week)" : kind === "carry" ? "Carried over" : `Adjustment (${kind})`),
   salary: "Fixed salary",
-  salesPay: "Sales pay",
+  salesPay: "Commission paid",
   takenBackCarry: "Pay taken back / carried over",
 } as const;
