@@ -25,7 +25,8 @@ import {
 } from "./Overlays";
 import { RulesStrip } from "./RulesStrip";
 import { StockBook } from "./StockBook";
-import { Avatar, Card, Fig, useMoney, useTableColumnResize } from "./ui";
+import { Tour } from "./Tour";
+import { Avatar, Fig, useMoney, useTableColumnResize } from "./ui";
 
 const ROLE_ORDER: Role[] = ["founder", "closer", "buyer", "lead", "accountant", "stock"];
 const SCHEME_KEY = "kova-color-scheme";
@@ -322,10 +323,10 @@ export function App() {
             type="button"
             className="side-btn"
             onClick={() => setGuide(!guideOpen)}
-            title={guideOpen ? "Hide CEO walkthrough" : "CEO demo walkthrough"}
+            title={guideOpen ? "Exit the tour" : "Take the tour"}
           >
             <Compass size={14} style={{ flexShrink: 0 }} />
-            <span className="side-btn-txt">{guideOpen ? "Hide CEO walkthrough" : "CEO demo walkthrough"}</span>
+            <span className="side-btn-txt">{guideOpen ? "Exit the tour" : "Take the tour"}</span>
           </button>
 
           {role === "founder" && (
@@ -438,7 +439,7 @@ export function App() {
             <div className="head-actions">
               {!imported && (
                 <button type="button" className="btn sm" onClick={() => setGuide(!guideOpen)}>
-                  <Sparkles size={13} /> {guideOpen ? "Hide walkthrough" : "60-sec CEO tour"}
+                  <Sparkles size={13} /> {guideOpen ? "Exit the tour" : "Take the tour"}
                 </button>
               )}
             </div>
@@ -463,42 +464,6 @@ export function App() {
                 )}
               </div>
             </div>
-          )}
-
-          {guideOpen && (
-            <Card
-              title="60-Second CEO Demo Walkthrough"
-              sub="Six moments that show why operations and compensation must share one engine."
-              actions={
-                <button type="button" className="btn xs ghost" onClick={() => setGuide(false)}>
-                  Dismiss
-                </button>
-              }
-              flush
-            >
-              <div className="guide">
-                <ol>
-                  <li>
-                    <b>The sales-report illusion (Founder tab):</b> Sales pay looks healthy at 6.5% of sales, yet the company is losing money once product cost, Meta ad spend, fixed salaries and ₦3,500 delivery fees are taken off. Click any number to see the orders behind it.
-                  </li>
-                  <li>
-                    <b>Permissions &amp; Audit Stamps:</b> Switch to <b>Amaka (Closer)</b> or <b>Dayo (Inventory)</b> in the sidebar. The rules strip locks with a founder audit stamp, and Amaka cannot mark her own orders delivered.
-                  </li>
-                  <li>
-                    <b>Realistic Lead-Credit Comparison:</b> On the Founder tab, switch <b>Pay staff when...</b> from <i>Delivery (6.5%)</i> to <i>Lead (2.75%)</i>. Even at less than half the rate, paying on leads pays out on orders that never arrive. Now try <i>Cash in</i> to hold back sales pay on orders #1047 and #1050 until the courier hands over the cash.
-                  </li>
-                  <li>
-                    <b>Pay taken back after a week closes:</b> In the Order Ledger, click the <b>Paid in W42/W43</b> filter and process a return on <b>Order #1033</b> (paid in W43). Toggle <b>Pay taken back</b> between <i>Take back now</i>, <i>Take back next week</i>, and <i>Business absorbs</i> — then try returning <b>Order #1024</b> from locked cycle W42.
-                  </li>
-                  <li>
-                    <b>Split credit:</b> Inspect <b>Order #1053</b> (opened by Amaka, closed by Chidi — toggle <i>First touch · Last touch · 50-50</i>).
-                  </li>
-                  <li>
-                    <b>Close the Inventory Loop:</b> Switch to <b>Dayo (Inventory)</b> and click <b>Raise PO</b> on <span className="mono">KET-03</span> or <span className="mono">VAC-21</span>. Units move to <i>On order</i> with an ETA, alerts clear, and receiving the PO unblocks order confirmation.
-                  </li>
-                </ol>
-              </div>
-            </Card>
           )}
 
           {/* Rules Strip (always visible, gated by role === 'founder') */}
@@ -544,6 +509,7 @@ export function App() {
         themeChoice={themeChoice}
         onSelectTheme={selectThemeExplicit}
       />
+      <Tour />
       <ToastTray />
     </div>
   );

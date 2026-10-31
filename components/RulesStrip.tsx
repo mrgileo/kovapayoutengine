@@ -25,6 +25,7 @@ export function RulesStrip() {
 
   return (
     <Card
+      id="tour-rules"
       title="Pay rules"
       sub={
         editable

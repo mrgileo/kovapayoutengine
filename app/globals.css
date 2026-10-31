@@ -1771,6 +1771,8 @@ table.tbl {
   color: #070709;
   border-color: var(--yellow-2);
   font-weight: 800;
+  /* Caps-height text sits high in a pill; a little extra on top centres it. */
+  padding: 4px 9px 2px;
 }
 .pill.plain {
   background: var(--surface-2);
@@ -3091,4 +3093,87 @@ html[data-modal-open] {
 .drawer-body,
 .dialog {
   overscroll-behavior: contain;
+}
+
+/* ─── Guided tour ─────────────────────────────────────────────────────────── */
+.tour {
+  position: fixed;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 28px));
+  max-height: 46dvh;
+  overflow-y: auto;
+  z-index: 40;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-top: 3px solid var(--yellow);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  padding: 12px 16px 14px;
+}
+.tour h3 {
+  margin: 2px 0 4px;
+  font-size: 15px;
+}
+.tour p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.tour-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tour-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tour-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tour-dots {
+  display: flex;
+  gap: 6px;
+}
+.tour-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--line-strong);
+}
+.tour-dots i.on {
+  background: var(--yellow);
+  width: 18px;
+}
+html[data-tour] body {
+  padding-bottom: 230px;
+}
+.tour-hl {
+  outline: 3px solid var(--yellow);
+  outline-offset: 4px;
+  border-radius: 14px;
+  scroll-margin: 120px 0 260px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tour-hl {
+    animation: tour-pulse 1.6s ease-out 2;
+  }
+  @keyframes tour-pulse {
+    0% { outline-color: transparent; }
+    40% { outline-color: var(--yellow); }
+  }
+}
+/* The tour already explains each step, so its own confirmations would only cover the Next button; refusals still show. */
+html[data-tour] .toast:not(.err) {
+  display: none;
 }

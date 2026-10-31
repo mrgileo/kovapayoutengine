@@ -160,6 +160,7 @@ export function AccountantView() {
       </Card>
 
       <Card
+        id="tour-payout"
         title="Payout desk"
         sub={nextText}
         actions={

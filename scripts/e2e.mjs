@@ -600,6 +600,29 @@ try {
   assert.ok(/Rule changed . Pay staff when/.test(linked.text), "The rule change is in the audit log like any other");
   console.log("✓ [12] Shared links open the right persona with the right rules, ignore bad values, and tidy the URL");
 
+  // 13. The tour acts: each step changes the live demo, switches persona and lights up the result
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(b => b.innerText.includes("Take the tour")).click();`);
+  const tourText = () => evaluate(`return document.querySelector(".tour")?.innerText || ""`);
+  for (let i = 0; i < 30 && !/step 1 of 6/i.test(await tourText()); i++) await sleep(150);
+  assert.ok(/step 1 of 6/i.test(await tourText()), "The tour opens on step 1: " + (await evaluate(`return JSON.stringify({buttons: Array.from(document.querySelectorAll("button")).filter(b => /tour/i.test(b.innerText)).map(b => b.innerText), toasts: document.querySelector(".toasts, [class*=toast]")?.innerText, url: location.href})`)));
+  const tourNext = () => evaluate(`Array.from(document.querySelectorAll(".tour button")).find(b => /Next|Finish/.test(b.innerText)).click();`);
+  const waitTab = async (tab) => { for (let i = 0; i < 40 && !(await evaluate(`return document.querySelector("#tab-${tab}")?.getAttribute("aria-selected") === "true"`)); i++) await sleep(150); };
+  await tourNext(); await waitTab("closer");
+  assert.ok(/step 2 of 6/i.test(await tourText()), "Next moves to step 2");
+  assert.ok(await evaluate(`return document.body.innerText.includes("#1043")`), "Step 2 delivered order #1043");
+  await tourNext();
+  for (let i = 0; i < 40 && !/Pay staff when is now Lead/.test(await tourText()); i++) await sleep(150);
+  assert.ok(/Pay staff when is now Lead. Sales pay is going out on orders that have not been delivered: ₦[1-9]/.test(await tourText()), "Step 3 flips the rule and quotes the live amount: " + (await tourText()).slice(0, 220));
+  assert.ok(await evaluate(`return Boolean(document.querySelector("#tour-rules.tour-hl"))`), "The rules strip is lit up");
+  await tourNext(); await tourNext(); await waitTab("stock");
+  assert.ok(await evaluate(`return /Stock loop closed|PO inbound/i.test(document.body.innerText)`), "Step 5 raised the purchase orders");
+  await tourNext(); await waitTab("accountant");
+  assert.ok(/step 6 of 6/i.test(await tourText()), "Step 6 of 6");
+  assert.ok(await evaluate(`return document.body.innerText.includes("W44 is approved")`), "The founder approved the week and the accountant can pay it");
+  await tourNext();
+  assert.equal(await tourText(), "", "Finish closes the tour");
+  console.log("✓ [13] The tour acts: delivers an order, flips a rule, returns an order, raises POs, hands pay to the accountant");
+
   // Reset back to clean seed so user gets fresh state if they open a new tab
   await evaluate(`
     const resetBtn = Array.from(document.querySelectorAll(".side-btn")).find(b => b.innerText.includes("Reset demo state"));
