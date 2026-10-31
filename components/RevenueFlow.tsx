@@ -19,7 +19,7 @@ export function FlowFunnel() {
   return (
     <Card
       title={`Where every order is · ${flow.cycleId}`}
-      sub="Orders booked this week and how far each has got. Click any figure to see the orders."
+      sub={`${L.flowIntro} Click any figure to see the orders.`}
       flush
     >
       {booked.orders === 0 ? (
@@ -30,14 +30,14 @@ export function FlowFunnel() {
         <div className="flow" role="list">
           {flow.steps.map((st) => {
             const label = L.flowStepLabel[st.key];
-            const summary = `${label}: ${m(st.value)}, ${st.orders} order${st.orders === 1 ? "" : "s"}, ${pctText(st.share)} of the value booked`;
+            const summary = `${label}: ${m(st.value)}. ${L.flowRowSub(st.key, st.orders, booked.orders)}, ${pctText(st.share)} of the value booked`;
             return (
               <div key={st.key} role="listitem">
                 {st.drops.length > 0 && (
                   <div className="flow-drops">
                     {st.drops.map((d) => (
                       <span key={d.label} className="flow-drop">
-                        <ArrowDown size={11} aria-hidden="true" /> {m(d.value)} · {d.orders} order{d.orders === 1 ? "" : "s"} · {d.label}
+                        <ArrowDown size={11} aria-hidden="true" /> {d.orders} order{d.orders === 1 ? "" : "s"} ({m(d.value)}) stopped here: {d.label}
                       </span>
                     ))}
                   </div>
@@ -46,7 +46,7 @@ export function FlowFunnel() {
                   <div className="flow-lbl">
                     <span>{label}</span>
                     <small>
-                      {st.orders} order{st.orders === 1 ? "" : "s"} · {pctText(st.share)}
+                      {L.flowRowSub(st.key, st.orders, booked.orders)} · {pctText(st.share)} of sales
                     </small>
                   </div>
                   <div className="flow-track">
@@ -78,7 +78,7 @@ export function FlowFunnel() {
               <thead>
                 <tr>
                   <th>Step</th>
-                  <th className="r">Orders</th>
+                  <th className="r">Orders that got this far</th>
                   <th className="r">Value</th>
                   <th className="r">% of booked sales</th>
                 </tr>

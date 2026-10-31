@@ -65,7 +65,7 @@ export function BuyerView() {
           />
         </Tile>
         <Tile
-          label={L.salesPerAdNaira}
+          label={L.deliveredSalesPerAdNaira}
           note={`Booked orders suggest ${L.perNaira(cs.bookedRoas)}, but returns and undelivered orders bring it down`}
           tone={cs.deliveredRoas < 2 ? "neg" : "pos"}
         >
@@ -214,10 +214,10 @@ export function LeadView() {
         <Tile label="Team lead net payout" note="Fixed salary + team bonus" tone="pos">
           <Fig amount={ps.payable} drill={payslipDrill} />
         </Tile>
-        <Tile label={L.teamBonus} note="After any pay taken back">
+        <Tile label={L.teamBonus} note="Earned on the team's delivered sales, after any pay taken back">
           <Fig amount={ps.commission + ps.adjustments} drill={payslipDrill} />
         </Tile>
-        <Tile label="Team delivered volume" note={`${teamDelivered.length} orders delivered in ${open.id}`}>
+        <Tile label="Team delivered sales" note={`${teamDelivered.length} orders delivered in ${open.id}`}>
           <Fig
             amount={teamDelVal}
             drill={{
@@ -232,8 +232,8 @@ export function LeadView() {
           />
         </Tile>
         <Tile
-          label="Split-credit orders"
-          note={`Rule: ${data.rules.split === "first" ? "First touch" : data.rules.split === "last" ? "Last touch" : "50-50 split"}`}
+          label="Orders two closers worked on"
+          note={`Closer pay goes to ${data.rules.split === "first" ? "whoever opened the order" : data.rules.split === "last" ? "whoever closed it" : "both, 50-50"}`}
         >
           <span className="num">{splitOrders.length}</span>
         </Tile>

@@ -72,7 +72,7 @@ export function FounderView() {
               drill={pnl.drills.actual}
               className={pnl.actual < 0 ? "" : "ok"}
             />{" "}
-            this cycle.
+            this week.
           </h2>
           <p>
             {L.headlineBody.intro} <b>{L.headlineBody.productCost}</b> (<Fig amount={pnl.cogs} drill={pnl.drills.cogs} />), <b>{L.headlineBody.adSpend}</b> (<Fig amount={pnl.adSpend} drill={pnl.drills.adSpend} />),{" "}
@@ -123,20 +123,20 @@ export function FounderView() {
                 }}
               />
             </b>
-            <em>{m(pnl.revenue, { compact: true })} − {m(pnl.cogs, { compact: true })} − {m(pnl.commission, { compact: true })} − {m(pnl.adSpend, { compact: true })}</em>
+            <em>Sales − product cost − commission − ad spend</em>
           </div>
           <div className="hl-stat">
             <span>{L.realProfit}</span>
             <b className={pnl.actual < 0 ? "bad" : "ok"}>
               <Fig amount={pnl.actual} sign drill={pnl.drills.actual} />
             </b>
-            <em>After fixed salaries and delivery fees too</em>
+            <em>Also takes off fixed salaries and delivery fees</em>
           </div>
           <div className="hl-stat">
             <span>{L.payAsPctOfSales}</span>
             <b className={pnl.payoutRatio > targetRatio ? "bad" : "ok"}>{pct(pnl.payoutRatio)}</b>
             <em>
-              Commission alone: {pct(pnl.commissionRatio)} (aim for {pct(TARGETS.commissionRatio, 0)} or less)
+              Fixed salary + commission, as a share of sales. Aim for {pct(targetRatio, 0)} or less.
             </em>
           </div>
         </div>
@@ -149,19 +149,19 @@ export function FounderView() {
 
       {/* Key founder tiles */}
       <dl className="tiles">
-        <Tile label="Delivered revenue" note="Delivered this week">
+        <Tile label="Delivered revenue" note={`${pnl.drills.revenue.lines.length} order${pnl.drills.revenue.lines.length === 1 ? "" : "s"} delivered in ${open.id} and not returned`}>
           <Fig amount={pnl.revenue} drill={pnl.drills.revenue} />
         </Tile>
         <Tile
           label="Cash still with courier"
-          note={courierCash.total > 0 ? "Delivered, but the cash isn't in the bank yet" : "All delivered cash received"}
+          note={courierCash.total > 0 ? `${courierCash.lines.length} delivered order${courierCash.lines.length === 1 ? "" : "s"}: the courier has not handed over the cash` : "All delivered cash received"}
           tone={courierCash.total > 0 ? "warn" : "pos"}
         >
           <Fig amount={courierCash.total} drill={courierCash} />
         </Tile>
         <Tile
           label="Paid on undelivered orders"
-          note={undelivered.total > 0 ? "Commission going out before the order arrives" : "No commission going out before delivery"}
+          note={undelivered.total > 0 ? `Commission paid on ${undelivered.lines.length} order${undelivered.lines.length === 1 ? "" : "s"} that ${undelivered.lines.length === 1 ? "has" : "have"} not been delivered yet` : "No commission is paid before delivery"}
           tone={undelivered.total > 0 ? "neg" : "pos"}
         >
           <Fig amount={undelivered.total} drill={undelivered} />
@@ -177,7 +177,7 @@ export function FounderView() {
               ? "Comes off next week's payout"
               : absorbed.total > 0
                 ? "Staff keep it, the business takes the loss"
-                : "Pay taken back protects your margin"
+                : "Nothing kept: pay on returned orders is taken back"
           }
           tone={absorbed.total > 0 ? "neg" : deferred.total < 0 ? "warn" : "pos"}
         >
@@ -189,7 +189,7 @@ export function FounderView() {
         </Tile>
         <Tile
           label="Products to reorder"
-          note={stockAlerts.length ? stockAlerts.map((r) => r.product.sku).join(", ") : "Every product has enough stock for open orders"}
+          note={stockAlerts.length ? `Low or out of stock: ${stockAlerts.map((r) => r.product.sku).join(", ")}` : "Every product has enough stock for open orders"}
           tone={stockAlerts.length ? "warn" : "pos"}
         >
           <span className="num">{stockAlerts.length}</span>

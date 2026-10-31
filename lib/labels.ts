@@ -50,6 +50,20 @@ export const L = {
     kept: "Delivered and kept",
     cash: "Cash received",
   },
+  // What each row counts, in words. Rows are cumulative: an order that is already delivered still counts as "confirmed" and "sent out".
+  flowRowSub: (key: string, n: number, booked: number) => {
+    const o = (x: number) => `${x} order${x === 1 ? "" : "s"}`;
+    if (key === "booked") return `${o(n)} booked this week`;
+    const what: Record<string, string> = {
+      confirmed: "have been confirmed",
+      dispatched: "have been sent out",
+      delivered: "have reached the customer",
+      kept: "reached the customer and were not returned",
+      cash: "have had their cash received",
+    };
+    return `${n} of ${booked} orders ${what[key] ?? "got this far"}`;
+  },
+  flowIntro: "Each row counts every order that got at least this far, including ones that have since moved on, so the numbers only go down. The red lines show the orders that stopped.",
   flowStepHint: {
     booked: "been booked",
     confirmed: "been confirmed or gone further",

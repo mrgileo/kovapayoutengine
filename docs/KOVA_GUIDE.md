@@ -58,7 +58,7 @@ Key point for the audience: **every figure opens the orders behind it.** The fou
 | Chidinma | Founder / CEO | Everything: profit, funnel, leaks, rules, prices, ad budget, stock, audit log. Approves pay. | n/a |
 | Amaka | Closer (phone-first, works at 390px wide) | Her open pipeline, her return rate, her pay accruing, order cards | Change prices, mark her own order delivered, edit rules |
 | Tobi | Media buyer | His ad spend, delivered versus booked results, cost per delivered order, his pay | Touch orders or rules |
-| Ngozi | Team lead | Team delivered volume, team bonus, closer scorecard | Process returns |
+| Ngozi | Team lead | Team delivered sales, team bonus, closer scorecard | Process returns |
 | Bisi | Accountant | Courier cash desk, payout desk, bank file, mark paid, lock | Orders, prices, rules, approving pay |
 | Dayo | Warehouse | Stock book, purchase orders, receiving, returns inspection | Cash, pay |
 

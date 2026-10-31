@@ -61,14 +61,14 @@ export function AccountantView() {
         </Tile>
         <Tile
           label="Approved, awaiting payment"
-          note={queue.awaitingPayment.length ? queue.awaitingPayment.map((x) => x.cycleId).join(", ") : "Nothing approved yet"}
+          note={queue.awaitingPayment.length ? `Approved by the founder: ${queue.awaitingPayment.map((x) => x.cycleId).join(", ")}` : "Nothing approved yet"}
           tone={awaiting > 0 ? "warn" : "pos"}
         >
           <span className="num">{m(awaiting)}</span>
         </Tile>
         <Tile
           label="Paid, ready to lock"
-          note={queue.readyToLock.length ? queue.readyToLock.map((x) => x.cycleId).join(", ") : "None"}
+          note={queue.readyToLock.length ? `${queue.readyToLock.map((x) => x.cycleId).join(", ")} is paid and can be locked` : "No paid week is waiting to be locked"}
         >
           <span className="num">{queue.readyToLock.length}</span>
         </Tile>

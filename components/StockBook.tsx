@@ -43,7 +43,7 @@ export function StockBook() {
         <dl className="tiles">
           <Tile
             label="Products to reorder"
-            note={alerts.length ? alerts.map((a) => a.product.sku).join(", ") : "Every product has enough stock or an order on the way"}
+            note={alerts.length ? `Low or out of stock: ${alerts.map((a) => a.product.sku).join(", ")}` : "Every product has enough stock or an order on the way"}
             tone={alerts.length ? "neg" : "pos"}
           >
             <span className="num">{alerts.length}</span>
@@ -67,7 +67,7 @@ export function StockBook() {
             />
           </Tile>
           <Tile
-            label="Open POs inbound"
+            label="Purchase orders on the way"
             note={openPOs.length ? `${openPOs.length} purchase order${openPOs.length === 1 ? "" : "s"} on the way` : "Raise a purchase order below to restock"}
             tone={openPOs.length ? "pos" : undefined}
           >

@@ -113,8 +113,8 @@ export function CloserView() {
 
       <dl className="tiles">
         <Tile
-          label="In your open pipeline"
-          note={`${openOrders.length} open orders. You earn once the warehouse marks them delivered`}
+          label="Commission you could still earn"
+          note={`If all ${openOrders.length} open orders are delivered. You earn once the warehouse marks each one delivered`}
           tone="pos"
         >
           <Fig amount={potentialTotal} sign drill={potentialDrill} />
@@ -127,7 +127,7 @@ export function CloserView() {
           <span className="num">{pct(st.returnRate, 0)}</span>
         </Tile>
         <Tile
-          label="Stock-blocked orders"
+          label="Orders waiting for stock"
           note={
             blocked.length
               ? `${blocked.length} order${blocked.length === 1 ? "" : "s"} waiting for stock to arrive`
