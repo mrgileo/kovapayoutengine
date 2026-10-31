@@ -307,6 +307,7 @@ The seed contains **25 orders** across W42 (#1021â€“#1028, Locked), W43 (#1031â€
 | components/RevenueFlow.tsx     | Founder-view revenue flow funnel ("Where every order is") and the stuck-or-leaking panel, both drillable. Engine: `revenueFlow()` and `leaks()` in lib/engine.ts. |
 | components/ActivityStrip.tsx   | Live activity strip pinned under the top bar on every tab, with per-role chips and an Earlier list. Engine: `impactOf()` and `impactFor()`; events carry an `impact` recorded in the audit log. |
 | components/AccountantView.tsx  | Accountant persona: cash reconciliation, owed-orders list with bulk cash recording, payout desk with payslips, bank file, mark paid and lock. Engine: `cashDesk()`, `payoutQueue()`, `canSettle()`, `canApprove()`, `canRecordCash()`. |
+| lib/deeplink.ts                | Shared links: `parseDeepLink()` reads `?role=` and the five rule keys (unknown values ignored), `buildDeepLink()` builds one. Applied once on load by `applyDeepLink`; the command palette has "Copy a link to this view". |
 | lib/download.ts                | Hands the user a text file built in the browser (bank file, import templates). |
 | components/PriceBook.tsx       | Company prices per SKU. Founder-editable, closers read-only; a price change only applies to new orders (each order stores its own unit price). |
 | components/ImportDialog.tsx    | Founder-only dialog: template downloads, three file pickers, live validation, summary, and "Show my dashboard". |
@@ -325,5 +326,5 @@ The seed contains **25 orders** across W42 (#1021â€“#1028, Locked), W43 (#1031â€
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
 | components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray.                                                       |
-| scripts/verify.ts              | Automated 27-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
+| scripts/verify.ts              | Automated 28-invariant mathematical verification suite (npm.cmd run verify).                                                                                  |
 | scripts/e2e.mjs                | Automated 10-scenario headless Chrome E2E test suite verifying DOM, 390px mobile layout, modals, and persistence.                                             |

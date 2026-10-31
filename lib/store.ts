@@ -33,6 +33,7 @@ import { SEED_VERSION, buildSeed } from "./seed";
 import { RULE_DEFS, ruleOptionLabel } from "./rules";
 import { L } from "./labels";
 import type { ImportSummary } from "./importer";
+import type { DeepLink } from "./deeplink";
 
 export interface Toast {
   id: number;
@@ -87,6 +88,7 @@ interface Store {
   setImportOpen: (open: boolean) => void;
   applyImport: (state: DemoState, summary: ImportSummary) => void;
   backToDemo: () => void;
+  applyDeepLink: (link: DeepLink) => void;
 }
 
 let toastSeq = 0;
@@ -346,6 +348,21 @@ export const useStore = create<Store>()(
         reset: () => {
           set({ data: buildSeed(), dataSource: "demo", importSummary: null, drill: null, returnFor: null, newOrderOpen: false });
           get().toast("ok", "Demo reset to the seed data.");
+        },
+        applyDeepLink: (link) => {
+          const keys = Object.keys(link.rules) as RuleKey[];
+          const before = get().role;
+          if (keys.length > 0) {
+            if (get().dataSource !== "demo") {
+              get().toast("warn", "Rule links only apply to the demo data. Your imported data was left alone.");
+            } else {
+              // A shared link starts from the demo company so it shows what the post showed; each rule goes through the normal founder path (and the audit log).
+              set({ data: buildSeed(), importSummary: null, drill: null, returnFor: null, newOrderOpen: false, role: "founder" });
+              for (const k of keys) get().setRule(k, link.rules[k] as never);
+              set({ role: before });
+            }
+          }
+          if (link.role) set({ role: link.role });
         },
         setImportOpen: (importOpen) => {
           if (importOpen && !canEditRules(get().role)) {

@@ -3,6 +3,7 @@ import { buildSeed } from "../lib/seed.ts";
 import { TEMPLATES, importData, isoWeekNumber, parseCsv } from "../lib/importer.ts";
 import { L, PNL_TEXT, RULE_TEXT, PAY_LINE_TEXT } from "../lib/labels.ts";
 import { RULE_DEFS } from "../lib/rules.ts";
+import { buildDeepLink, isEmptyLink, parseDeepLink } from "../lib/deeplink.ts";
 import {
   actionsFor,
   adCost,
@@ -483,5 +484,17 @@ assert.equal(acctSees.pay.length, 3, "The accountant sees every pay line");
 assert.equal(acctSees.revenue !== undefined && acctSees.profit !== undefined && acctSees.stuckCash !== undefined, true, "…and the company figures");
 assert.equal(acctSees.stock.length, 0, "…but not stock");
 
-console.log("ALL 27 ENGINE INVARIANTS PASSED.");
+// 28. Shared links: only real personas and real rule options are accepted, and a built link parses back to the same rules.
+const dl = parseDeepLink("?role=closer&creditOn=lead&onReturn=nonsense&returnCap=0.3&split=half&role2=x");
+assert.equal(dl.role, "closer");
+assert.deepEqual(dl.rules, { creditOn: "lead", returnCap: 0.3, split: "half" }, "Unknown values are ignored, known ones kept");
+assert.equal(parseDeepLink("?role=admin").role, undefined, "An unknown persona is ignored");
+assert.equal(isEmptyLink(parseDeepLink("")), true);
+const seedRules = buildSeed().rules;
+const custom = { ...seedRules, creditOn: "lead" as const, returnCap: 0.2 };
+const built = buildDeepLink("https://x.test/", "founder", custom, seedRules);
+assert.equal(built, "https://x.test/?role=founder&creditOn=lead&returnCap=0.2", "Only rules that differ from the demo default are in the link");
+assert.deepEqual(parseDeepLink(built.slice(built.indexOf("?"))).rules, { creditOn: "lead", returnCap: 0.2 }, "A built link round-trips");
+
+console.log("ALL 28 ENGINE INVARIANTS PASSED.");
 

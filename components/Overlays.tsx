@@ -16,6 +16,8 @@ import {
 } from "@/lib/engine";
 import { dateTime, shortName } from "@/lib/format";
 import { RULE_DEFS, ruleOptionLabel } from "@/lib/rules";
+import { buildDeepLink } from "@/lib/deeplink";
+import { buildSeed } from "@/lib/seed";
 import { useData, useStore } from "@/lib/store";
 import { Avatar, Card, useMoney } from "./ui";
 import type { Role } from "@/lib/types";
@@ -371,6 +373,7 @@ export function CommandPalette({
   const setNewOrderOpen = useStore((s) => s.setNewOrderOpen);
   const closeCycle = useStore((s) => s.closeCycle);
   const reset = useStore((s) => s.reset);
+  const toast = useStore((s) => s.toast);
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -453,6 +456,16 @@ export function CommandPalette({
           },
         ]
       : []),
+    {
+      label: "Copy a link to this view",
+      tag: "Share",
+      run: () => {
+        const url = buildDeepLink(window.location.origin + window.location.pathname, role, data.rules, buildSeed().rules);
+        const done = (ok: boolean) => toast(ok ? "ok" : "err", ok ? "Link copied. It opens this persona with these pay rules." : `Couldn't copy. Link: ${url}`);
+        (navigator.clipboard?.writeText(url) ?? Promise.reject()).then(() => done(true), () => done(false));
+        onClose();
+      },
+    },
     {
       label: "Reset demo state to seed defaults",
       tag: "System",

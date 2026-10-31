@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isEmptyLink, parseDeepLink } from "@/lib/deeplink";
 import { Command, Compass, FileUp, Moon, PanelLeftClose, PanelLeftOpen, RotateCcw, ShieldCheck, Sparkles, Sun } from "lucide-react";
 import { PERSONA, cashDesk, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
 import { CCY, Currency, shortDate } from "@/lib/format";
@@ -80,6 +81,17 @@ export function App() {
       root.removeAttribute("data-modal-open");
     };
   }, []);
+
+  // Open a shared link (?role=…&creditOn=…) once, then tidy the address bar so a reload keeps whatever the visitor does next.
+  const applyDeepLink = useStore((s) => s.applyDeepLink);
+  useEffect(() => {
+    try {
+      const link = parseDeepLink(window.location.search);
+      if (isEmptyLink(link)) return;
+      applyDeepLink(link);
+      window.history.replaceState(null, "", window.location.pathname);
+    } catch {}
+  }, [applyDeepLink]);
 
   useEffect(() => {
     setHydrated(true);

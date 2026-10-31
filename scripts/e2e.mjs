@@ -110,7 +110,7 @@ try {
 
   // 0. Light by default even when the browser prefers dark; the toggle works and only saves on an explicit click
   await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
-  await evaluate(`localStorage.removeItem("kova-color-scheme");`);
+  await evaluate(`localStorage.removeItem("kova-color-scheme"); localStorage.removeItem("kova-payout-engine");`);
   await send("Page.reload");
   for (let i = 0; i < 40 && !(await evaluate(`return Boolean(document.querySelector(".theme-toggle"));`)); i++) await sleep(250);
   const theme0 = await evaluate(`
@@ -590,6 +590,15 @@ try {
   assert.ok(back.cycle.includes("W44"), "Demo cycle W44 is back, got " + back.cycle);
   assert.ok(back.head.includes("152,420"), "Demo headline is back: " + back.head);
   console.log("✓ [11] Import: clear row errors, loaded your data, 390px closer view fits, survives reload, back to demo data");
+
+  // 12. Shared links: a link opens the chosen persona with the chosen rules, then tidies the address bar
+  await send("Page.navigate", { url: `${URL}/?role=accountant&creditOn=lead&onReturn=nonsense` });
+  for (let i = 0; i < 60 && !(await evaluate(`return document.querySelector("#tab-accountant")?.getAttribute("aria-selected") === "true"`)); i++) await sleep(150);
+  const linked = await evaluate(`return { tab: document.querySelector("#tab-accountant")?.getAttribute("aria-selected"), url: location.search, text: document.body.innerText };`);
+  assert.equal(linked.tab, "true", "The link opens the accountant persona");
+  assert.equal(linked.url, "", "The address bar is tidied after the link is applied");
+  assert.ok(/Rule changed . Pay staff when/.test(linked.text), "The rule change is in the audit log like any other");
+  console.log("✓ [12] Shared links open the right persona with the right rules, ignore bad values, and tidy the URL");
 
   // Reset back to clean seed so user gets fresh state if they open a new tab
   await evaluate(`
