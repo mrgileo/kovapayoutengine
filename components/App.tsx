@@ -65,6 +65,22 @@ export function App() {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   useTableColumnResize();
 
+  // Lock the page behind any open dialog or drawer so only the overlay scrolls.
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => {
+      const open = document.querySelector('[aria-modal="true"]') !== null;
+      root.toggleAttribute("data-modal-open", open);
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      root.removeAttribute("data-modal-open");
+    };
+  }, []);
+
   useEffect(() => {
     setHydrated(true);
     try {

@@ -3077,3 +3077,18 @@ table.tbl {
     gap: 8px;
   }
 }
+
+/* ─── Page scroll lock while a dialog or drawer is open ─────────────────────── */
+html {
+  scrollbar-gutter: stable;
+}
+html[data-modal-open] body {
+  overflow: hidden;
+}
+html[data-modal-open] {
+  overflow: hidden;
+}
+.drawer-body,
+.dialog {
+  overscroll-behavior: contain;
+}
