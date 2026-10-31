@@ -286,7 +286,7 @@ export const useStore = create<Store>()(
                 text = `Order ${o.id} dispatched to ${o.city}`;
                 break;
               case "deliver":
-                text = `Order ${o.id} delivered · ${p} −${o.qty} on hand`;
+                text = `Order ${o.id} delivered · ${p} −${o.qty} on the shelf`;
                 break;
               case "fail":
                 text = `Order ${o.id} failed delivery · delivery fee lost, goods back on shelf`;
@@ -382,7 +382,7 @@ export const useStore = create<Store>()(
             const before = structuredClone(d);
             receivePOFx(d, poId, now());
             const po = d.pos.find((x) => x.id === poId)!;
-            log(d, { at: now(), actor: actor(), kind: "stock", text: `${po.id} received · ${po.sku} +${po.qty} on hand`, impact: impactOf(before, d) });
+            log(d, { at: now(), actor: actor(), kind: "stock", text: `${po.id} received · ${po.sku} +${po.qty} on the shelf`, impact: impactOf(before, d) });
           });
         },
         createOrder: (input) => {

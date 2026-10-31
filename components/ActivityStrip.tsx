@@ -47,7 +47,7 @@ function useChips() {
     if (i.profit !== undefined) chips.push({ key: "profit", text: `${L.realProfit} ${m(i.profit, { sign: true })}`, tone: i.profit >= 0 ? "good" : "bad" });
     if (i.stuckCash !== undefined) chips.push({ key: "stuck", text: `${L.cashWithCourier} ${m(i.stuckCash, { sign: true })}`, tone: i.stuckCash > 0 ? "bad" : "good" });
     for (const s of i.stock) {
-      if (s.onHand[0] !== s.onHand[1]) chips.push({ key: "oh-" + s.sku, text: `${s.sku} on hand ${s.onHand[0]} → ${s.onHand[1]}`, tone: "plain" });
+      if (s.onHand[0] !== s.onHand[1]) chips.push({ key: "oh-" + s.sku, text: `${s.sku} on the shelf ${s.onHand[0]} → ${s.onHand[1]}`, tone: "plain" });
       if (s.available[0] !== s.available[1]) chips.push({ key: "av-" + s.sku, text: `${s.sku} free ${s.available[0]} → ${s.available[1]}`, tone: s.available[1] < s.available[0] ? "bad" : "good" });
     }
     return { chips, any: !impactIsEmpty(i) };

@@ -147,7 +147,7 @@ export function OrderLedger() {
 
   return (
     <Card
-      title={role === "closer" ? "Order Cards (Phone-First Closer View)" : "Order Ledger & Segregation of Duties"}
+      title={role === "closer" ? "Your orders" : "Orders and who can do what"}
       sub={
         role === "closer"
           ? "Your orders as cards. You earn commission once the warehouse marks an order delivered."
@@ -283,11 +283,11 @@ export function OrderLedger() {
                 <th>Order</th>
                 <th>Customer</th>
                 <th>Item &amp; stock</th>
-                <th>Touch / Attribution</th>
+                <th>Opened / closed by</th>
                 <th className="r">Value</th>
                 <th>Stage</th>
                 <th className="r">Commission</th>
-                <th className="r">Actions ({role})</th>
+                <th className="r">Actions</th>
               </tr>
             </thead>
             <tbody>

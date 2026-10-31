@@ -103,7 +103,7 @@ export const PNL_TEXT = {
 export const RULE_TEXT = {
   creditOn: {
     label: "Pay staff when...",
-    options: { lead: "Lead", delivered: "Delivery", cash: "Cash in" },
+    options: { lead: "Order booked", delivered: "Delivered", cash: "Cash received" },
     explain: {
       lead: (total: string) => `Staff earn ${total} the moment an order is booked, even if it never arrives.`,
       delivered: (total: string, closer: string, buyer: string, lead: string) =>

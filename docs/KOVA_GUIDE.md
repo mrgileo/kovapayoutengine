@@ -69,7 +69,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 **Founder view**
 - Headline: three profit figures and pay as a percentage of sales.
 - Funnel ("where every order is") and leaks panel (six checks, no fake grand total).
-- KPI tiles: delivered revenue, cash with couriers, paid on undelivered orders, pay kept on returns, SKUs needing reorder.
+- KPI tiles: delivered revenue, cash with couriers, paid on undelivered orders, pay kept on returns, Products to reorder.
 - "Where the money went": eight lines from delivered revenue down to real profit.
 - Closer scorecard, ad budget (profit per order, max cost per order), price book, order ledger, stock book, audit log.
 
@@ -85,7 +85,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 
 **Try it with your orders:** upload an orders CSV (optionally ad spend and products). Weeks are worked out from your dates and replayed through the same engine. The data never leaves the browser. "Back to demo data" resets.
 
-**Take the tour:** a six-step guided tour that *acts*. It resets the demo, then delivers an order as the warehouse and switches to the closer so her pay visibly moves, flips the pay rule to "Lead" and quotes what that costs, returns an order paid last week, raises purchase orders, and hands the approved week to the accountant. Each step outlines the result and says in one or two sentences what just happened. It is the quickest way for a prospect to see how everything connects without you narrating, and a good basis for a 60-second clip. Reload the page (or Reset demo state) to run it again from the start.
+**Take the tour:** a six-step guided tour that *acts*. It resets the demo, then delivers an order as the warehouse and switches to the closer so her pay visibly moves, flips the pay rule to "Order booked" and quotes what that costs, returns an order paid last week, raises purchase orders, and hands the approved week to the accountant. Each step outlines the result and says in one or two sentences what just happened. It is the quickest way for a prospect to see how everything connects without you narrating, and a good basis for a 60-second clip. Reload the page (or Reset demo state) to run it again from the start.
 
 ### Words the app uses for pay
 
@@ -98,7 +98,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 
 ## 7. The five rules as founder questions (post and video material)
 
-1. *Pay staff when?* Lead, delivery, or cash in. Delivery is the default. The demo shows what the rule costs you in pay on undelivered orders.
+1. *Pay staff when?* Order booked, delivered, or cash received. Delivered is the default. The demo shows what the rule costs you in pay on undelivered orders.
 2. *A return comes back after pay was sent. Who carries it?* Take back now, take back next week, or business absorbs. The app shows the exact amount and the person, and a locked week is never reopened.
 3. *Two people on one order?* First touch, last touch, or 50-50, with a live order (#1053) to try it on.
 4. *Salary plus commission, or commission only?* The pay meter shows the share of sales going to people against a ceiling.
@@ -112,15 +112,15 @@ Honest framing for posts: Kova doesn't tell a founder which option is right. It 
 |---|---|
 | Delivered revenue | ₦532,500 |
 | Product cost | ₦222,500 |
-| Commission paid (6.5% of sales on the delivery rule) | ₦34,613 |
+| Commission paid (6.5% of sales when staff are paid on delivery) | ₦34,613 |
 | Fixed salary (weekly share) | ₦122,307 |
 | Ad spend (simulated feed) | ₦281,000 |
 | Delivery fees (7 legs × ₦3,500) | ₦24,500 |
 | **What you really made** | **−₦152,420** |
 | What the sales report says | +₦497,888 |
 | Cash still with couriers | ₦185,500 (2 orders) |
-| Paid on undelivered orders: delivery rule / lead rule | ₦0 / ₦34,210 |
-| Pay rate: delivery rule / lead rule | 6.5% / 2.75% of sales |
+| Paid on undelivered orders: paid on delivery / paid on booking | ₦0 / ₦34,210 |
+| Pay rate: paid on delivery / paid on booking | 6.5% / 2.75% of sales |
 | Ads: sales per ₦1 on booked orders vs delivered | ₦6.81 vs ₦1.09 (one buyer) |
 | Profit per order, before / after staff pay | +₦5,800 / −₦25,584 |
 | Stock on hand at cost | ₦1,419,000 |
@@ -142,7 +142,7 @@ Honest framing for posts: Kova doesn't tell a founder which option is right. It 
 ## 11. Hook bank (each ties to something you can show in under 30 seconds)
 
 - *"Your sales report and your bank account disagree. Here's where the difference goes."* Headline banner, then click through "Where the money went."
-- *"A closer's commission is paid on lead. Here's what that costs in a week."* Switch "Pay staff when" from delivery to lead. Show paid-on-undelivered going from ₦0 to ₦34,210.
+- *"A closer's commission is paid the moment an order is booked. Here's what that costs in a week."* Switch "Pay staff when" from Delivered to Order booked. Show paid-on-undelivered going from ₦0 to ₦34,210.
 - *"A return three weeks later: clawback now, offset, or absorb."* Return order #1033 on three settings. Show the amount taken back each time.
 - *"Two people on one order."* Order #1053 under first touch, last touch, 50-50.
 - *"Your media buyer says ₦6.81 back per ₦1. The delivered number is ₦1.09."* Media buyer view.
@@ -157,14 +157,14 @@ Every post can link to the exact moment it talks about. Add these to the demo ad
 | Parameter | Values |
 |---|---|
 | `role` | `founder`, `closer`, `buyer`, `lead`, `accountant`, `stock` |
-| `creditOn` (Pay staff when) | `lead`, `delivered`, `cash` |
+| `creditOn` (Pay staff when) | `lead` (Order booked), `delivered` (Delivered), `cash` (Cash received) |
 | `onReturn` (Pay taken back) | `clawback`, `offset`, `absorb` |
 | `split` (Two closers, one order) | `first`, `last`, `half` |
 | `payModel` (Pay structure) | `base_plus`, `commission` |
 | `returnCap` (Return-rate gate) | `1` (off), `0.3`, `0.2` |
 
 Examples:
-- Pay on lead, founder view: `/?role=founder&creditOn=lead`
+- Pay on booking, founder view: `/?role=founder&creditOn=lead`
 - Split on an order, team lead view: `/?role=lead&split=half`
 - The accountant's cash desk: `/?role=accountant`
 

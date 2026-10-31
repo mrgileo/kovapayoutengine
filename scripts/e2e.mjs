@@ -166,7 +166,7 @@ try {
   // 3. Rule toggle & live recalculation
   const beforeHeadline = await evaluate(`return document.querySelector(".headline h2")?.innerText;`);
   await evaluate(`
-    const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Lead"));
+    const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Order booked"));
     btn.click();
   `);
   await sleep(150);
@@ -176,7 +176,7 @@ try {
 
   // Switch back to Delivery
   await evaluate(`
-    const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Delivery"));
+    const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Delivered"));
     btn.click();
   `);
   await sleep(100);
@@ -238,10 +238,10 @@ try {
   await evaluate(`document.querySelector('#tab-stock').click();`);
   await sleep(150);
   // wait for the warehouse view to mount its alert and button before clicking
-  for (let i = 0; i < 30 && !(await evaluate(`return Array.from(document.querySelectorAll(".alert button")).some(b => b.innerText.includes("Raise POs"));`)); i++) await sleep(150);
+  for (let i = 0; i < 30 && !(await evaluate(`return Array.from(document.querySelectorAll(".alert button")).some(b => b.innerText.includes("Order stock for all"));`)); i++) await sleep(150);
   const stockBefore = await evaluate(`return document.querySelector(".alert")?.innerText;`);
   await evaluate(`
-    const raiseAllBtn = Array.from(document.querySelectorAll(".alert button")).find(b => b.innerText.includes("Raise POs"));
+    const raiseAllBtn = Array.from(document.querySelectorAll(".alert button")).find(b => b.innerText.includes("Order stock for all"));
     if (raiseAllBtn) raiseAllBtn.click();
   `);
   for (let i = 0; i < 20 && !String(await evaluate(`return document.querySelector(".alert")?.innerText;`)).includes("Stock loop closed"); i++) await sleep(150);
@@ -326,13 +326,13 @@ try {
   assert.ok(/Ngozi\s*\+₦2,120/.test(founderStrip), "Founder sees the team lead's pay move");
   assert.ok(/Real profit\s*\+₦116,720/.test(founderStrip), "Founder sees real profit move: " + founderStrip);
   assert.ok(/Cash with courier\s*\+₦212,000/.test(founderStrip), "Founder sees cash with the courier rise");
-  assert.ok(founderStrip.includes("AIR-12 on hand 4 → 3"), "Founder sees stock move: " + founderStrip);
+  assert.ok(founderStrip.includes("AIR-12 on the shelf 4 → 3"), "Founder sees stock move: " + founderStrip);
 
   for (const [tab, must, mustNot] of [
     ["closer", [/You\s*\+₦8,480/], [/Real profit/, /Tobi/, /Ngozi/]],
     ["buyer", [/You\s*\+₦3,180/], [/Real profit/, /Amaka/]],
     ["lead", [/You\s*\+₦2,120/, /Amaka\s*\+₦8,480/], [/Real profit/, /Tobi/]],
-    ["stock", [/AIR-12 on hand 4 → 3/], [/\+₦/, /Real profit/]],
+    ["stock", [/AIR-12 on the shelf 4 → 3/], [/\+₦/, /Real profit/]],
   ]) {
     await evaluate(`document.querySelector('#tab-${tab}').click();`);
     await sleep(300);
@@ -369,8 +369,8 @@ try {
     return row ? Array.from(row.querySelectorAll("button")).map(b => b.innerText.trim()) : null;
   `);
   // owed orders at this point: #1043 (delivered in 7d), #1047, #1050
-  await gotoTab("stock", "Reservations & PO Loop");
-  const whBtns = await evaluate(`return Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim());`);
+  await gotoTab("stock", "Purchase Orders");
+  const whBtns = await evaluate(`return Array.from(document.querySelectorAll("button:not(.seg button)")).map(b => b.innerText.trim());`);
   assert.ok(!whBtns.some((t) => /Cash received/.test(t)), "The warehouse must not be offered Cash received");
   assert.ok(whBtns.some((t) => /Process return/.test(t)), "The warehouse still processes returns");
   await gotoTab("founder", "Weekly Close");
@@ -387,9 +387,9 @@ try {
   `);
   assert.equal(acc.locked, 5, "Rules are locked for the accountant");
   assert.ok(acc.title.includes("Courier Cash"), "Accountant heading: " + acc.title);
-  const forbidden = /^(Confirm|Dispatch|Mark delivered|Failed delivery|Process return|Cancel|\+? ?New lead|Close & approve)/;
+  const forbidden = /^(Confirm|Dispatch|Send out|Mark delivered|Failed delivery|Process return|Cancel|\+? ?New lead|Close & approve)/;
   assert.deepEqual(acc.buttons.filter((t) => forbidden.test(t)), [], "The accountant has no sales, warehouse or approval buttons");
-  assert.ok(acc.buttons.some((t) => /Bank CSV/.test(t)), "The accountant can export the bank file");
+  assert.ok(acc.buttons.some((t) => /Bank file/.test(t)), "The accountant can export the bank file");
   assert.ok(acc.buttons.some((t) => /Record all as received \(3/.test(t)), "Bulk cash button shows three owed orders: " + acc.buttons.filter((t) => /Record/.test(t)));
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b => /Record all as received/.test(b.innerText)).click();`);
   for (let i = 0; i < 30 && !(await stripText()).includes("Cash with courier"); i++) await sleep(150);
@@ -398,9 +398,9 @@ try {
   const after = await evaluate(`return Array.from(document.querySelectorAll(".tile")).find(t => t.innerText.includes("Cash still with couriers"))?.innerText || "";`);
   assert.ok(/₦0/.test(after), "Cash still with couriers is ₦0 after recording it: " + after);
   // non-settlers cannot export the bank file
-  await gotoTab("closer", "Closer Phone Console");
+  await gotoTab("closer", "Your Orders & Earnings");
   const closerBtns = await evaluate(`return Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim());`);
-  assert.ok(!closerBtns.some((t) => /Bank CSV|Mark paid|Lock cycle|Lock week|Record all/.test(t)), "A closer cannot export the bank file or settle cycles");
+  assert.ok(!closerBtns.some((t) => /Bank file|Mark paid|Lock cycle|Lock week|Record all/.test(t)), "A closer cannot export the bank file or settle cycles");
   await gotoTab("founder", "Weekly Close");
   console.log("✓ [7e] Accountant: cash desk records courier cash, warehouse no longer can, role limits hold");
 
@@ -611,8 +611,8 @@ try {
   assert.ok(/step 2 of 6/i.test(await tourText()), "Next moves to step 2");
   assert.ok(await evaluate(`return document.body.innerText.includes("#1043")`), "Step 2 delivered order #1043");
   await tourNext();
-  for (let i = 0; i < 40 && !/Pay staff when is now Lead/.test(await tourText()); i++) await sleep(150);
-  assert.ok(/Pay staff when is now Lead. Commission is going out on orders that have not been delivered: ₦[1-9]/.test(await tourText()), "Step 3 flips the rule and quotes the live amount: " + (await tourText()).slice(0, 220));
+  for (let i = 0; i < 40 && !/Pay staff when is now Order booked/.test(await tourText()); i++) await sleep(150);
+  assert.ok(/Pay staff when is now Order booked.*Commission going out on undelivered orders: ₦[1-9]/.test(await tourText()), "Step 3 flips the rule and quotes the live amount: " + (await tourText()).slice(0, 220));
   assert.ok(await evaluate(`return Boolean(document.querySelector("#tour-rules.tour-hl"))`), "The rules strip is lit up");
   await tourNext(); await tourNext(); await waitTab("stock");
   assert.ok(await evaluate(`return /Stock loop closed|PO inbound/i.test(document.body.innerText)`), "Step 5 raised the purchase orders");

@@ -188,7 +188,7 @@ export function FounderView() {
           )}
         </Tile>
         <Tile
-          label="SKUs needing reorder"
+          label="Products to reorder"
           note={stockAlerts.length ? stockAlerts.map((r) => r.product.sku).join(", ") : "Every product has enough stock for open orders"}
           tone={stockAlerts.length ? "warn" : "pos"}
         >

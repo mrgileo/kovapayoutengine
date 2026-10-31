@@ -362,7 +362,7 @@ export function App() {
           </button>
 
           <p className="side-note">
-            State persists in <code className="mono">localStorage</code> across refreshes. Click any currency figure to inspect its orders.
+            Your changes are saved in this browser and survive a refresh. Click any figure to see the orders behind it.
           </p>
         </div>
       </aside>
@@ -439,11 +439,11 @@ export function App() {
               </div>
               <h1>
                 {role === "founder" && "Real Profit, Pay Rules & Weekly Close"}
-                {role === "closer" && "Closer Phone Console & Personal Earnings"}
-                {role === "buyer" && "Media Buyer Results & Sales per ₦1 of Ads"}
-                {role === "lead" && "Sales Team Lead Bonus & Quality Scorecard"}
+                {role === "closer" && "Your Orders & Earnings"}
+                {role === "buyer" && "Ad Results: Booked vs Delivered Sales"}
+                {role === "lead" && "Team Bonus & Closer Quality"}
                 {role === "accountant" && "Courier Cash, Payouts & the Bank File"}
-                {role === "stock" && "Warehouse Stock Book, Reservations & PO Loop"}
+                {role === "stock" && "Warehouse Stock, Reorders & Purchase Orders"}
               </h1>
               <p>
                 {role === "founder"

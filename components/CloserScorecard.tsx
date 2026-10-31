@@ -53,7 +53,7 @@ export function CloserScorecard() {
           <thead>
             <tr>
               <th>Closer</th>
-              <th className="r">Delivered vol.</th>
+              <th className="r">Delivered sales</th>
               <th>Return rate</th>
               <th className="r">This week's pay</th>
               <th className="r">Profit contributed</th>

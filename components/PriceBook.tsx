@@ -59,7 +59,7 @@ export function PriceBook() {
       title="Company prices"
       sub={
         editable
-          ? "Every order is priced at its SKU's company price × quantity. A change here only applies to new orders."
+          ? "Every order is priced at that product's company price × quantity. A change here only applies to new orders."
           : "Prices are set by the company. Closers cannot change them."
       }
       flush
@@ -68,7 +68,7 @@ export function PriceBook() {
         <table className="tbl">
           <thead>
             <tr>
-              <th>SKU</th>
+              <th>Code</th>
               <th>Product</th>
               <th className="r">Product cost</th>
               <th className="r">Company price</th>

@@ -129,7 +129,7 @@ export function CycleBar() {
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: "auto", paddingTop: 4 }}>
                 {settle && (
                   <button type="button" className="btn xs" onClick={() => downloadCsv(c.id)}>
-                    <Download size={12} /> Bank CSV
+                    <Download size={12} /> Bank file (CSV)
                   </button>
                 )}
                 {settle && c.status === "approved" && (

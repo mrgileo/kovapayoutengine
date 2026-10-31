@@ -42,16 +42,16 @@ export function StockBook() {
       {role === "stock" && (
         <dl className="tiles">
           <Tile
-            label="SKUs needing reorder"
+            label="Products to reorder"
             note={alerts.length ? alerts.map((a) => a.product.sku).join(", ") : "Every product has enough stock or an order on the way"}
             tone={alerts.length ? "neg" : "pos"}
           >
             <span className="num">{alerts.length}</span>
           </Tile>
-          <Tile label="Units committed" note="Set aside for orders already confirmed or sent out">
+          <Tile label="Units set aside" note="Set aside for orders already confirmed or sent out">
             <span className="num">{totalCommitted}</span>
           </Tile>
-          <Tile label="Stock on hand (at cost)" note="What the stock on the shelf cost us">
+          <Tile label="Stock on the shelf (at cost)" note="What it cost us to buy it">
             <Fig
               amount={totalOnHandValue}
               drill={{
@@ -106,7 +106,7 @@ export function StockBook() {
               style={{ marginLeft: "auto" }}
               onClick={() => alerts.forEach((a) => raisePO(a.product.sku, a.suggested))}
             >
-              <PackagePlus size={14} /> Raise POs for all ({alerts.length})
+              <PackagePlus size={14} /> Order stock for all ({alerts.length})
             </button>
           )}
         </div>
@@ -120,7 +120,7 @@ export function StockBook() {
       )}
 
       <Card
-        title="Warehouse Stock Book & Replenishment"
+        title="Warehouse stock and reordering"
         sub="Available = on the shelf minus set aside for confirmed or sent-out orders. A purchase order puts units 'On order' and clears the reorder alert."
         flush
       >
@@ -128,17 +128,17 @@ export function StockBook() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>SKU</th>
+                <th>Code</th>
                 <th>Product</th>
-                <th className="r">On hand</th>
-                <th className="r">Committed</th>
+                <th className="r">On the shelf</th>
+                <th className="r">Set aside</th>
                 <th className="r">Available</th>
                 <th className="r">On order</th>
-                <th className="r">Projected</th>
-                <th className="r">Reorder at</th>
+                <th className="r">Will have</th>
+                <th className="r">Reorder level</th>
                 <th>Status</th>
-                <th className="r">Value at cost</th>
-                <th className="r">Replenish</th>
+                <th className="r">Worth (at cost)</th>
+                <th className="r">Restock</th>
               </tr>
             </thead>
             <tbody>
@@ -181,7 +181,7 @@ export function StockBook() {
                           lines: [
                             {
                               ref: p.sku,
-                              label: `${r.onHand} units on hand × ${m(p.cost)}`,
+                              label: `${r.onHand} units on the shelf × ${m(p.cost)}`,
                               amount: r.onHand * p.cost,
                             },
                           ],
@@ -197,7 +197,7 @@ export function StockBook() {
                             className={"btn xs " + (r.status === "out" || r.status === "reorder" ? "primary" : "")}
                             onClick={() => raisePO(p.sku, r.suggested)}
                           >
-                            <PackagePlus size={12} /> Raise PO (+{r.suggested})
+                            <PackagePlus size={12} /> Order more (+{r.suggested})
                           </button>
                           {openSkuPOs.map((po) => (
                             <button
@@ -207,7 +207,7 @@ export function StockBook() {
                               onClick={() => receivePO(po.id)}
                               title={`Receive ${po.id} (${po.qty} units) into warehouse stock`}
                             >
-                              Receive {po.id}
+                              Mark {po.id} received
                             </button>
                           ))}
                         </div>
@@ -231,12 +231,12 @@ export function StockBook() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>PO #</th>
-                  <th>SKU</th>
-                  <th className="r">Qty</th>
-                  <th className="r">Committed cost</th>
+                  <th>Purchase order</th>
+                  <th>Code</th>
+                  <th className="r">Units</th>
+                  <th className="r">Cost</th>
                   <th>Raised</th>
-                  <th>ETA</th>
+                  <th>Arrives</th>
                   <th>Status</th>
                   <th className="r">Action</th>
                 </tr>
@@ -260,7 +260,7 @@ export function StockBook() {
                     <td className="r">
                       {po.status === "open" && canManage ? (
                         <button type="button" className="btn xs primary" onClick={() => receivePO(po.id)}>
-                          Receive stock
+                          Mark as received
                         </button>
                       ) : (
                         <span className="muted">—</span>
@@ -277,7 +277,7 @@ export function StockBook() {
       <PriceBook />
 
       <Card
-        title="SKU Unit Economics & Return Bleed"
+        title="Profit by product, and what returns cost"
         sub="Which products actually make money after product cost, delivery fees, damaged stock and commission?"
         flush
       >
@@ -285,15 +285,15 @@ export function StockBook() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>SKU</th>
+                <th>Code</th>
                 <th>Product</th>
-                <th className="r">Landed qty</th>
+                <th className="r">Delivered units</th>
                 <th className="r">Return rate</th>
-                <th className="r">Delivered rev.</th>
+                <th className="r">Delivered revenue</th>
                 <th className="r">Product cost</th>
                 <th className="r">Delivery fees &amp; damaged stock</th>
                 <th className="r">Commission</th>
-                <th className="r">Net SKU profit</th>
+                <th className="r">Profit</th>
               </tr>
             </thead>
             <tbody>

@@ -1008,8 +1008,8 @@ export const STOCK_LABEL: Record<StockStatus, string> = {
   out: "Out of stock",
   reorder: "Reorder now",
   inbound: "On order",
-  watch: "Watch",
-  ok: "Healthy",
+  watch: "Running low",
+  ok: "Enough stock",
 };
 
 export interface StockRow {
@@ -1049,7 +1049,7 @@ export type ActionKey = "confirm" | "dispatch" | "deliver" | "fail" | "cash" | "
 
 export const ACTION_LABEL: Record<ActionKey, string> = {
   confirm: "Confirm",
-  dispatch: "Dispatch",
+  dispatch: "Send out",
   deliver: "Mark delivered",
   fail: "Failed delivery",
   cash: "Cash received",

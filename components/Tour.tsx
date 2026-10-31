@@ -40,7 +40,7 @@ const STEPS: Step[] = [
       "Dayo in the warehouse just confirmed order #1043 delivered. You are now Amaka, the closer: her pay moved the moment it landed. The founder saw revenue move and the stock dropped, from one action.",
   },
   {
-    title: "Pay on lead, and see what it costs",
+    title: "Pay on booking, and see what it costs",
     run: () => {
       st().setRole("founder");
       st().setRule("creditOn", "lead");
@@ -48,7 +48,7 @@ const STEPS: Step[] = [
     target: "#tour-rules",
     text: (d) => {
       const early = leaks(d).find((l) => l.key === "payEarly")?.amount ?? 0;
-      return `Pay staff when is now Lead. Commission is going out on orders that have not been delivered: ${naira(early)} this week. Switch it back to Delivery and it drops to ₦0.`;
+      return `Pay staff when is now Order booked, so staff are paid before anything is delivered. Commission going out on undelivered orders: ${naira(early)} this week. Switch it back to Delivered and it drops to ₦0.`;
     },
   },
   {

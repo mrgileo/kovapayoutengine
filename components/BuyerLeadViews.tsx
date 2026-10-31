@@ -93,9 +93,9 @@ export function BuyerView() {
               <tr>
                 <th>Media buyer</th>
                 <th className="r">Ad spend</th>
-                <th className="r">Booked vol.</th>
+                <th className="r">Booked sales</th>
                 <th className="r">{L.bookedSalesPerAdNaira}</th>
-                <th className="r">Delivered rev.</th>
+                <th className="r">Delivered sales</th>
                 <th className="r">{L.deliveredSalesPerAdNaira}</th>
                 <th className="r">Left after product, ads, pay</th>
                 <th className="r">Pay this week</th>

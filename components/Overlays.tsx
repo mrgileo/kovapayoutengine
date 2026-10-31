@@ -111,13 +111,13 @@ export function ReturnDialog() {
       <div className="scrim" onClick={() => close(null)} aria-hidden="true" />
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Process customer return">
         <div>
-          <div className="eyebrow">Return Inspection &amp; Reversal · Order #{order.id}</div>
+          <div className="eyebrow">Customer return · Order #{order.id}</div>
           <h2>
             {order.customer} · {order.sku} ×{order.qty}
           </h2>
           <p>
-            Delivered in <b>{order.deliveredCycle}</b> ({m(orderValue(order))}). Specify warehouse condition and see how the{" "}
-            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule handles the commission.
+            Delivered in <b>{order.deliveredCycle}</b> ({m(orderValue(order))}). Say what condition it came back in, and see what the{" "}
+            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule does to the commission.
           </p>
         </div>
 
@@ -144,7 +144,7 @@ export function ReturnDialog() {
           <div>
             <span>Payout cycle status</span>
             <span className="mono">
-              {creditedCycle ? `${creditedCycle.id} (${creditedCycle.status.toUpperCase()})` : "Current open cycle (unpaid)"}
+              {creditedCycle ? `${creditedCycle.id} (${creditedCycle.status.toUpperCase()})` : "This week (not paid yet)"}
             </span>
           </div>
           <div>
@@ -219,11 +219,11 @@ export function NewOrderDialog() {
       <div className="scrim" onClick={() => close(false)} aria-hidden="true" />
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Create new customer lead">
         <div>
-          <div className="eyebrow">Live Lead Intake</div>
+          <div className="eyebrow">New order</div>
           <h2>Create New Customer Order</h2>
           <p>
-            Test split attribution (different opener vs closer), stock availability checks, or commission paid straight away under the{" "}
-            <b>{data.rules.creditOn}</b> trigger.
+            Try an order opened by one person and closed by another, and see whether there is stock for it. Pay staff when is currently{" "}
+            <b>{ruleOptionLabel("creditOn", data.rules.creditOn)}</b>.
           </p>
         </div>
 
@@ -325,7 +325,7 @@ export function NewOrderDialog() {
           <div>
             <span>Warehouse availability</span>
             <span className={"mono " + (sr.available < qty ? "neg" : "pos")}>
-              {sr.available} free on shelf {sr.available < qty ? "(will block confirmation until PO)" : "(ready to confirm)"}
+              {sr.available} available {sr.available < qty ? "(cannot be confirmed until stock arrives)" : "(ready to confirm)"}
             </span>
           </div>
           <div className="tot">
@@ -467,7 +467,7 @@ export function CommandPalette({
       },
     },
     {
-      label: "Reset demo state to seed defaults",
+      label: "Reset the demo to its starting data",
       tag: "System",
       run: () => {
         reset();
@@ -489,7 +489,7 @@ export function CommandPalette({
           <input
             type="text"
             autoFocus
-            placeholder="Jump to persona, toggle rule, or run action…"
+            placeholder="Jump to a person, change a rule, or run an action…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             style={{
@@ -527,7 +527,7 @@ export function AuditLogCard() {
 
   return (
     <Card
-      title="Immutable Audit & Event Log"
+      title="Audit log: who did what"
       sub="Everything that changes anything: rules, orders, prices, purchase orders and weekly payouts. Each entry shows who did it, when, and what it did to pay and profit."
       actions={
         <button type="button" className="btn sm ghost" onClick={reset}>

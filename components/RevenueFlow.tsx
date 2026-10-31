@@ -80,7 +80,7 @@ export function FlowFunnel() {
                   <th>Step</th>
                   <th className="r">Orders</th>
                   <th className="r">Value</th>
-                  <th className="r">Share of booked</th>
+                  <th className="r">% of booked sales</th>
                 </tr>
               </thead>
               <tbody>
