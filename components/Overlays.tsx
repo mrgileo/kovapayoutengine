@@ -447,7 +447,7 @@ export function CommandPalette({
             })),
           ),
           {
-            label: "Close & approve active payout cycle",
+            label: "Close this week and approve the pay",
             tag: "Cycle",
             run: () => {
               closeCycle();
@@ -528,7 +528,7 @@ export function AuditLogCard() {
   return (
     <Card
       title="Immutable Audit & Event Log"
-      sub="Every rule change, order transition, price change, PO, and cycle settlement — stamped with who did it, when, and the exact payout delta."
+      sub="Everything that changes anything: rules, orders, prices, purchase orders and weekly payouts. Each entry shows who did it, when, and what it did to pay and profit."
       actions={
         <button type="button" className="btn sm ghost" onClick={reset}>
           <RotateCcw size={13} /> Reset demo data

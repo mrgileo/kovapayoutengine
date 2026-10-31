@@ -53,7 +53,7 @@ export function CloserView() {
 
   const potentialDrill: Drill = {
     title: "Commission on your open orders",
-    subtitle: "If all currently open orders land and clear",
+    subtitle: "If every open order is delivered and not returned",
     lines: openOrders.map((o) => {
       const ls = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
         (l) => l.personId === "amaka",
@@ -62,7 +62,7 @@ export function CloserView() {
       return {
         ref: `#${o.id}`,
         label: `${o.customer} · ${o.sku} ×${o.qty} (${o.stage})`,
-        detail: ls[0]?.note ?? "No closer share under current split rule",
+        detail: ls[0]?.note ?? "You do not earn on this order under the current split rule",
         amount: amt,
       };
     }),
@@ -114,14 +114,14 @@ export function CloserView() {
       <dl className="tiles">
         <Tile
           label="In your open pipeline"
-          note={`${openOrders.length} open orders · lands when warehouse marks delivered`}
+          note={`${openOrders.length} open orders. You earn once the warehouse marks them delivered`}
           tone="pos"
         >
           <Fig amount={potentialTotal} sign drill={potentialDrill} />
         </Tile>
         <Tile
           label="Your return rate"
-          note={`${st.returned} returned out of ${st.delivered + st.returned} resolved`}
+          note={`${st.returned} came back out of ${st.delivered + st.returned} finished orders (delivered or returned)`}
           tone={st.returnRate > 0.25 ? "neg" : "pos"}
         >
           <span className="num">{pct(st.returnRate, 0)}</span>
@@ -130,7 +130,7 @@ export function CloserView() {
           label="Stock-blocked orders"
           note={
             blocked.length
-              ? `${blocked.length} order${blocked.length === 1 ? "" : "s"} waiting on warehouse PO`
+              ? `${blocked.length} order${blocked.length === 1 ? "" : "s"} waiting for stock to arrive`
               : "All open orders have stock"
           }
           tone={blocked.length ? "warn" : "pos"}

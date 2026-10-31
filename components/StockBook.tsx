@@ -43,15 +43,15 @@ export function StockBook() {
         <dl className="tiles">
           <Tile
             label="SKUs needing reorder"
-            note={alerts.length ? alerts.map((a) => a.product.sku).join(", ") : "Every SKU covered by shelf or open PO"}
+            note={alerts.length ? alerts.map((a) => a.product.sku).join(", ") : "Every product has enough stock or an order on the way"}
             tone={alerts.length ? "neg" : "pos"}
           >
             <span className="num">{alerts.length}</span>
           </Tile>
-          <Tile label="Units committed" note="Reserved for confirmed & dispatched orders">
+          <Tile label="Units committed" note="Set aside for orders already confirmed or sent out">
             <span className="num">{totalCommitted}</span>
           </Tile>
-          <Tile label="Stock on hand (at cost)" note="Warehouse inventory valuation">
+          <Tile label="Stock on hand (at cost)" note="What the stock on the shelf cost us">
             <Fig
               amount={totalOnHandValue}
               drill={{
@@ -68,7 +68,7 @@ export function StockBook() {
           </Tile>
           <Tile
             label="Open POs inbound"
-            note={openPOs.length ? `${openPOs.length} POs in transit` : "Raise a PO below to replenish"}
+            note={openPOs.length ? `${openPOs.length} purchase order${openPOs.length === 1 ? "" : "s"} on the way` : "Raise a purchase order below to restock"}
             tone={openPOs.length ? "pos" : undefined}
           >
             <Fig
@@ -85,7 +85,7 @@ export function StockBook() {
               }}
             />
           </Tile>
-          <Tile label="Restocked from returns" note="Resellable units back on shelf">
+          <Tile label="Restocked from returns" note="Returned items put back on the shelf">
             <span className="num">{restockedUnits}</span>
           </Tile>
         </dl>
@@ -121,7 +121,7 @@ export function StockBook() {
 
       <Card
         title="Warehouse Stock Book & Replenishment"
-        sub="Available = On hand minus Committed to confirmed/dispatched orders. Raising a PO moves units to 'On order' with supplier lead times and clears reorder alerts."
+        sub="Available = on the shelf minus set aside for confirmed or sent-out orders. A purchase order puts units 'On order' and clears the reorder alert."
         flush
       >
         <div className="tbl-wrap">
@@ -226,7 +226,7 @@ export function StockBook() {
       </Card>
 
       {data.pos.length > 0 && (
-        <Card title="Purchase Order Register" sub="Raised POs with supplier lead times and receiving status." flush>
+        <Card title="Purchase Order Register" sub="Orders placed with suppliers: when they arrive and whether they have been received." flush>
           <div className="tbl-wrap">
             <table className="tbl">
               <thead>

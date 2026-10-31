@@ -87,6 +87,15 @@ A **live activity strip** at the top shows each person what changed for them as 
 
 **Take the tour:** a six-step guided tour that *acts*. It resets the demo, then delivers an order as the warehouse and switches to the closer so her pay visibly moves, flips the pay rule to "Lead" and quotes what that costs, returns an order paid last week, raises purchase orders, and hands the approved week to the accountant. Each step outlines the result and says in one or two sentences what just happened. It is the quickest way for a prospect to see how everything connects without you narrating, and a good basis for a 60-second clip. Reload the page (or Reset demo state) to run it again from the start.
 
+### Words the app uses for pay
+
+| Word on screen | What it means |
+|---|---|
+| **Fixed salary** | The weekly share of each person's monthly base pay. Paid whatever they sell. |
+| **Commission paid** | The variable part, earned on delivered orders (closer 4%, media buyer 1.5%, team bonus 1% in the demo). It does **not** include fixed salary. |
+| **Staff pay / Net payout** | Fixed salary + commission, less any pay taken back. |
+| **Pay taken back** | Commission that is taken off a payout because the order was returned. |
+
 ## 7. The five rules as founder questions (post and video material)
 
 1. *Pay staff when?* Lead, delivery, or cash in. Delivery is the default. The demo shows what the rule costs you in pay on undelivered orders.

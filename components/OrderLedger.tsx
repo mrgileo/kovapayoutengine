@@ -78,7 +78,7 @@ export function OrderLedger() {
           tone: "warn",
           drill: {
             title: `Order #${o.id} · Post-Lock Return`,
-            subtitle: `Credited in ${pc.id} (Locked) · Commission is final`,
+            subtitle: `Counted in ${pc.id} (locked) · Commission is final`,
             lines: paidLines.map((l) => ({
               ref: pc.id,
               label: personOf(data, l.personId).name,
@@ -96,11 +96,11 @@ export function OrderLedger() {
           tone: "neg",
           drill: {
             title: `Order #${o.id} · Pay taken back`,
-            subtitle: `Paid in ${pc?.id} · Reversed in ${open.id}`,
+            subtitle: `Paid in ${pc?.id} · Returned in ${open.id}`,
             lines: paidLines.map((l) => ({
               ref: "TAKEN BACK",
               label: personOf(data, l.personId).name,
-              detail: `Deducted in ${open.id}`,
+              detail: `Taken back in ${open.id}`,
               amount: -l.amount,
             })),
             total: -paidAmt,
@@ -114,11 +114,11 @@ export function OrderLedger() {
           tone: "warn",
           drill: {
             title: `Order #${o.id} · Pay to be taken back next week`,
-            subtitle: `Paid in ${pc?.id} · Deducted on next cycle close`,
+            subtitle: `Paid in ${pc?.id} · Taken back when next week closes`,
             lines: paidLines.map((l) => ({
               ref: "NEXT WEEK",
               label: personOf(data, l.personId).name,
-              detail: `Recoverable in next cycle`,
+              detail: `To be taken back next week`,
               amount: -l.amount,
             })),
             total: -paidAmt,
@@ -129,11 +129,11 @@ export function OrderLedger() {
 
     return {
       amount: creditedNow ? total : 0,
-      label: o.creditedCycle ? `Paid in ${o.creditedCycle}` : creditedNow ? "Accrued" : "Not yet credited",
+      label: o.creditedCycle ? `Paid in ${o.creditedCycle}` : creditedNow ? "Earned this week" : "Not earned yet",
       tone: creditedNow ? "pos" : "muted",
       drill: {
         title: `Order #${o.id} · Commission split`,
-        subtitle: `${o.customer} · Credited value ${m(val)}`,
+        subtitle: `${o.customer} · Order value ${m(val)}`,
         lines: lines.map((l) => ({
           ref: personOf(data, l.personId).role.toUpperCase(),
           label: personOf(data, l.personId).name,
@@ -150,10 +150,10 @@ export function OrderLedger() {
       title={role === "closer" ? "Order Cards (Phone-First Closer View)" : "Order Ledger & Segregation of Duties"}
       sub={
         role === "closer"
-          ? "Designed for a 390px phone screen in Lagos traffic — zero horizontal scroll, clear personal earnings, and strict delivery controls."
+          ? "Your orders as cards. You earn commission once the warehouse marks an order delivered."
           : imported
             ? "Move orders forward, or return an order from an earlier paid week to see pay taken back."
-            : "Move orders forward, inspect split-credit (#1053), or return a paid order from W43 (#1033) to see pay taken back."
+            : "Move orders forward, look at an order two closers worked on (#1053), or return a paid order from W43 (#1033) to see pay taken back."
       }
       actions={
         <div className="filters" role="group" aria-label="Filter orders" style={{ alignItems: "center" }}>
@@ -171,7 +171,7 @@ export function OrderLedger() {
             { id: "OPEN", label: `Current (${open.id})`, count: data.orders.filter((o) => o.createdCycle === open.id || o.reversedCycle === open.id).length },
             { id: "PAID_PRIOR", label: imported ? "Paid in earlier weeks (test return)" : "Paid in W42/W43 (test return)", count: data.orders.filter((o) => o.creditedCycle && o.stage === "delivered").length },
             { id: "SPLIT", label: "Split touch", count: data.orders.filter((o) => o.openedBy !== o.closer).length },
-            { id: "ALL", label: "All cycles", count: data.orders.length },
+            { id: "ALL", label: "All weeks", count: data.orders.length },
           ].map((f) => (
             <button
               key={f.id}

@@ -400,7 +400,7 @@ try {
   // non-settlers cannot export the bank file
   await gotoTab("closer", "Closer Phone Console");
   const closerBtns = await evaluate(`return Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim());`);
-  assert.ok(!closerBtns.some((t) => /Bank CSV|Mark paid|Lock cycle|Record all/.test(t)), "A closer cannot export the bank file or settle cycles");
+  assert.ok(!closerBtns.some((t) => /Bank CSV|Mark paid|Lock cycle|Lock week|Record all/.test(t)), "A closer cannot export the bank file or settle cycles");
   await gotoTab("founder", "Weekly Close");
   console.log("✓ [7e] Accountant: cash desk records courier cash, warehouse no longer can, role limits hold");
 

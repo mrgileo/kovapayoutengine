@@ -72,7 +72,7 @@ export function AccountantView() {
         >
           <span className="num">{queue.readyToLock.length}</span>
         </Tile>
-        <Tile label={L.revenue} note={`Landed in ${pnl.cycleId}`}>
+        <Tile label={L.revenue} note={`Delivered in ${pnl.cycleId}`}>
           <Fig amount={pnl.revenue} drill={pnl.drills.revenue} />
         </Tile>
       </dl>
@@ -176,7 +176,7 @@ export function AccountantView() {
               )}
               {cycle.status === "paid" && (
                 <button type="button" className="btn sm" onClick={() => lockCycle(cycle.id)}>
-                  <Lock size={13} /> Lock cycle
+                  <Lock size={13} /> Lock week
                 </button>
               )}
             </span>

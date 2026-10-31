@@ -300,7 +300,7 @@ export function App() {
 
         <div className="side-cycle">
           <div className="row">
-            <span style={{ color: "var(--side-muted)" }}>Active cycle</span>
+            <span style={{ color: "var(--side-muted)" }}>This week</span>
             <span className="pill brand">{open.id} · Open</span>
           </div>
           <div className="row">
@@ -389,7 +389,7 @@ export function App() {
             </button>
             <span className="live-dot" aria-hidden="true" />
             <span>
-              <b style={{ color: "var(--ink)" }}>Live Operations Ledger</b> · Cycle {open.id} ({shortDate(open.start)} – {shortDate(open.end)})
+              <b style={{ color: "var(--ink)" }}>Live Operations Ledger</b> · Week {open.id} ({shortDate(open.start)} – {shortDate(open.end)})
             </span>
             <span className={`pill ${pnl.actual < 0 ? "neg" : "pos"}`}>
               Net: <Fig amount={pnl.actual} sign drill={pnl.drills.actual} />
@@ -447,7 +447,7 @@ export function App() {
               </h1>
               <p>
                 {role === "founder"
-                  ? "Only you can edit rules, close cycles, or mark cash remitted. Every change recalculates the entire company live."
+                  ? "Only you can edit rules, close weeks, or mark courier cash as received. Every change recalculates the entire company live."
                   : "Rules are locked by the founder. Click any payout or revenue figure to inspect the underlying orders."}
               </p>
             </div>

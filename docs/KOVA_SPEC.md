@@ -63,7 +63,8 @@ All display text comes from `lib/labels.ts`. Internal keys such as `creditOn`, `
 | What your sales report says | Naive net | Sales minus commission. Ignores product cost and ads. |
 | Left after product and ads | Core actual | Sales minus product cost, commission and ad spend. |
 | Real profit | Full operating net (`pnl.actual`) | Everything the business pays out is taken off. |
-| Commission paid | Variable commission | Closer, media buyer and team bonus earned on orders. |
+| Commission paid | Variable commission (earlier versions said "sales pay") | The variable part of staff pay: closer, media buyer and team bonus earned on orders. It does **not** include fixed salary. |
+| Staff pay / Net payout | Payout | Fixed salary + Commission paid, less any pay taken back. "Pay" on its own, as in *Pay as % of sales*, means this total. |
 | Fixed salary | Fixed base | The weekly share of each person's monthly base. |
 | Team bonus | 1.0% override | What the team lead earns on the team's delivered sales. |
 | Pay staff when... | Credit a sale on | The moment an order starts earning commission. |
@@ -164,7 +165,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 |--------------------------------|-------------------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **1. Accruing (\`open\`)**     | Info (Accruing)         | 1 / 4 dark-green bars | Live calculation window (currently **W44 · 26 Oct – 1 Nov**). Every rule toggle or order transition updates payslips live. Founder sees the **Close & approve W44** button.                                                                                                                                   |
 | **2. Approved (\`approved\`)** | Light Yellow (Approved) | 2 / 4 dark-green bars | Triggered when the founder clicks **Close & approve**. Freezes the cycle's payout lines (c.lines), snapshots the cycle's P&L (c.pnl), calculates any negative payslip carry-forwards (carryOut), and automatically opens the next cycle (**W45**). Founder can now click **Mark paid**.                       |
-| **3. Paid (\`paid\`)**         | Dark Green (Paid)       | 3 / 4 dark-green bars | Cash has been disbursed to staff bank accounts (currently **W43 · 19 Oct – 25 Oct**). The post-close return window is still open: if a W43 order (like \#1033) returns now, Take back now deducts the commission from W44 payslips, or Take back next week schedules it into W45. Founder can click **Lock cycle**. |
+| **3. Paid (\`paid\`)**         | Dark Green (Paid)       | 3 / 4 dark-green bars | Cash has been disbursed to staff bank accounts (currently **W43 · 19 Oct – 25 Oct**). The post-close return window is still open: if a W43 order (like \#1033) returns now, Take back now deducts the commission from W44 payslips, or Take back next week schedules it into W45. Founder can click **Lock week**. |
 | **4. Locked (\`locked\`)**     | Neutral (Locked)        | 4 / 4 dark-green bars | Accounting books are closed (currently **W42 · 12 Oct – 18 Oct**). If a W42 order (like \#1024) returns after lock, the commission is **kept (final)** under all return rules so historical payroll is never mutated.                                                                                         |
 
 ## **5.1 Negative Payslip Protection & Carry-Forward (\`payslip()\`)**
@@ -209,7 +210,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 >
 > **• Closer Quality, Return Gate & Net Contribution Scorecard (\`CloserScorecard.tsx\`):** Side-by-side table auditing **Amaka Obi** vs **Chidi Nwosu** on Delivered vol., Return rate (with visual progress bar and High risk / ½ rate gate / Healthy pills), This week's pay, and **Net margin contrib.** (after product cost, courier legs, damaged write-offs, and closer commission).
 >
-> **• Full Visibility:** The Founder tab also renders the **Payout Cycles & Settlement** bar, the full **Order Ledger** table, the **Warehouse Stock Book & SKU Unit Economics** tables, and the **Immutable Audit & Event Log**.
+> **• Full Visibility:** The Founder tab also renders the **Weekly payouts** bar, the full **Order Ledger** table, the **Warehouse Stock Book & SKU Unit Economics** tables, and the **Immutable Audit & Event Log**.
 
 > **• Profit per order & Ad Cost Card (`AdBudget.tsx`, founder and media buyer tabs):** Labelled **Simulated Meta feed**: the ad spend is demo data and there is no live Meta connection. Shows **Profit per order, before staff pay** = (delivered revenue − product cost − ad spend) ÷ delivered orders = (₦532,500 − ₦222,500 − ₦281,000) ÷ 5 = **+₦5,800**, and **after staff pay** = that minus (commission + fixed salary) ÷ delivered orders = ₦5,800 − ₦156,919.50 ÷ 5 = **−₦25,584**. Delivery fees are not included in either figure. Each media buyer's **ad cost per delivered order** (ad spend ÷ their delivered orders: Tobi ₦185,000 ÷ 2 = ₦92,500, Zainab ₦96,000 ÷ 3 = ₦32,000) is flagged against the founder's **Max cost per order** (default ₦4,000, `maxCostPerOrder`, editable by the founder only, written to the audit log). The max is a flag only; it never changes pay or profit.
 >
@@ -226,7 +227,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 ## **6.3 Media Buyer View (\`Tobi Ade\`)**
 
-> **• 5 Media Buyer KPI Tiles:** Net payout this cycle (₦30,722 = ₦27,692 salary + ₦3,030 buyer commission), Ad spend from the Simulated Meta feed (₦185,000), Delivered revenue (₦202,000), Sales per ₦1 of ads, delivered (₦1.09 vs ₦6.81 on booked orders), and Left after product, ads, pay (−₦94,130 after product cost, ad spend, courier legs, and commission).
+> **• 5 Media Buyer KPI Tiles:** Net payout this week (₦30,722 = ₦27,692 salary + ₦3,030 buyer commission), Ad spend from the Simulated Meta feed (₦185,000), Delivered revenue (₦202,000), Sales per ₦1 of ads, delivered (₦1.09 vs ₦6.81 on booked orders), and Left after product, ads, pay (−₦94,130 after product cost, ad spend, courier legs, and commission).
 >
 > **• Campaign Economics Table:** Compares **Tobi Ade** and **Zainab Bello** (any buyer can run any campaign) across Ad spend, Booked vol., Booked sales per ₦1 of ads, Delivered rev., Delivered sales per ₦1 of ads, Net margin (after product cost), and Cycle pay. Demonstrates why media buyers celebrating ₦6.81 booked sales per ₦1 of ads are actually losing money when orders fail to deliver.
 
@@ -256,7 +257,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 >
 > **• Cash Reconciliation (`cashDesk()`):** per week, what was delivered, what cash has arrived, what is still owed and how old it is (an order delivered a week or more ago and still owed shows a red *Overdue* pill with an icon). Below it, each owed order with a **Cash received** button, a **Record all as received** bulk button (one audit entry for the batch), and the amount owed by city (the courier's patch). The week totals, the city totals and the courier-cash tile all add up to the same ₦185,500. On a phone the owed orders stack so the button is always visible.
 >
-> **• Payout Desk (`payoutQueue()`):** a one-line next step ("W43 is paid. Lock it once its return window has closed", or "W44 is approved. Export the bank file, pay it, then mark it paid"), a week picker, and the payslip table for the chosen week: fixed salary, commission, pay taken back, carried over, net payable and the total to pay. Negative balances are never paid; they carry into the next week. **Bank file** exports the CSV; **Mark paid** appears on an approved week and **Lock cycle** on a paid one.
+> **• Payout Desk (`payoutQueue()`):** a one-line next step ("W43 is paid. Lock it once its return window has closed", or "W44 is approved. Export the bank file, pay it, then mark it paid"), a week picker, and the payslip table for the chosen week: fixed salary, commission, pay taken back, carried over, net payable and the total to pay. Negative balances are never paid; they carry into the next week. **Bank file** exports the CSV; **Mark paid** appears on an approved week and **Lock week** on a paid one.
 >
 > **• The handoff:** the founder closes and approves the week; the accountant then sees it awaiting payment, exports the file, marks it paid and later locks it. The person who approves pay never moves it, and the founder can still override. Each step is in the audit log under the person who did it.
 >

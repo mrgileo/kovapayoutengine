@@ -65,11 +65,11 @@ export function CycleBar() {
 
   return (
     <Card
-      title="Payout Cycles & Settlement"
+      title="Weekly payouts"
       sub={
         imported
-          ? "Accrued → Approved → Paid → Locked. Try returning an order from a paid week in the ledger below to see pay taken back after a week closes."
-          : "Accrued → Approved → Paid → Locked. Try returning an order from W43 (paid) vs W42 (locked) in the ledger below to see pay taken back after a week closes."
+          ? "Each week goes Accruing → Approved → Paid → Locked. Return an order from a paid week in the list below to see pay taken back after the week has closed."
+          : "Each week goes Accruing → Approved → Paid → Locked. Return an order from W43 (paid) to see pay taken back, or from W42 (locked) to see that a locked week is never touched."
       }
       actions={
         canClose && (
@@ -139,7 +139,7 @@ export function CycleBar() {
                 )}
                 {settle && c.status === "paid" && (
                   <button type="button" className="btn xs" onClick={() => lockCycle(c.id)}>
-                    <Lock size={12} /> Lock cycle
+                    <Lock size={12} /> Lock week
                   </button>
                 )}
               </div>

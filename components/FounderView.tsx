@@ -149,7 +149,7 @@ export function FounderView() {
 
       {/* Key founder tiles */}
       <dl className="tiles">
-        <Tile label="Delivered revenue" note="Landed in current cycle">
+        <Tile label="Delivered revenue" note="Delivered this week">
           <Fig amount={pnl.revenue} drill={pnl.drills.revenue} />
         </Tile>
         <Tile
@@ -189,7 +189,7 @@ export function FounderView() {
         </Tile>
         <Tile
           label="SKUs needing reorder"
-          note={stockAlerts.length ? stockAlerts.map((r) => r.product.sku).join(", ") : "Stock ahead of pipeline"}
+          note={stockAlerts.length ? stockAlerts.map((r) => r.product.sku).join(", ") : "Every product has enough stock for open orders"}
           tone={stockAlerts.length ? "warn" : "pos"}
         >
           <span className="num">{stockAlerts.length}</span>
@@ -202,7 +202,7 @@ export function FounderView() {
         {/* True P&L Waterfall */}
         <Card
           title={`Where the money went · ${open.id}`}
-          sub="Click any row to inspect the exact orders, SKUs, campaigns, or staff lines behind the figure."
+          sub="Staff pay is two lines: Fixed salary (the weekly share of monthly pay) and Commission paid (earned on delivered orders). Click any row to see what is behind it."
           flush
         >
           <div className="wf">

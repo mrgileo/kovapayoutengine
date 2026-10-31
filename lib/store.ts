@@ -265,7 +265,7 @@ export const useStore = create<Store>()(
               impact: impactOf(pre, d),
             });
           });
-          if (res) get().toast("ok", `${RULE_DEFS.find((r) => r.key === key)!.label} → ${ruleOptionLabel(key, value)}. Stamped to you.`);
+          if (res) get().toast("ok", `${RULE_DEFS.find((r) => r.key === key)!.label} → ${ruleOptionLabel(key, value)}. Recorded under your name.`);
         },
 
         act: (orderId, action, opts = {}) => {
@@ -375,7 +375,7 @@ export const useStore = create<Store>()(
             const po = d.pos[d.pos.length - 1];
             log(d, { at: now(), actor: actor(), kind: "stock", text: `${po.id} raised · ${qty} × ${sku}, due ${po.eta}`, deltas: [{ label: "Committed spend", amount: qty * po.unitCost }] });
           });
-          get().toast("ok", `PO raised for ${qty} × ${sku}. Alert cleared, units now on order.`);
+          get().toast("ok", `Purchase order raised for ${qty} × ${sku}. The alert has cleared and the units are on order.`);
         },
         receivePO: (poId) => {
           mutate((d) => {

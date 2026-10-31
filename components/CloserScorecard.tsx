@@ -21,7 +21,7 @@ export function CloserScorecard() {
     const p = personOf(data, id);
     const ps = payslip(lines, id);
     return {
-      title: `${p.name} · Current Cycle Payslip`,
+      title: `${p.name} · This Week's Payslip`,
       subtitle: `${p.title} · Reports to Ngozi Eze`,
       lines: ps.lines.map((l) => ({
         ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
@@ -85,7 +85,7 @@ export function CloserScorecard() {
                         amount={st.deliveredValue}
                         drill={{
                           title: `${p.name} · Delivered Orders`,
-                          subtitle: "Across all cycles",
+                          subtitle: "All weeks",
                           lines: data.orders
                             .filter((o) => o.closer === id && o.stage === "delivered")
                             .map((o) => ({

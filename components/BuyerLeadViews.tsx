@@ -33,7 +33,7 @@ export function BuyerView() {
   return (
     <div className="stack">
       <dl className="tiles">
-        <Tile label="Net payout this cycle" note="Base + 1.5% on credited orders" tone="pos">
+        <Tile label="Net payout this week" note="Fixed salary + commission on counted orders" tone="pos">
           <Fig amount={ps.payable} drill={payslipDrill} />
         </Tile>
         <Tile label="Ad spend" note={`${L.simulatedFeed} · ${open.id}`}>
@@ -48,7 +48,7 @@ export function BuyerView() {
         </Tile>
         <Tile
           label="Delivered revenue"
-          note={`${delivered.length} of ${myOrders.length} orders landed`}
+          note={`${delivered.length} of ${myOrders.length} orders delivered`}
         >
           <Fig
             amount={cs.deliveredRev}
@@ -57,7 +57,7 @@ export function BuyerView() {
               lines: delivered.map((o) => ({
                 ref: `#${o.id}`,
                 label: `${o.customer} · ${o.sku} ×${o.qty}`,
-                detail: o.cashIn ? "Cash remitted" : "Cash with courier",
+                detail: o.cashIn ? "Cash received" : "Cash still with the courier",
                 amount: orderValue(o),
               })),
               total: cs.deliveredRev,
@@ -66,7 +66,7 @@ export function BuyerView() {
         </Tile>
         <Tile
           label={L.salesPerAdNaira}
-          note={`Looks like ${L.perNaira(cs.bookedRoas)} on booked orders, until returns and pending orders hit`}
+          note={`Booked orders suggest ${L.perNaira(cs.bookedRoas)}, but returns and undelivered orders bring it down`}
           tone={cs.deliveredRoas < 2 ? "neg" : "pos"}
         >
           <span className="num">{L.perNaira(cs.deliveredRoas)}</span>
@@ -98,7 +98,7 @@ export function BuyerView() {
                 <th className="r">Delivered rev.</th>
                 <th className="r">{L.deliveredSalesPerAdNaira}</th>
                 <th className="r">Left after product, ads, pay</th>
-                <th className="r">Cycle pay</th>
+                <th className="r">Pay this week</th>
               </tr>
             </thead>
             <tbody>
@@ -217,7 +217,7 @@ export function LeadView() {
         <Tile label={L.teamBonus} note="After any pay taken back">
           <Fig amount={ps.commission + ps.adjustments} drill={payslipDrill} />
         </Tile>
-        <Tile label="Team delivered volume" note={`${teamDelivered.length} orders landed in ${open.id}`}>
+        <Tile label="Team delivered volume" note={`${teamDelivered.length} orders delivered in ${open.id}`}>
           <Fig
             amount={teamDelVal}
             drill={{

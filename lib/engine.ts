@@ -150,7 +150,7 @@ export function reversals(s: DemoState, rules: Rules): Reversals {
     if (!o.creditedCycle) {
       if (!o.closedOut && isCredited(o, rules)) {
         const amt = sum(commissionLines(s, o, rules, c.id).map((l) => l.amount));
-        res.absorbed.push({ order: o, amount: amt, reason: "Returned in this cycle · business absorbs it" });
+        res.absorbed.push({ order: o, amount: amt, reason: "Returned this week · the business absorbs it" });
       }
       continue;
     }
@@ -257,22 +257,22 @@ export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
   const revenueL: DrillLine[] = revOrders.map((o) => ({
     ref: orderRef(o),
     label: `${o.customer} · ${o.sku} ×${o.qty}`,
-    detail: o.cashIn ? "Cash remitted" : "Delivered · cash still with courier",
+    detail: o.cashIn ? "Cash received" : "Delivered · cash still with courier",
     amount: orderValue(o),
   }));
   const refundL: DrillLine[] = refundOrders.map((o) => ({
     ref: orderRef(o),
     label: `${o.customer} · delivered ${o.deliveredCycle}, returned ${C}`,
-    detail: o.returnCondition === "damaged" ? "Damaged · not restocked" : "Resellable · restocked",
+    detail: o.returnCondition === "damaged" ? "Damaged, not put back on the shelf" : "Put back on the shelf",
     amount: orderValue(o),
   }));
   const cogsL: DrillLine[] = [
-    ...revOrders.map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} · ${productOf(s, o.sku).name}`, detail: "Unit cost × qty", amount: unitCost(s, o) })),
+    ...revOrders.map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} · ${productOf(s, o.sku).name}`, detail: "Cost per unit × quantity", amount: unitCost(s, o) })),
     ...refundOrders
       .filter((o) => o.returnCondition !== "damaged")
-      .map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} back on the shelf`, detail: "Prior-cycle return, restocked", amount: -unitCost(s, o) })),
+      .map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} back on the shelf`, detail: "Returned from an earlier week, back on the shelf", amount: -unitCost(s, o) })),
   ];
-  const writeoffL: DrillLine[] = writeoffOrders.map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} returned damaged`, detail: "Written off at cost", amount: unitCost(s, o) }));
+  const writeoffL: DrillLine[] = writeoffOrders.map((o) => ({ ref: orderRef(o), label: `${o.sku} ×${o.qty} returned damaged`, detail: "Lost: it cannot be resold", amount: unitCost(s, o) }));
 
   const commLines = lines.filter((l) => l.kind === "commission" || l.kind === "clawback" || l.kind === "offset");
   const commissionL: DrillLine[] = commLines.map((l) => ({
@@ -295,9 +295,9 @@ export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
 
   const logisticsL: DrillLine[] = [];
   for (const o of s.orders) {
-    if (o.deliveredCycle === C) logisticsL.push({ ref: orderRef(o), label: `Outbound · ${o.city}`, detail: "Delivery fee", amount: DELIVERY_FEE });
-    if (o.failed && o.reversedCycle === C) logisticsL.push({ ref: orderRef(o), label: `Failed attempt · ${o.city}`, detail: "Delivery fee paid for a delivery that did not happen", amount: DELIVERY_FEE });
-    if (o.stage === "returned" && o.reversedCycle === C) logisticsL.push({ ref: orderRef(o), label: `Return leg · ${o.city}`, detail: "Return trip back to warehouse", amount: DELIVERY_FEE });
+    if (o.deliveredCycle === C) logisticsL.push({ ref: orderRef(o), label: `Delivery · ${o.city}`, detail: "Courier fee for the delivery trip", amount: DELIVERY_FEE });
+    if (o.failed && o.reversedCycle === C) logisticsL.push({ ref: orderRef(o), label: `Failed attempt · ${o.city}`, detail: "Courier fee for a delivery that failed", amount: DELIVERY_FEE });
+    if (o.stage === "returned" && o.reversedCycle === C) logisticsL.push({ ref: orderRef(o), label: `Return trip · ${o.city}`, detail: "Courier fee to bring it back to the warehouse", amount: DELIVERY_FEE });
   }
 
   const total = (l: DrillLine[]) => sum(l.map((x) => x.amount));
@@ -347,7 +347,7 @@ export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
       base: d(L.fixedSalary, baseL, "Fixed salary for sales staff, one week's share"),
       adSpend: d("Ad spend", spendL),
       logistics: d(L.deliveryFees, logisticsL, L.deliveryFeeNote(DELIVERY_FEE)),
-      actual: d(`${L.realProfit} this cycle`, actualL, "What is left after every cost the business carries"),
+      actual: d(`${L.realProfit} this week`, actualL, "What is left after every cost the business carries"),
     },
   };
 }
@@ -368,8 +368,8 @@ export function whatIf(s: DemoState, patch: Partial<Rules>) {
 export function cashWithCourier(s: DemoState): Drill {
   const lines = s.orders
     .filter((o) => o.stage === "delivered" && !o.cashIn)
-    .map((o) => ({ ref: orderRef(o), label: `${o.customer} · ${o.city}`, detail: `Delivered ${o.deliveredCycle} · awaiting courier remittance`, amount: orderValue(o) }));
-  return { title: "Cash still with the courier", subtitle: "Delivered on paper, not yet in the bank", lines, total: sum(lines.map((l) => l.amount)) };
+    .map((o) => ({ ref: orderRef(o), label: `${o.customer} · ${o.city}`, detail: `Delivered ${o.deliveredCycle} · the courier has not handed over the cash`, amount: orderValue(o) }));
+  return { title: "Cash still with the courier", subtitle: "Delivered, but the courier has not handed over the money", lines, total: sum(lines.map((l) => l.amount)) };
 }
 
 export function paidOnUndelivered(s: DemoState): Drill {
@@ -378,14 +378,14 @@ export function paidOnUndelivered(s: DemoState): Drill {
     .filter((l) => l.kind === "commission" && l.orderId)
     .map((l) => ({ l, o: byId.get(l.orderId!)! }))
     .filter(({ o }) => o.stage !== "delivered")
-    .map(({ l, o }) => ({ ref: orderRef(o), label: `${personOf(s, l.personId).name}`, detail: `Order is ${o.stage}${o.failed ? " (failed delivery)" : ""}`, amount: l.amount }));
-  return { title: "Commission on orders that have not been delivered", subtitle: "Pay going out before the sale is in", lines, total: sum(lines.map((l) => l.amount)) };
+    .map(({ l, o }) => ({ ref: orderRef(o), label: `${personOf(s, l.personId).name}`, detail: `${o.failed ? "Delivery failed" : (L.stage[o.stage] ?? o.stage) + ", not delivered yet"}`, amount: l.amount }));
+  return { title: "Commission on orders that have not been delivered", subtitle: "Staff are paid before the customer has received the order", lines, total: sum(lines.map((l) => l.amount)) };
 }
 
 export function absorbedDrill(s: DemoState): Drill {
   const r = reversals(s, s.rules);
   const lines = r.absorbed.map((a) => ({ ref: orderRef(a.order), label: a.order.customer, detail: a.reason, amount: a.amount }));
-  return { title: L.payKeptOnReturns, subtitle: "The business carries this, not the staff", lines, total: sum(lines.map((l) => l.amount)) };
+  return { title: L.payKeptOnReturns, subtitle: "Staff keep this pay and the business takes the loss", lines, total: sum(lines.map((l) => l.amount)) };
 }
 
 export function deferredDrill(s: DemoState): Drill {
@@ -446,14 +446,14 @@ export function closerStats(s: DemoState, personId: string): CloserStats {
       contribLines.push({
         ref: orderRef(o),
         label: `${o.customer} · returned (${o.returnCondition ?? "resellable"})`,
-        detail: `2 delivery fees lost${dmg ? ` + ₦${dmg.toLocaleString()} damaged stock` : ""}`,
+        detail: `2 courier fees wasted${dmg ? ` + ₦${dmg.toLocaleString()} damaged stock` : ""}`,
         amount: loss,
       });
     } else if (o.failed && o.reversedCycle === c.id) {
       contribLines.push({
         ref: orderRef(o),
         label: `${o.customer} · failed delivery`,
-        detail: "Delivery fee wasted",
+        detail: "Courier fee wasted",
         amount: -DELIVERY_FEE,
       });
     }
@@ -544,7 +544,7 @@ export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
     netMargin,
     marginDrill: {
       title: `${personOf(s, buyerId).name} · What is really left from ads (${c.id})`,
-      subtitle: `Managed by ${personOf(s, buyerId).name} · sales per ₦1 of ads, before product cost and returns, can mislead`,
+      subtitle: `Managed by ${personOf(s, buyerId).name} · sales per ₦1 of ads looks better than it is, because it ignores product cost and returns`,
       lines: drillLines,
       total: netMargin,
     },
@@ -670,7 +670,7 @@ export function revenueFlow(s: DemoState): RevenueFlow {
     kept: [[L.flowDropReturned, (o) => o.stage === "returned"]],
     cash: [[L.flowDropCashWithCourier, (o) => o.stage === "delivered" && !o.cashIn]],
   };
-  const stageNote = (o: Order) => (failedCancel(o) ? "Failed delivery" : o.stage === "delivered" && !o.cashIn ? "Delivered · cash still with courier" : `Now ${o.stage}`);
+  const stageNote = (o: Order) => (failedCancel(o) ? "Failed delivery" : o.stage === "delivered" && !o.cashIn ? "Delivered · cash still with courier" : L.stage[o.stage] ?? o.stage);
 
   const bookedValue = value(mine);
   const keys = Object.keys(reach) as FlowKey[];
@@ -734,7 +734,7 @@ export function leaks(s: DemoState): Leak[] {
     .map(({ o, row }) => ({
       ref: orderRef(o),
       label: `${o.customer} · ${o.sku} ×${o.qty}`,
-      detail: `${Math.max(0, row.available)} free, needs ${o.qty}${row.onOrder > 0 ? ` · ${row.onOrder} on order, due ${row.nextEta}` : " · no purchase order raised yet"}`,
+      detail: `${Math.max(0, row.available)} in stock, the order needs ${o.qty}${row.onOrder > 0 ? ` · ${row.onOrder} on order, due ${row.nextEta}` : " · no purchase order raised yet"}`,
       amount: orderValue(o),
     }));
   const blockedLeak = make("blocked", "stuck", L.leak.blocked.label, "New orders that cannot be confirmed because the stock is not there", blockedLines);
@@ -1088,8 +1088,8 @@ export function actionsFor(s: DemoState, role: Role, o: Order): ActionKey[] {
 }
 
 export function blockedNote(role: Role, o: Order): string | null {
-  if (role === "closer" && (o.stage === "dispatched" || o.stage === "confirmed")) return "Logistics confirms delivery. Closers can't mark their own orders delivered.";
-  if (role === "closer" && o.stage === "delivered" && !o.cashIn) return "Delivered. Waiting on courier to remit the cash.";
+  if (role === "closer" && (o.stage === "dispatched" || o.stage === "confirmed")) return "The warehouse confirms delivery. You can't mark your own orders delivered.";
+  if (role === "closer" && o.stage === "delivered" && !o.cashIn) return "Delivered. The courier has not handed over the cash yet.";
   if (role === "buyer") return null;
   return null;
 }
@@ -1193,8 +1193,8 @@ export function closeCycle(d: DemoState, actor: string, at: string) {
   for (const p of salesPeople(d)) {
     const net = sum(lines.filter((l) => l.personId === p.id).map((l) => l.amount));
     if (net < -0.5) {
-      lines.push({ key: `${c.id}-carry-${p.id}`, personId: p.id, kind: "carry", amount: -net, note: `Negative balance moved to ${nextId}. No negative payslips.` });
-      carryOut.push({ key: `${nextId}-carryin-${p.id}`, personId: p.id, kind: "carry", amount: net, note: `Balance owed from ${c.id}` });
+      lines.push({ key: `${c.id}-carry-${p.id}`, personId: p.id, kind: "carry", amount: -net, note: `Less was earned than was taken back, so the shortfall moves to ${nextId}. Payslips are never negative.` });
+      carryOut.push({ key: `${nextId}-carryin-${p.id}`, personId: p.id, kind: "carry", amount: net, note: `Shortfall carried over from ${c.id}` });
     }
   }
   deferred.forEach((l) => carryOut.push({ ...l, key: `${nextId}-${l.key}`, note: l.note + ` · deducted in ${nextId}` }));
