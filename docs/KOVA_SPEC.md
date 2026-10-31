@@ -208,9 +208,9 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 >
 > **• Where the money went (profit waterfall) & Pay as % of sales meter:** Visual horizontal bar chart of all 8 P&L lines plus a segmented progress meter comparing Commission (yellow) + Fixed salary (dark green) against the target ceiling (35% for Base + variable, 10% for Commission only).
 >
-> **• Closer Quality, Return Gate & Net Contribution Scorecard (\`CloserScorecard.tsx\`):** Side-by-side table auditing **Amaka Obi** vs **Chidi Nwosu** on Delivered vol., Return rate (with visual progress bar and High risk / ½ rate gate / Healthy pills), This week's pay, and **Net margin contrib.** (after product cost, courier legs, damaged write-offs, and closer commission).
+> **• Closer Quality, Return Gate & Net Contribution Scorecard (\`CloserScorecard.tsx\`):** Side-by-side table auditing **Amaka Obi** vs **Chidi Nwosu** on Delivered sales, Return rate (with visual progress bar and High risk / ½ rate gate / Healthy pills), This week's pay, and **Net margin contrib.** (after product cost, courier legs, damaged write-offs, and closer commission).
 >
-> **• Full Visibility:** The Founder tab also renders the **Weekly payouts** bar, the full **Order Ledger** table, the **Warehouse Stock Book & SKU Unit Economics** tables, and the **Audit log: who did what**.
+> **• Full Visibility:** The Founder tab also renders the **Weekly payouts** bar, the full **Orders** table, the **warehouse stock** and **profit by product** tables, and the **Audit log: who did what**.
 
 > **• Profit per order & Ad Cost Card (`AdBudget.tsx`, founder and media buyer tabs):** Labelled **Simulated Meta feed**: the ad spend is demo data and there is no live Meta connection. Shows **Profit per order, before staff pay** = (delivered revenue − product cost − ad spend) ÷ delivered orders = (₦532,500 − ₦222,500 − ₦281,000) ÷ 5 = **+₦5,800**, and **after staff pay** = that minus (commission + fixed salary) ÷ delivered orders = ₦5,800 − ₦156,919.50 ÷ 5 = **−₦25,584**. Delivery fees are not included in either figure. Each media buyer's **ad cost per delivered order** (ad spend ÷ their delivered orders: Tobi ₦185,000 ÷ 2 = ₦92,500, Zainab ₦96,000 ÷ 3 = ₦32,000) is flagged against the founder's **Max cost per order** (default ₦4,000, `maxCostPerOrder`, editable by the founder only, written to the audit log). The max is a flag only; it never changes pay or profit.
 >
@@ -229,7 +229,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 > **• 5 Media Buyer KPI Tiles:** Net payout this week (₦30,722 = ₦27,692 salary + ₦3,030 buyer commission), Ad spend from the Simulated Meta feed (₦185,000), Delivered revenue (₦202,000), Sales per ₦1 of ads, delivered (₦1.09 vs ₦6.81 on booked orders), and Left after product, ads, pay (−₦94,130 after product cost, ad spend, courier legs, and commission).
 >
-> **• Campaign Economics Table:** Compares **Tobi Ade** and **Zainab Bello** (any buyer can run any campaign) across Ad spend, Booked vol., Booked sales per ₦1 of ads, Delivered rev., Delivered sales per ₦1 of ads, Net margin (after product cost), and Cycle pay. Demonstrates why media buyers celebrating ₦6.81 booked sales per ₦1 of ads are actually losing money when orders fail to deliver.
+> **• Campaign Economics Table:** Compares **Tobi Ade** and **Zainab Bello** (any buyer can run any campaign) across Ad spend, Booked sales, Booked sales per ₦1 of ads, Delivered sales, Delivered sales per ₦1 of ads, Net margin (after product cost), and Cycle pay. Demonstrates why media buyers celebrating ₦6.81 booked sales per ₦1 of ads are actually losing money when orders fail to deliver.
 
 ## **6.4 Sales Team Lead View (\`Ngozi Eze\`)**
 
@@ -241,13 +241,13 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 > **• 5 Warehouse KPI Tiles:** Products to reorder (3), Units set aside (6 units reserved across confirmed/dispatched orders), Stock on the shelf (at cost) (₦1,419,000), Purchase orders on the way (₦0 initially), and Restocked from returns (4 resellable units).
 >
-> **• Actionable Stock Alert Banner:** Highlights AIR-12: 2 avail, KET-03: 2 avail, VAC-21: 0 avail with a 1-click **Order stock for all (3)** button. Raising POs moves units into On order with supplier ETAs (leadDays), recalculates Projected = Available + On order, and flips the banner to a dark-green **Stock loop closed** confirmation.
+> **• Actionable Stock Alert Banner:** Highlights AIR-12: 2 avail, KET-03: 2 avail, VAC-21: 0 avail with a 1-click **Order stock for all (3)** button. Raising POs moves units into On order with supplier ETAs (leadDays), recalculates Will have = Available + On order, and flips the banner to a dark-green **Stock loop closed** confirmation.
 >
 > **• Warehouse Stock Book Table:** Columns for Code, Product, On the shelf, Set aside, Available, On order, Will have, Reorder level, Status (Out of stock, Reorder now, On order, Running low, Enough stock), Worth (at cost), and per-product **Order more (+qty)** / **Mark … received** buttons.
 >
-> **• Purchase Order Register Table:** Appears automatically once POs are raised, showing PO \#, SKU, Qty, Committed cost, Raised by & timestamp, ETA, Status (In transit / Received), and a **Mark as received** button that increments onHand and unblocks stock-blocked orders like \#1051.
+> **• Purchase Order Register Table:** Appears automatically once POs are raised, showing Purchase order, Code, Units, Cost, Raised by & timestamp, Arrives, Status (In transit / Received), and a **Mark as received** button that increments onHand and unblocks stock-blocked orders like \#1051.
 >
-> **• Profit by product, and what returns cost Table:** Audits all 5 SKUs across all cycles (Delivered units, Return rate, Delivered rev., Product cost, Courier & write-offs, Commission, and clickable Profit).
+> **• Profit by product, and what returns cost Table:** Audits all 5 SKUs across all cycles (Delivered units, Return rate, Delivered revenue, Product cost, Courier & write-offs, Commission, and clickable Profit).
 
 ## **6.6 Accountant View (`Bisi Adeyemi`)**
 
@@ -267,7 +267,7 @@ Everything in Kova is anchored to a weekly payout cycle (CycleBar.tsx). Instead 
 
 ## **7.1 All 5 Product SKUs (\`products\`)**
 
-| **SKU** | **Product Name**     | **Product cost per unit** | **Company Price** | **On Hand** | **Committed (W44)**     | **Available**    | **Reorder Point** | **Lead Time** |
+| **SKU** | **Product Name**     | **Product cost per unit** | **Company Price** | **On the shelf** | **Set aside (W44)**     | **Available**    | **Reorder Point** | **Lead Time** |
 |---------|----------------------|----------------------|------------------------|-------------|-------------------------|------------------|-------------------|---------------|
 | AIR-12  | Air fryer 5.5L       | ₦78,000              | ₦212,000               | 4           | 2 (#1043,#1049)         | 2 (Reorder)      | 3                 | 7 days        |
 | BLN-07  | Blender Pro 1200W    | ₦34,000              | ₦73,500                | 12          | 1 (#1053)               | 11 (Enough stock)     | 4                 | 5 days        |
@@ -296,7 +296,7 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 >
 > **• 2. Return Inspection & Reversal Modal (\`ReturnDialog\`):** Opens when clicking **Process return** on a delivered order. Requires selecting the warehouse inspection condition: • **Resellable · Return to shelf:** Increments available stock (+qty) and charges only the ₦3,500 return courier leg. • **Damaged in transit · Write off product cost:** Does not increment stock and writes off unitCost × qty on the P&L (Damaged write-offs). Also previews the exact **Commission consequence** based on whether the order was credited in the current open cycle, a paid cycle (W43), or a locked cycle (W42).
 >
-> **• 3. Live Lead Intake Modal (\`NewOrderDialog\`):** Opens when clicking **+ New lead** in the Order Ledger or Command Palette. Allows creating a live order with custom Customer name, Delivery city (Lagos, Abuja, Port Harcourt, Ibadan, Enugu, Kano), Product SKU, Quantity (1–3), Opened by (First touch), Closed by (Last touch), and Media buyer, while previewing warehouse availability and total commission pool.
+> **• 3. Live Lead Intake Modal (\`NewOrderDialog\`):** Opens when clicking **+ New lead** in the Orders list or Command Palette. Allows creating a live order with custom Customer name, Delivery city (Lagos, Abuja, Port Harcourt, Ibadan, Enugu, Kano), Product SKU, Quantity (1–3), Opened by (First touch), Closed by (Last touch), and Media buyer, while previewing warehouse availability and total commission pool.
 >
 > **• 4. Quick Command Palette (`CommandPalette` — `⌘K` / `Ctrl+K`):** Keyboard-driven spotlight modal with instant search filter to switch themes (Light, Dark), jump to any role persona, create a new lead, toggle any founder rule, close the active payout cycle, **copy a link to the current view**, or reset demo state.
 >
@@ -331,9 +331,9 @@ The seed contains **25 orders** across W42 (#1021–#1028, Locked), W43 (#1031�
 | components/CloserScorecard.tsx | Closer quality, return-rate gate, and profit contribution table.                                                                        |
 | components/CloserView.tsx      | 390px phone-first closer hero console, personal pipeline tiles, and stock-block alert.                                                                        |
 | components/BuyerLeadViews.tsx  | Media Buyer (BuyerView) sales per ₦1 of ads vs what is really left, and the Sales Team Lead (LeadView) team bonus console.                                                             |
-| components/CycleBar.tsx        | 4-stage payout cycle cards (Accrued → Approved → Paid → Locked) and 1-click Bank file (CSV) export.                                                                  |
+| components/CycleBar.tsx        | 4-stage payout cycle cards (Accruing → Approved → Paid → Locked) and 1-click Bank file (CSV) export.                                                                  |
 | components/OrderLedger.tsx     | Filterable, searchable order ledger (renders stacked .ocard cards for Closer and resizable .tbl table for other roles).                                       |
-| components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and SKU Unit Economics table.                                                              |
+| components/StockBook.tsx       | Warehouse Stock Book, Reorder Alert loop, Purchase Order Register, and profit-by-product table.                                                              |
 | components/Overlays.tsx        | DrillDrawer, ReturnDialog, NewOrderDialog, CommandPalette, AuditLogCard, and ToastTray. |
 | scripts/verify.ts              | Automated 29-invariant verification suite (`npm run verify`), including that no engine mutator touches the state it was cloned from. |
 | scripts/e2e.mjs                | Headless Chrome end-to-end suite (scenarios 0 to 13): theme, roles and permissions, drills, returns, ad card, funnel and leaks, activity strip, accountant, handoff, import, shared links, the tour; plus 390px phone layout and persistence. `KOVA_URL` runs it against a deployment. |
