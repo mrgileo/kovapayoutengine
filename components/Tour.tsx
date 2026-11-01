@@ -22,14 +22,14 @@ const naira = (n: number) => "₦" + Math.round(n).toLocaleString();
 
 const STEPS: Step[] = [
   {
-    title: "The sales report says one thing",
+    title: "Sales look fine, but the business is losing money",
     run: () => st().setRole("founder"),
     target: ".headline",
     text: () =>
-      "Founder view. Commission looks fine as a share of sales, yet after product cost, ads, salaries and courier fees the week is a loss. Click any figure to see the orders behind it.",
+      "You are the founder. Staff pay looks small next to sales, yet once you subtract what the products cost, ad spend, salaries and courier fees, this week is a loss. Click any number to see the orders behind it.",
   },
   {
-    title: "One delivery, everyone sees it",
+    title: "One delivery updates everyone",
     run: () => {
       st().setRole("stock");
       if (stage(1043) === "dispatched") st().act(1043, "deliver");
@@ -37,10 +37,10 @@ const STEPS: Step[] = [
     },
     target: ".activity",
     text: () =>
-      "Dayo in the warehouse just confirmed order #1043 delivered. You are now Amaka, the closer: her pay moved the moment it landed. The founder saw revenue move and the stock dropped, from one action.",
+      "Dayo in the warehouse just marked order #1043 as delivered. You are now Amaka, who sold it: her pay went up the moment it was delivered. The founder's revenue went up and the stock went down too, all from that one click.",
   },
   {
-    title: "Pay on booking, and see what it costs",
+    title: "Paying staff too early costs money",
     run: () => {
       st().setRole("founder");
       st().setRule("creditOn", "lead");
@@ -48,11 +48,11 @@ const STEPS: Step[] = [
     target: "#tour-rules",
     text: (d) => {
       const early = leaks(d).find((l) => l.key === "payEarly")?.amount ?? 0;
-      return `Pay staff when is now Order booked, so staff are paid before anything is delivered. Commission going out on undelivered orders: ${naira(early)} this week. Switch it back to Delivered and it drops to ₦0.`;
+      return `The rule "Pay staff when..." is now set to Order booked, so staff get paid before the customer has received anything. That is ${naira(early)} of commission paid out this week on orders not yet delivered. Set it back to Delivered and this falls to ₦0.`;
     },
   },
   {
-    title: "A return after pay was sent",
+    title: "An order comes back after staff were paid",
     run: () => {
       st().setRole("founder");
       st().setRule("creditOn", "delivered");
@@ -61,20 +61,20 @@ const STEPS: Step[] = [
     },
     target: ".activity",
     text: () =>
-      "Order #1033 was delivered and paid last week, then came back. Amaka's pay for it is taken back from this week's payout. Under Take back next week it would land on the next payout; under Business absorbs she would keep it.",
+      "Order #1033 was delivered and Amaka was paid for it last week, then the customer sent it back. Because the rule is Take back now, that pay comes off this week's payout. With Take back next week it would come off the next payout instead, and with Business absorbs she would keep it.",
   },
   {
-    title: "Stock-outs raise purchase orders",
+    title: "Low stock is fixed in one click",
     run: () => {
       st().setRole("stock");
       for (const r of needsAttention(st().data)) st().raisePO(r.product.sku, r.suggested);
     },
     target: ".alert",
     text: () =>
-      "Three products were at or below their reorder point. Purchase orders are raised in one click and the alert clears. When the stock arrives, orders that were waiting on it, like #1051, unblock.",
+      "Three products have run low, at or below the level where you should reorder. One click orders more from the supplier (a purchase order) and the warning clears. When the stock arrives, orders that were waiting for it, like #1051, can go ahead.",
   },
   {
-    title: "Approve, pay, lock: two people",
+    title: "Two people handle the money",
     run: () => {
       st().setRole("founder");
       const cy = openCycle(st().data);
@@ -83,7 +83,7 @@ const STEPS: Step[] = [
     },
     target: "#tour-payout",
     text: () =>
-      "The founder approved the week. You are now Bisi, the accountant: export the bank file, mark it paid, then lock it. The person who approves pay never pays it, and every step is in the audit log.",
+      "The founder has approved this week's pay. You are now Bisi, the accountant: download the bank file, mark the week as paid, then lock it so nothing can change. The person who approves the pay is never the one who pays it, and every step is recorded in the audit log.",
   },
 ];
 
@@ -95,6 +95,7 @@ export function Tour() {
   const dataSource = useStore((s) => s.dataSource);
   const [i, setI] = useState(0);
   const lit = useRef<Element | null>(null);
+  const spot = useRef<HTMLDivElement>(null);
 
   // Starting the tour puts the demo company back to its first state, so every run tells the same story.
   useEffect(() => {
@@ -115,6 +116,29 @@ export function Tour() {
     document.documentElement.setAttribute("data-tour", "");
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
+    let frame = 0;
+    // Keeps the dimming spotlight on the target while it scrolls, resizes or re-renders.
+    const follow = (el: Element) => {
+      let last = "";
+      const tick = () => {
+        const s = spot.current;
+        if (s) {
+          const r = el.getBoundingClientRect();
+          const key = `${r.top}|${r.left}|${r.width}|${r.height}`;
+          if (key !== last) {
+            last = key;
+            const pad = 6;
+            s.style.top = `${r.top - pad}px`;
+            s.style.left = `${r.left - pad}px`;
+            s.style.width = `${r.width + pad * 2}px`;
+            s.style.height = `${r.height + pad * 2}px`;
+          }
+          s.style.opacity = "1";
+        }
+        frame = requestAnimationFrame(tick);
+      };
+      tick();
+    };
     const light = () => {
       const el = document.querySelector(STEPS[i].target);
       if (!el) {
@@ -124,12 +148,15 @@ export function Tour() {
       lit.current?.classList.remove("tour-hl");
       el.classList.add("tour-hl");
       lit.current = el;
+      follow(el);
       const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       el.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
     };
     timer = setTimeout(light, 250);
     return () => {
       clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      if (spot.current) spot.current.style.opacity = "0";
       lit.current?.classList.remove("tour-hl");
       lit.current = null;
     };
@@ -146,6 +173,8 @@ export function Tour() {
   const last = i === STEPS.length - 1;
 
   return (
+    <>
+    <div ref={spot} className="tour-spot" aria-hidden="true" />
     <div className="tour" role="region" aria-label="Guided tour">
       <div className="tour-top">
         <span className="tour-count">
@@ -171,5 +200,6 @@ export function Tour() {
         </button>
       </div>
     </div>
+    </>
   );
 }

@@ -611,8 +611,8 @@ try {
   assert.ok(/step 2 of 6/i.test(await tourText()), "Next moves to step 2");
   assert.ok(await evaluate(`return document.body.innerText.includes("#1043")`), "Step 2 delivered order #1043");
   await tourNext();
-  for (let i = 0; i < 40 && !/Pay staff when is now Order booked/.test(await tourText()); i++) await sleep(150);
-  assert.ok(/Pay staff when is now Order booked.*Commission going out on undelivered orders: ₦[1-9]/.test(await tourText()), "Step 3 flips the rule and quotes the live amount: " + (await tourText()).slice(0, 220));
+  for (let i = 0; i < 40 && !/is now set to Order booked/.test(await tourText()); i++) await sleep(150);
+  assert.ok(/is now set to Order booked.*That is ₦[1-9]/.test(await tourText()), "Step 3 flips the rule and quotes the live amount: " + (await tourText()).slice(0, 220));
   assert.ok(await evaluate(`return Boolean(document.querySelector("#tour-rules.tour-hl"))`), "The rules strip is lit up");
   await tourNext(); await tourNext(); await waitTab("stock");
   assert.ok(await evaluate(`return /Stock loop closed|PO inbound/i.test(document.body.innerText)`), "Step 5 raised the purchase orders");

@@ -3202,6 +3202,21 @@ html[data-modal-open] {
 html[data-tour] body {
   padding-bottom: 230px;
 }
+/* Dims everything outside its own box, so the box sits over the tour target and leaves it at full brightness. */
+.tour-spot {
+  position: fixed;
+  z-index: 38;
+  pointer-events: none;
+  border-radius: 16px;
+  box-shadow: 0 0 0 100vmax rgba(6, 8, 14, 0.66);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot {
+    transition: none;
+  }
+}
 .tour-hl {
   outline: 3px solid var(--yellow);
   outline-offset: 4px;
