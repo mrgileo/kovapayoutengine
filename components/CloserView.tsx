@@ -2,6 +2,7 @@
 
 import { Smartphone, Lock, AlertTriangle } from "lucide-react";
 import {
+  PERSONA,
   closerStats,
   commissionLines,
   openCycle,
@@ -22,11 +23,11 @@ export function CloserView() {
   const data = useData();
   const open = openCycle(data);
   const lines = openLines(data);
-  const ps = payslip(lines, "amaka");
-  const st = closerStats(data, "amaka");
+  const ps = payslip(lines, PERSONA.closer);
+  const st = closerStats(data, PERSONA.closer);
 
   const mine = data.orders.filter(
-    (o) => (o.closer === "amaka" || o.openedBy === "amaka") && o.createdCycle === open.id,
+    (o) => (o.closer === PERSONA.closer || o.openedBy === PERSONA.closer) && o.createdCycle === open.id,
   );
   const openOrders = mine.filter((o) => o.stage !== "delivered" && o.stage !== "returned" && o.stage !== "cancelled");
   const blocked = openOrders.filter((o) => stockRow(data, productOf(data, o.sku)).available <= 0);
@@ -34,7 +35,7 @@ export function CloserView() {
   // Potential commission if all open pipeline lands
   const potentialLines = openOrders.flatMap((o) =>
     commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
-      (l) => l.personId === "amaka",
+      (l) => l.personId === PERSONA.closer,
     ),
   );
   const potentialTotal = sum(potentialLines.map((l) => l.amount));
@@ -56,7 +57,7 @@ export function CloserView() {
     subtitle: "If every open order is delivered and not returned",
     lines: openOrders.map((o) => {
       const ls = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
-        (l) => l.personId === "amaka",
+        (l) => l.personId === PERSONA.closer,
       );
       const amt = sum(ls.map((l) => l.amount));
       return {
@@ -75,7 +76,7 @@ export function CloserView() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span className="eyebrow">
             <Smartphone size={12} style={{ verticalAlign: -2, marginRight: 5 }} />
-            Phone-First Closer Console · {open.id}
+            Sales Closer · {open.id}
           </span>
           <span className="pill brand">
             <Lock size={11} /> Delivery certified by Warehouse

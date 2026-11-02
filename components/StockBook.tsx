@@ -274,9 +274,10 @@ export function StockBook() {
         </Card>
       )}
 
-      <PriceBook />
+      {/* Prices and profit by product are company accounting: the warehouse does not need them. */}
+      {role !== "stock" && <PriceBook />}
 
-      <Card
+      {role !== "stock" && <Card
         title="Profit by product, and what returns cost"
         sub="Which products actually make money after product cost, delivery fees, damaged stock and commission?"
         flush
@@ -321,7 +322,7 @@ export function StockBook() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Card>}
     </div>
   );
 }

@@ -11,14 +11,18 @@ import {
   cycleById,
   firstName,
   isCredited,
+  PERSONA,
+  canSeeAllPayouts,
   openCycle,
   orderValue,
+  ordersFor,
   personOf,
   productOf,
   stockRow,
   sum,
 } from "@/lib/engine";
 import { useData, useStore } from "@/lib/store";
+import { L } from "@/lib/labels";
 import { Card, Fig, StagePill, useMoney } from "./ui";
 import type { Drill, Order } from "@/lib/types";
 
@@ -38,10 +42,12 @@ export function OrderLedger() {
   const q = query.trim().toLowerCase();
 
   // Filter orders by cycle chip + live instant search
-  const visible = data.orders.filter((o) => {
+  const mine = ordersFor(data, role);
+  const me = PERSONA[role];
+  const visible = mine.filter((o) => {
     if (cycleFilter === "OPEN" && !(o.createdCycle === open.id || o.reversedCycle === open.id)) return false;
-    if (cycleFilter === "SPLIT" && o.openedBy === o.closer) return false;
-    if (cycleFilter === "PAID_PRIOR" && !(o.creditedCycle && o.stage === "delivered")) return false;
+    if (cycleFilter === "DELIVERED" && o.stage !== "delivered") return false;
+    if (cycleFilter === "RETURNED" && o.stage !== "returned") return false;
     if (q) {
       const p = productOf(data, o.sku);
       const cName = personOf(data, o.closer).name.toLowerCase();
@@ -51,6 +57,15 @@ export function OrderLedger() {
     }
     return true;
   });
+
+  /** "Confirmed by Amaka": the latest thing someone did to this order, from the audit log. */
+  function lastAction(o: Order): string | null {
+    const e = data.audit.find((x) => x.orderId === o.id);
+    if (!e) return null;
+    const verb = /^Order \d+ (\w+)/.exec(e.text)?.[1] ?? (e.text.includes("created") ? "created" : null);
+    if (!verb) return null;
+    return `${verb.charAt(0).toUpperCase()}${verb.slice(1)} by ${firstName(data, e.actor)}`;
+  }
 
   function handleAction(o: Order, a: ActionKey) {
     if (a === "return") {
@@ -62,14 +77,16 @@ export function OrderLedger() {
 
   function orderCommissionInfo(o: Order): { amount: number; label: string; tone: string; drill: Drill } {
     const val = orderValue(o);
-    const lines = commissionLines(data, o, data.rules, o.creditedCycle ?? open.id);
+    // Only the founder and accountant see what everyone earned on an order; others see their own share.
+    const mineOnly = <T extends { personId: string }>(ls: T[]): T[] => (canSeeAllPayouts(role) ? ls : ls.filter((l) => l.personId === me));
+    const lines = mineOnly(commissionLines(data, o, data.rules, o.creditedCycle ?? open.id));
     const total = sum(lines.map((l) => l.amount));
     const creditedNow = isCredited(o, data.rules);
 
     // Post-close return reversal check
     if ((o.stage === "returned" || o.stage === "cancelled") && o.creditedCycle) {
       const pc = cycleById(data, o.creditedCycle);
-      const paidLines = (pc?.lines ?? []).filter((l) => l.orderId === o.id && l.kind === "commission");
+      const paidLines = mineOnly((pc?.lines ?? []).filter((l) => l.orderId === o.id && l.kind === "commission"));
       const paidAmt = sum(paidLines.map((l) => l.amount));
       if (pc?.status === "locked") {
         return {
@@ -92,10 +109,10 @@ export function OrderLedger() {
       if (data.rules.onReturn === "clawback") {
         return {
           amount: -paidAmt,
-          label: `Pay taken back (${pc?.id})`,
+          label: `Customer refunded (${pc?.id})`,
           tone: "neg",
           drill: {
-            title: `Order #${o.id} · Pay taken back`,
+            title: `Order #${o.id} · Customer refunded`,
             subtitle: `Paid in ${pc?.id} · Returned in ${open.id}`,
             lines: paidLines.map((l) => ({
               ref: "TAKEN BACK",
@@ -113,7 +130,7 @@ export function OrderLedger() {
           label: `Taken back next week`,
           tone: "warn",
           drill: {
-            title: `Order #${o.id} · Pay to be taken back next week`,
+            title: `Order #${o.id} · Customer refunds to take off next week`,
             subtitle: `Paid in ${pc?.id} · Taken back when next week closes`,
             lines: paidLines.map((l) => ({
               ref: "NEXT WEEK",
@@ -147,13 +164,13 @@ export function OrderLedger() {
 
   return (
     <Card
-      title={role === "closer" ? "Your orders" : "Orders and who can do what"}
+      title={role === "closer" ? "Your orders" : role === "buyer" ? "Orders from your ads" : "Manage Orders"}
       sub={
         role === "closer"
           ? "Your orders as cards. You earn commission once the warehouse marks an order delivered."
-          : imported
-            ? "Move orders forward, or return an order from an earlier paid week to see pay taken back."
-            : "Move orders forward, look at an order two closers worked on (#1053), or return a paid order from W43 (#1033) to see pay taken back."
+          : role === "buyer"
+            ? "Every order your ads brought in, and where it is now."
+            : "Move each order forward, or mark one returned if it comes back."
       }
       actions={
         <div className="filters" role="group" aria-label="Filter orders" style={{ alignItems: "center" }}>
@@ -168,10 +185,10 @@ export function OrderLedger() {
             />
           </label>
           {[
-            { id: "OPEN", label: `Current (${open.id})`, count: data.orders.filter((o) => o.createdCycle === open.id || o.reversedCycle === open.id).length },
-            { id: "PAID_PRIOR", label: imported ? "Paid in earlier weeks (test return)" : "Paid in W42/W43 (test return)", count: data.orders.filter((o) => o.creditedCycle && o.stage === "delivered").length },
-            { id: "SPLIT", label: "Split touch", count: data.orders.filter((o) => o.openedBy !== o.closer).length },
-            { id: "ALL", label: "All weeks", count: data.orders.length },
+            { id: "OPEN", label: `Current (${open.id})`, count: mine.filter((o) => o.createdCycle === open.id || o.reversedCycle === open.id).length },
+            { id: "DELIVERED", label: "Delivered", count: mine.filter((o) => o.stage === "delivered").length },
+            { id: "RETURNED", label: "Returned", count: mine.filter((o) => o.stage === "returned").length },
+            { id: "ALL", label: "All weeks", count: mine.length },
           ].map((f) => (
             <button
               key={f.id}
@@ -208,7 +225,7 @@ export function OrderLedger() {
             const note = blockedNote(role, o);
             const comm = orderCommissionInfo(o);
             const myLines = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
-              (l) => l.personId === "amaka",
+              (l) => l.personId === me,
             );
             const myShare = sum(myLines.map((l) => l.amount));
             const isSplit = o.openedBy !== o.closer;
@@ -241,7 +258,7 @@ export function OrderLedger() {
                 </div>
 
                 <div className="ocard-earn">
-                  <span>Your commission ({isCredited(o, data.rules) ? "credited" : "when landed"}):</span>
+                  <span>Your commission ({isCredited(o, data.rules) ? "credited" : "when delivered"}):</span>
                   <b className={isCredited(o, data.rules) ? "pos" : ""}>
                     <Fig amount={myShare} drill={comm.drill} />
                   </b>
@@ -256,19 +273,22 @@ export function OrderLedger() {
 
                 {acts.length > 0 && (
                   <div className="acts">
-                    {acts.map((a) => (
-                      <button
-                        key={a}
-                        type="button"
-                        className={
-                          "btn sm " +
-                          (a === "confirm" || a === "deliver" ? "primary" : a === "return" || a === "cancel" || a === "fail" ? "danger" : "")
-                        }
-                        onClick={() => handleAction(o, a)}
-                      >
-                        {ACTION_LABEL[a]}
-                      </button>
-                    ))}
+                    {acts.map((a) =>
+                      a === "return" ? (
+                        <button key={a} type="button" className="link-quiet" onClick={() => handleAction(o, a)}>
+                          {ACTION_LABEL[a]}
+                        </button>
+                      ) : (
+                        <button
+                          key={a}
+                          type="button"
+                          className={"btn sm " + (a === "confirm" || a === "deliver" ? "primary" : a === "cancel" || a === "fail" ? "danger" : "")}
+                          onClick={() => handleAction(o, a)}
+                        >
+                          {ACTION_LABEL[a]}
+                        </button>
+                      ),
+                    )}
                   </div>
                 )}
               </article>
@@ -286,7 +306,7 @@ export function OrderLedger() {
                 <th>Opened / closed by</th>
                 <th className="r">Value</th>
                 <th>Stage</th>
-                <th className="r">Commission</th>
+                {role !== "stock" && <th className="r">{canSeeAllPayouts(role) ? "Commission" : "Your commission"}</th>}
                 <th className="r">Actions</th>
               </tr>
             </thead>
@@ -346,8 +366,9 @@ export function OrderLedger() {
                     </td>
                     <td>
                       <StagePill stage={o.stage} failed={o.failed} cashIn={o.cashIn} />
+                      {lastAction(o) && <span className="sub">{lastAction(o)}</span>}
                     </td>
-                    <td className="r mono">
+                    {role !== "stock" && <td className="r mono">
                       {comm.amount !== 0 ? (
                         <div>
                           <b className={comm.amount < 0 ? "neg" : comm.tone === "pos" ? "pos" : ""}>
@@ -363,28 +384,26 @@ export function OrderLedger() {
                           <span className="sub">{comm.label}</span>
                         </div>
                       )}
-                    </td>
+                    </td>}
                     <td className="r">
                       {acts.length > 0 ? (
                         <div className="acts">
-                          {acts.map((a) => (
-                            <button
-                              key={a}
-                              type="button"
-                              className={
-                                "btn xs " +
-                                (a === "deliver" || a === "confirm" || a === "dispatch"
-                                  ? "primary"
-                                  : a === "return" || a === "fail" || a === "cancel"
-                                    ? "danger"
-                                    : "")
-                              }
-                              onClick={() => handleAction(o, a)}
-                            >
-                              {a === "return" && <RotateCcw size={11} />}
-                              {ACTION_LABEL[a]}
-                            </button>
-                          ))}
+                          {acts.map((a) =>
+                            a === "return" ? (
+                              <button key={a} type="button" className="link-quiet" onClick={() => handleAction(o, a)}>
+                                {ACTION_LABEL[a]}
+                              </button>
+                            ) : (
+                              <button
+                                key={a}
+                                type="button"
+                                className={"btn xs " + (a === "deliver" || a === "confirm" || a === "dispatch" ? "primary" : a === "fail" || a === "cancel" ? "danger" : "")}
+                                onClick={() => handleAction(o, a)}
+                              >
+                                {ACTION_LABEL[a]}
+                              </button>
+                            ),
+                          )}
                         </div>
                       ) : (
                         <span className="muted" style={{ fontSize: 12 }}>

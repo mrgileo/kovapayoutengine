@@ -1,27 +1,19 @@
 "use client";
 
-import { useDeferredValue, useMemo, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { Lock } from "lucide-react";
 import { RULE_DEFS } from "@/lib/rules";
-import { canEditRules, personOf, whatIf } from "@/lib/engine";
+import { canEditRules, personOf } from "@/lib/engine";
 import { shortDate, shortName } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
-import { Card, useMoney } from "./ui";
-import type { Rules, RuleKey } from "@/lib/types";
+import type { RuleKey } from "@/lib/types";
 
-export function RulesStrip() {
+/** The five pay rules, as shown inside the Pay rules drawer. */
+export function RulesBody() {
   const data = useData();
   const role = useStore((s) => s.role);
   const setRule = useStore((s) => s.setRule);
-  const m = useMoney();
   const editable = canEditRules(role);
-
-  // Fourteen what-if recalculations. They run once per data change, and after the click has already updated the screen, so a big import stays responsive.
-  const lagging = useDeferredValue(data);
-  const sims = useMemo(
-    () => new Map(RULE_DEFS.flatMap((def) => def.options.map((o) => [`${def.key}:${String(o.value)}`, whatIf(lagging, { [def.key]: o.value } as Partial<Rules>)] as const))),
-    [lagging],
-  );
 
   // Latest rule edit across all keys for the header audit stamp
   const latestKey = (Object.keys(data.rulesMeta) as RuleKey[]).reduce((best, k) =>
@@ -31,25 +23,7 @@ export function RulesStrip() {
   const latestPerson = personOf(data, latestStamp.by);
 
   return (
-    <Card
-      id="tour-rules"
-      title="Pay rules"
-      sub={
-        editable
-          ? "Change a rule and every figure, payslip and profit line recalculates immediately."
-          : `Set by the founder. Last changed ${shortDate(latestStamp.at)} by ${shortName(latestPerson.name)}`
-      }
-      actions={
-        !editable ? (
-          <span className="pill plain">
-            <Lock size={12} style={{ marginRight: 5 }} /> Read-only for your role
-          </span>
-        ) : (
-          <span className="pill brand">Founder authority</span>
-        )
-      }
-      flush
-    >
+    <>
       <div className="rules-grid">
         {RULE_DEFS.map((def) => {
           const current = data.rules[def.key];
@@ -79,7 +53,6 @@ export function RulesStrip() {
               >
                 {def.options.map((opt) => {
                   const active = current === opt.value;
-                  const sim = sims.get(`${def.key}:${String(opt.value)}`)!;
                   return (
                     <button
                       key={String(opt.value)}
@@ -88,14 +61,9 @@ export function RulesStrip() {
                       disabled={!editable}
                       className={editable ? "" : "locked"}
                       onClick={() => setRule(def.key, opt.value as never)}
-                      title={
-                        editable
-                          ? `Staff pay would be ${m(sim.payout)} · Real profit ${m(sim.actual, { sign: true })}`
-                          : "Only the founder can change the pay rules"
-                      }
+                      title={editable ? undefined : "Only the founder can change the pay rules"}
                     >
                       <span>{opt.label}</span>
-                      <span className="wi">{m(sim.payout, { compact: true })}</span>
                     </button>
                   );
                 })}
@@ -119,6 +87,6 @@ export function RulesStrip() {
           </span>
         </div>
       )}
-    </Card>
+    </>
   );
 }

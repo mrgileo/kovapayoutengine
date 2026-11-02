@@ -7,6 +7,7 @@ import {
   PERSONA,
   RATES,
   canEditRules,
+  canSeeFullAudit,
   cycleById,
   orderValue,
   personOf,
@@ -97,6 +98,10 @@ export function ReturnDialog() {
 
   const order = data.orders.find((o) => o.id === orderId);
   const [cond, setCond] = useState<"resellable" | "damaged">("resellable");
+  const [sure, setSure] = useState(false);
+
+  // A fresh tick for every order: returning one order never pre-approves the next.
+  useEffect(() => setSure(false), [orderId]);
 
   if (!order) return null;
 
@@ -169,6 +174,11 @@ export function ReturnDialog() {
           </div>
         </div>
 
+        <label className="confirm-tick">
+          <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
+          <span>This order really came back. This can&apos;t be undone.</span>
+        </label>
+
         <div className="dialog-foot">
           <button type="button" className="btn ghost" onClick={() => close(null)}>
             Cancel
@@ -176,6 +186,7 @@ export function ReturnDialog() {
           <button
             type="button"
             className="btn danger"
+            disabled={!sure}
             onClick={() => {
               act(order.id, "return", { condition: cond });
               close(null);
@@ -522,22 +533,33 @@ export function CommandPalette({
 
 export function AuditLogCard() {
   const data = useData();
+  const role = useStore((s) => s.role);
   const reset = useStore((s) => s.reset);
   const m = useMoney();
+  const full = canSeeFullAudit(role);
+  const me = PERSONA[role];
+  const entries = full ? data.audit : data.audit.filter((e) => e.actor === me);
 
   return (
     <Card
-      title="Audit log: who did what"
-      sub="Everything that changes anything: rules, orders, prices, purchase orders and weekly payouts. Each entry shows who did it, when, and what it did to pay and profit."
+      title={full ? "Audit log: who did what" : "Your actions"}
+      sub={
+        full
+          ? "Everything that changes anything: rules, orders, prices, purchase orders and weekly payouts. Each entry shows who did it, when, and what it did to pay and profit."
+          : "What you did, and when. For example: Order 1043 confirmed by you."
+      }
       actions={
-        <button type="button" className="btn sm ghost" onClick={reset}>
-          <RotateCcw size={13} /> Reset demo data
-        </button>
+        full ? (
+          <button type="button" className="btn sm ghost" onClick={reset}>
+            <RotateCcw size={13} /> Reset demo data
+          </button>
+        ) : undefined
       }
       flush
     >
+      {entries.length === 0 && <p className="muted" style={{ padding: "14px 20px", margin: 0, fontSize: 13 }}>Nothing yet. When you take an action, such as confirming an order, it shows up here.</p>}
       <ol className="audit">
-        {data.audit.map((e) => {
+        {entries.map((e) => {
           const p = personOf(data, e.actor);
           return (
             <li key={e.id}>

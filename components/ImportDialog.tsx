@@ -125,7 +125,7 @@ export function ImportDialog() {
         </div>
 
         <p style={{ marginTop: 12 }}>
-          One row per order, price per unit, dates as 2026-10-27. Weeks run Monday to Sunday and the latest week is the open one (up to {MAX_WEEKS} weeks, {MAX_ROWS.toLocaleString()} orders). Closers must be Amaka or Chidi. Every order is credited to one media buyer.
+          One row per order, price per unit, dates as 2026-10-27. Weeks run Monday to Sunday and the latest week is the open one (up to {MAX_WEEKS} weeks, {MAX_ROWS.toLocaleString()} orders). Any closer names are fine; they are created from your file. Every order is credited to one media buyer.
         </p>
 
         {readError && (

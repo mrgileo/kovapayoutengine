@@ -150,6 +150,27 @@ export interface AuditEntry {
   deltas?: { label: string; amount: number }[];
   /** Who and what this event moved. Present on order, stock and rule events recorded after this was added. */
   impact?: Impact;
+  /** The order this event is about, so the order table can say "Confirmed by Amaka". */
+  orderId?: number;
+}
+
+/** Where an enquiry came from. Most arrive as form fills from the landing page. */
+export type LeadSource = "web_form" | "whatsapp" | "call" | "instagram";
+
+/** An enquiry before it is an order. Leads never reserve stock or earn pay; only a booked order does. */
+export interface Lead {
+  id: number;
+  cycle: string;
+  customer: string;
+  city: string;
+  source: LeadSource;
+  /** Optional free-text label, the same idea as Order.campaign. */
+  campaign?: string;
+  /** open = not reached yet; booked = became the order in orderId; lost = never became an order. */
+  status: "open" | "booked" | "lost";
+  /** Why a lost lead was lost. */
+  reason?: string;
+  orderId?: number;
 }
 
 export interface DemoState {
@@ -157,6 +178,8 @@ export interface DemoState {
   people: Person[];
   products: Product[];
   orders: Order[];
+  /** Leads that came in before orders; empty on imported data. */
+  leads: Lead[];
   cycles: Cycle[];
   rules: Rules;
   rulesMeta: Record<RuleKey, Stamp>;

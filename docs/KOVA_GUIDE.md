@@ -10,7 +10,7 @@ Who this is for: anyone who needs to explain Kova to an e-commerce founder, whet
 
 Most COD and phone-sales businesses run on five disconnected things: the sales sheet, the ad dashboard, the courier's cash, the stock sheet and the payroll spreadsheet. Each says something different, and none says whether the business actually made money. Kova puts one order's whole journey in one place (booked, confirmed, sent, delivered, cash received, staff paid, stock reduced) and shows every naira of it, so nothing is missed and nothing is left out. The founder sees the truth; each staff member sees only their part.
 
-**The sentence to remember:** *"Your sales report says you made ₦497,888 this week. The real figure was a loss of ₦152,420."* (demo week)
+**The sentence to remember:** *"Your sales sheet shows ₦497,888 this week. After product cost, ads, salaries and courier fees, the real figure was a loss of ₦152,420."* (demo week)
 
 ## 2. Who it is for
 
@@ -34,7 +34,7 @@ Use this table as the source for posts. Left: what the founder lives with. Right
 | 8 | **Media buyers celebrate booked sales, not delivered sales.** "₦6.81 back per ₦1 of ads" is really ₦1.09 once only delivered orders count. | Ad results shown on booked and on delivered orders side by side, cost per delivered order against a limit you set, and profit per order before and after staff pay. | Media buyer view; Ad cost card |
 | 9 | **Courier cash goes missing in the gap.** Delivered, but the money is still with the rider. | A "cash with courier" figure everywhere it matters, an accountant desk to record cash received by week and by city, and an Overdue flag after a week. | Founder tiles; Accountant view |
 | 10 | **Stock-outs surprise you.** Orders get confirmed for product you don't have. | Stock book with on hand, committed, available and on order. A stock-out raises a purchase order in one click; receiving it unblocks the waiting orders. Orders blocked by stock show up in the leaks panel. | Warehouse view; stock book; leaks panel |
-| 11 | **Nobody knows where the money is stuck.** | A funnel (booked, confirmed, sent out, delivered, delivered and kept, cash received) with the money at each step and the reason for each drop. Beside it, a leaks panel of six checks, each with a ₦ figure and what to do. | Founder view, top |
+| 11 | **Nobody knows where the money is stuck.** | Leads first (29 came in, 13 became orders, 12 lost), then a funnel (booked, confirmed, sent out, delivered, delivered and kept, cash received) with the money at each step and the reason for each drop. Beside it, a leaks panel of six checks, each with a ₦ figure and what to do. | Founder view, top |
 | 12 | **Payroll day is messy and risky.** One person calculates, approves, pays and records. | Pay is closed and approved by the founder, then paid and locked by the accountant, with a bank-ready payout file. Negative balances are never paid; they carry into next week. Everything is in an audit log by name and time. | Cycle bar; Accountant view; audit log |
 | 13 | **Staff don't trust the numbers or can't see their own.** | Each person sees their own pay accrue as orders are delivered, with a plain breakdown (salary, commission, pay taken back). | Closer, buyer and team lead views |
 | 14 | **Roles blur.** The person who sells also marks things delivered. | A closer can't mark their own order delivered. Only the founder approves pay. Only the warehouse and founder process returns. The accountant can't touch orders, prices or rules. | Order actions in every view |
@@ -68,7 +68,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 
 **Founder view**
 - Headline: three profit figures and pay as a percentage of sales.
-- Funnel ("where every order is") and leaks panel (six checks, no fake grand total).
+- Funnel ("where every order is") and leaks panel (seven checks, no fake grand total).
 - KPI tiles: delivered revenue, cash with couriers, paid on undelivered orders, pay kept on returns, Products to reorder.
 - "Where the money went": eight lines from delivered revenue down to real profit.
 - Closer scorecard, ad budget (profit per order, max cost per order), price book, order ledger, stock book, audit log.
@@ -83,7 +83,7 @@ A **live activity strip** at the top shows each person what changed for them as 
 
 **Currency and theme:** naira, dollar and pound display toggle (fixed demo rates); light by default, dark available.
 
-**Try it with your orders:** upload an orders CSV (optionally ad spend and products). Weeks are worked out from your dates and replayed through the same engine. The data never leaves the browser. "Back to demo data" resets.
+**Try it with your orders:** upload an orders CSV (optionally ad spend and products). Closer names can be anyone's: they are created from your file, so nothing has to be renamed. Weeks are worked out from your dates and replayed through the same engine. The data never leaves the browser. "Back to demo data" resets.
 
 **Take the tour:** a six-step guided tour that *acts*. It resets the demo, then delivers an order as the warehouse and switches to the closer so her pay visibly moves, flips the pay rule to "Order booked" and quotes what that costs, returns an order paid last week, raises purchase orders, and hands the approved week to the accountant. Each step outlines the result and says in one or two sentences what just happened. It is the quickest way for a prospect to see how everything connects without you narrating, and a good basis for a 60-second clip. Reload the page (or Reset demo state) to run it again from the start.
 
@@ -130,7 +130,13 @@ Honest framing for posts: Kova doesn't tell a founder which option is right. It 
 
 - It is a **demo and decision tool**, not (yet) a live integration. The Meta ad figures are a *simulated feed*, clearly labelled. There is no connection to Shopify, couriers or banks.
 - There is **no backend**. Everything lives in the visitor's browser. Their imported data is never uploaded, and clearing the browser clears it.
+- The demo week is a **deliberate stress test**: ad spend is about 53% of sales, heavier than most businesses run, so every leak shows at once. Say so before a founder says "my business doesn't look like that". The app says it too, in a note under the headline.
 - Pay rates (4% closer, 1.5% buyer, 1% team lead) and the 3,500 delivery fee are demo settings.
+- It has **no part-payments**. An order is paid in full on delivery or it is not delivered.
+- It has **no repeat-customer tracking**. Repeat buyers usually call or message on WhatsApp, and that happens outside the product. Every order is entered as a new order.
+- It has **no per-courier or per-city delivery success rate** and **no variable delivery fees** (the delivery fee is one flat demo setting). Do not promise these; say they are not built.
+- Leads are **seeded, not live**. The demo shows form fills, WhatsApp, calls and Instagram, how many became orders and what the lost ones were worth, but there is no connection to a WordPress form or any inbox. Do not claim one.
+- The waitlist is a Tally form embedded in the page. The email goes to Tally; nothing from the demo or loaded orders leaves the browser.
 - It doesn't prove which rule is best. It shows the cost of each on the numbers in front of you.
 
 ## 10. Nigeria versus the UK: what carries over
@@ -174,7 +180,7 @@ Link previews: pasting the address into WhatsApp, LinkedIn or X shows a card wit
 
 ## 13. Loom run-down: suggested order (8–10 minutes)
 
-*Short on time? Open the demo, click **Take the tour**, and talk over it: it covers steps 1 to 7 below in about a minute and a half.*
+*Short on time? Open the demo, click **Take the tour**, and talk over it: it covers steps 1 and 3 to 7 below in about a minute and a half.*
 
 
 1. The question: "does my business actually make money?" Headline banner (1 min).
@@ -184,4 +190,4 @@ Link previews: pasting the address into WhatsApp, LinkedIn or X shows a card wit
 5. A return after payout (1 min).
 6. Stock-out to purchase order (1 min).
 7. Week close: founder approves, accountant pays and locks (1 min).
-8. Try it with your own orders (1 min), then the call to action.
+8. Try it with your own orders (1 min), then the call to action: **Join the waitlist** (button in the page header). Say it plainly: "Leave your email and I will tell you when it is ready for your own orders."

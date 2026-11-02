@@ -1,179 +1,107 @@
 "use client";
 
-import { SIM_FEED_NOTE, campaignStats, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
+import { PERSONA, SIM_FEED_NOTE, cycleLines, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
+import { shortDate } from "@/lib/format";
 import { L, PAY_LINE_TEXT } from "@/lib/labels";
 import { useData } from "@/lib/store";
-import { AdBudget } from "./AdBudget";
 import { CloserScorecard } from "./CloserScorecard";
-import { Avatar, Card, Fig, Tile } from "./ui";
+import { Card, Fig, Tile } from "./ui";
 import type { Drill } from "@/lib/types";
 
+/** The media buyer sees only their own spend, the orders their ads brought in, and their own pay. No company accounting. */
 export function BuyerView() {
   const data = useData();
+  const me = PERSONA.buyer;
   const open = openCycle(data);
-  const lines = openLines(data);
-  const ps = payslip(lines, "tobi");
-  const cs = campaignStats(data, "tobi");
+  const ps = payslip(openLines(data), me);
+  const myOrders = data.orders.filter((o) => o.buyer === me);
+  const thisWeek = myOrders.filter((o) => o.createdCycle === open.id);
+  const spendNow = data.spend[open.id]?.[me] ?? 0;
 
-  const myOrders = data.orders.filter((o) => o.buyer === "tobi" && o.createdCycle === open.id);
-  const delivered = myOrders.filter((o) => o.stage === "delivered");
-
-  const payslipDrill: Drill = {
-    title: `Tobi Ade · ${open.id} Payslip Breakdown`,
-    subtitle: "Media buyer",
-    lines: ps.lines.map((l) => ({
+  const payLines = (slip: ReturnType<typeof payslip>) =>
+    slip.lines.map((l) => ({
       ref: l.orderId ? `#${l.orderId}` : l.kind.toUpperCase(),
-      label: l.kind === "base" ? PAY_LINE_TEXT.base : PAY_LINE_TEXT.commission(l.orderId),
+      label: l.kind === "base" ? PAY_LINE_TEXT.base : l.kind === "commission" ? PAY_LINE_TEXT.commission(l.orderId) : PAY_LINE_TEXT.adjustment(l.kind),
       detail: l.note,
       amount: l.amount,
-    })),
-    total: ps.gross,
-  };
+    }));
+  const spendDrill = (cycle: string, amount: number): Drill => ({
+    title: `${cycle} · Your ad spend`,
+    lines: [{ ref: "Sim. feed", label: "Ad spend", detail: SIM_FEED_NOTE, amount }],
+    total: amount,
+  });
+
+  // One row per week: what I spent, the orders my ads brought in, how many were delivered, and what I was paid.
+  const weeks = [...data.cycles].reverse().map((c) => {
+    const ords = myOrders.filter((o) => o.createdCycle === c.id);
+    return {
+      c,
+      ords,
+      delivered: ords.filter((o) => o.stage === "delivered").length,
+      spend: data.spend[c.id]?.[me] ?? 0,
+      slip: payslip(cycleLines(data, c.id), me),
+    };
+  });
 
   return (
     <div className="stack">
       <dl className="tiles">
-        <Tile label="Net payout this week" note="Fixed salary + commission on counted orders" tone="pos">
-          <Fig amount={ps.payable} drill={payslipDrill} />
+        <Tile label="Ad spend this week" note={`${L.simulatedFeed} · ${open.id}`}>
+          <Fig amount={spendNow} drill={spendDrill(open.id, spendNow)} />
         </Tile>
-        <Tile label="Ad spend" note={`${L.simulatedFeed} · ${open.id}`}>
+        <Tile label="Orders from your ads" note={`${thisWeek.filter((o) => o.stage === "delivered").length} delivered so far in ${open.id}`}>
+          <span className="num">{thisWeek.length}</span>
+        </Tile>
+        <Tile label="Your pay this week" note="Fixed salary + commission on delivered orders" tone="pos">
           <Fig
-            amount={cs.spend}
-            drill={{
-              title: `Tobi Ade · ${open.id} Ad Spend`,
-              lines: [{ ref: "Sim. feed", label: "Ad spend", detail: SIM_FEED_NOTE, amount: cs.spend }],
-              total: cs.spend,
-            }}
+            amount={ps.payable}
+            drill={{ title: `${open.id} · Your pay`, subtitle: "Fixed salary + commission on delivered orders from your ads", lines: payLines(ps), total: ps.gross }}
           />
-        </Tile>
-        <Tile
-          label="Delivered revenue"
-          note={`${delivered.length} of ${myOrders.length} orders delivered`}
-        >
-          <Fig
-            amount={cs.deliveredRev}
-            drill={{
-              title: "Delivered revenue",
-              lines: delivered.map((o) => ({
-                ref: `#${o.id}`,
-                label: `${o.customer} · ${o.sku} ×${o.qty}`,
-                detail: o.cashIn ? "Cash received" : "Cash still with the courier",
-                amount: orderValue(o),
-              })),
-              total: cs.deliveredRev,
-            }}
-          />
-        </Tile>
-        <Tile
-          label={L.deliveredSalesPerAdNaira}
-          note={`Booked orders suggest ${L.perNaira(cs.bookedRoas)}, but returns and undelivered orders bring it down`}
-          tone={cs.deliveredRoas < 2 ? "neg" : "pos"}
-        >
-          <span className="num">{L.perNaira(cs.deliveredRoas)}</span>
-        </Tile>
-        <Tile
-          label="Left after product, ads, pay"
-          note="After product cost, ads, delivery fees and commission"
-          tone={cs.netMargin < 0 ? "neg" : "pos"}
-        >
-          <Fig amount={cs.netMargin} sign drill={cs.marginDrill} />
         </Tile>
       </dl>
 
-      <AdBudget />
-
-      <Card
-        title="Campaign results · booked sales vs what's really left"
-        sub="Ad managers report sales per ₦1 of ads on orders booked. You pay the bills from what's left after product cost, delivery fees, commission and ads."
-        flush
-      >
+      <Card title="Your weeks" sub="What you spent, the orders your ads brought in, and what you were paid. Only your own numbers are shown." flush>
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>Media buyer</th>
+                <th>Week</th>
                 <th className="r">Ad spend</th>
-                <th className="r">Booked sales</th>
-                <th className="r">{L.bookedSalesPerAdNaira}</th>
-                <th className="r">Delivered sales</th>
-                <th className="r">{L.deliveredSalesPerAdNaira}</th>
-                <th className="r">Left after product, ads, pay</th>
-                <th className="r">Pay this week</th>
+                <th className="r">Orders from your ads</th>
+                <th className="r">Delivered</th>
+                <th className="r">Your pay</th>
               </tr>
             </thead>
             <tbody>
-              {data.people.filter((p) => p.role === "buyer").map((b) => b.id).map((id) => {
-                const p = personOf(data, id);
-                const c = campaignStats(data, id);
-                const ords = data.orders.filter((o) => o.buyer === id && o.createdCycle === open.id);
-                const del = ords.filter((o) => o.stage === "delivered");
-                const slip = payslip(lines, id);
+              {weeks.map(({ c, ords, delivered, spend, slip }) => {
+                const value = sum(ords.map(orderValue));
                 return (
-                  <tr key={id}>
+                  <tr key={c.id}>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                        <Avatar id={p.id} name={p.name} size="sm" />
-                        <b>{p.name}</b>
-                      </div>
+                      <b>{c.id}</b>
+                      <span className="sub">{c.id === open.id ? "This week" : `${shortDate(c.start)} – ${shortDate(c.end)}`}</span>
+                    </td>
+                    <td className="r mono">
+                      <Fig amount={spend} drill={spendDrill(c.id, spend)} />
                     </td>
                     <td className="r mono">
                       <Fig
-                        amount={c.spend}
+                        amount={value}
                         drill={{
-                          title: `${p.name} · Ad Spend`,
-                          lines: [{ ref: "Sim. feed", label: p.name, detail: SIM_FEED_NOTE, amount: c.spend }],
-                          total: c.spend,
+                          title: `${c.id} · Orders from your ads`,
+                          lines: ords.map((o) => ({ ref: `#${o.id}`, label: `${o.customer} (${L.stage[o.stage] ?? o.stage})`, amount: orderValue(o) })),
+                          total: value,
                         }}
                       />
+                      <span className="sub">
+                        {ords.length} order{ords.length === 1 ? "" : "s"}
+                      </span>
                     </td>
+                    <td className="r mono">{delivered}</td>
                     <td className="r mono">
-                      <Fig
-                        amount={c.bookedRev}
-                        drill={{
-                          title: `${p.name} · Booked Orders`,
-                          lines: ords.map((o) => ({
-                            ref: `#${o.id}`,
-                            label: `${o.customer} (${o.stage})`,
-                            amount: orderValue(o),
-                          })),
-                          total: c.bookedRev,
-                        }}
-                      />
-                    </td>
-                    <td className="r mono muted">{c.spend ? L.perNaira(c.bookedRoas) : "—"}</td>
-                    <td className="r mono">
-                      <Fig
-                        amount={c.deliveredRev}
-                        drill={{
-                          title: `${p.name} · Delivered Orders`,
-                          lines: del.map((o) => ({
-                            ref: `#${o.id}`,
-                            label: o.customer,
-                            amount: orderValue(o),
-                          })),
-                          total: c.deliveredRev,
-                        }}
-                      />
-                    </td>
-                    <td className={"r mono " + (c.spend && c.deliveredRoas < 2 ? "neg" : "pos")} style={{ fontWeight: 600 }}>
-                      {c.spend ? L.perNaira(c.deliveredRoas) : "—"}
-                    </td>
-                    <td className={"r mono " + (c.netMargin < 0 ? "neg" : "pos")} style={{ fontWeight: 600 }}>
-                      <Fig amount={c.netMargin} sign drill={c.marginDrill} />
-                    </td>
-                    <td className="r mono">
-                      <Fig
-                        amount={slip.payable}
-                        drill={{
-                          title: `${p.name} · Payslip`,
-                          lines: slip.lines.map((l) => ({
-                            ref: l.orderId ? `#${l.orderId}` : l.kind,
-                            label: l.note,
-                            amount: l.amount,
-                          })),
-                          total: slip.gross,
-                        }}
-                      />
+                      <b>
+                        <Fig amount={slip.payable} drill={{ title: `${c.id} · Your pay`, lines: payLines(slip), total: slip.gross }} />
+                      </b>
                     </td>
                   </tr>
                 );
@@ -190,7 +118,7 @@ export function LeadView() {
   const data = useData();
   const open = openCycle(data);
   const lines = openLines(data);
-  const ps = payslip(lines, "ngozi");
+  const ps = payslip(lines, PERSONA.lead);
 
   const teamDelivered = data.orders.filter((o) => o.deliveredCycle === open.id && o.stage === "delivered");
   const teamDelVal = sum(teamDelivered.map(orderValue));
@@ -214,7 +142,7 @@ export function LeadView() {
         <Tile label="Team lead net payout" note="Fixed salary + team bonus" tone="pos">
           <Fig amount={ps.payable} drill={payslipDrill} />
         </Tile>
-        <Tile label={L.teamBonus} note="Earned on the team's delivered sales, after any pay taken back">
+        <Tile label={L.teamBonus} note="Earned on the team's delivered sales, after any customer refunds">
           <Fig amount={ps.commission + ps.adjustments} drill={payslipDrill} />
         </Tile>
         <Tile label="Team delivered sales" note={`${teamDelivered.length} orders delivered in ${open.id}`}>

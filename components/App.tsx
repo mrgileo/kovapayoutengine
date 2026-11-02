@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { isEmptyLink, parseDeepLink } from "@/lib/deeplink";
-import { Command, Compass, FileUp, Moon, PanelLeftClose, PanelLeftOpen, RotateCcw, ShieldCheck, Sparkles, Sun } from "lucide-react";
-import { PERSONA, cashDesk, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
+import { L } from "@/lib/labels";
+import { Command, FileUp, Mail, Moon, Play, PanelLeftClose, PanelLeftOpen, RotateCcw, ShieldCheck, SlidersHorizontal, Sun } from "lucide-react";
+import { PERSONA, canSeeAllPayouts, canSeeFullAudit, canSeeRules, cashDesk, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
 import { CCY, Currency, shortDate } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
 import type { Role } from "@/lib/types";
@@ -12,7 +13,7 @@ import { ActivityStrip } from "./ActivityStrip";
 import { BuyerView, LeadView } from "./BuyerLeadViews";
 import { CloserView } from "./CloserView";
 import { CycleBar } from "./CycleBar";
-import { FounderView } from "./FounderView";
+import { CashHero, FounderView } from "./FounderView";
 import { ImportDialog } from "./ImportDialog";
 import { OrderLedger } from "./OrderLedger";
 import {
@@ -23,9 +24,11 @@ import {
   ReturnDialog,
   ToastTray,
 } from "./Overlays";
-import { RulesStrip } from "./RulesStrip";
+import { RulesDrawer } from "./RulesDrawer";
+import { MyWeeklyPay } from "./MyWeeklyPay";
 import { StockBook } from "./StockBook";
 import { Tour } from "./Tour";
+import { WaitlistDialog } from "./WaitlistDialog";
 import { Avatar, Fig, useMoney, useTableColumnResize } from "./ui";
 
 const ROLE_ORDER: Role[] = ["founder", "closer", "buyer", "lead", "accountant", "stock"];
@@ -42,12 +45,13 @@ function applyScheme(choice: ThemeChoice, save: boolean) {
   if (!save) return;
   try {
     window.localStorage?.setItem?.(SCHEME_KEY, choice);
-  } catch {}
+  } catch { }
 }
 
 export function App() {
   const [hydrated, setHydrated] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [waitOpen, setWaitOpen] = useState(false);
   const [sideCollapsed, setSideCollapsed] = useState(false);
   const [themeChoice, setThemeChoice] = useState<ThemeChoice>("light");
   const data = useData();
@@ -57,6 +61,7 @@ export function App() {
   const setRole = useStore((s) => s.setRole);
   const setCcy = useStore((s) => s.setCcy);
   const setGuide = useStore((s) => s.setGuide);
+  const setRulesOpen = useStore((s) => s.setRulesOpen);
   const reset = useStore((s) => s.reset);
   const dataSource = useStore((s) => s.dataSource);
   const importSummary = useStore((s) => s.importSummary);
@@ -91,7 +96,7 @@ export function App() {
       if (isEmptyLink(link)) return;
       applyDeepLink(link);
       window.history.replaceState(null, "", window.location.pathname);
-    } catch {}
+    } catch { }
   }, [applyDeepLink]);
 
   useEffect(() => {
@@ -103,7 +108,7 @@ export function App() {
       applyScheme(initial, false);
       const savedSide = window.localStorage?.getItem?.(SIDE_KEY);
       if (savedSide === "1") setSideCollapsed(true);
-    } catch {}
+    } catch { }
 
     const onStorage = (e: StorageEvent) => {
       if (e.key === SCHEME_KEY) {
@@ -122,7 +127,7 @@ export function App() {
       try {
         if (next) window.localStorage?.setItem?.(SIDE_KEY, "1");
         else window.localStorage?.removeItem?.(SIDE_KEY);
-      } catch {}
+      } catch { }
       return next;
     });
   }
@@ -195,13 +200,13 @@ export function App() {
           update: () => setRole(nextRole),
           types: [direction],
         });
-        vt?.ready?.catch(() => {});
-        vt?.finished?.catch(() => {});
+        vt?.ready?.catch(() => { });
+        vt?.finished?.catch(() => { });
         return;
       } catch {
         const vt = doc.startViewTransition(() => setRole(nextRole));
-        vt?.ready?.catch(() => {});
-        vt?.finished?.catch(() => {});
+        vt?.ready?.catch(() => { });
+        vt?.finished?.catch(() => { });
         return;
       }
     }
@@ -334,14 +339,14 @@ export function App() {
             ))}
           </select>
 
-          <button
-            type="button"
-            className="side-btn"
-            onClick={() => setGuide(!guideOpen)}
-            title={guideOpen ? "Exit the tour" : "Take the tour"}
-          >
-            <Compass size={14} style={{ flexShrink: 0 }} />
-            <span className="side-btn-txt">{guideOpen ? "Exit the tour" : "Take the tour"}</span>
+          <button type="button" className="side-btn" onClick={() => setGuide(true, "demo")} title={L.guidedDemo}>
+            <Play size={14} style={{ flexShrink: 0 }} />
+            <span className="side-btn-txt">{L.guidedDemo}</span>
+          </button>
+
+          <button type="button" className="side-btn" onClick={() => setWaitOpen(true)} title="Join the waitlist">
+            <Mail size={14} style={{ flexShrink: 0 }} />
+            <span className="side-btn-txt">Join the waitlist</span>
           </button>
 
           {role === "founder" && (
@@ -375,60 +380,60 @@ export function App() {
         aria-labelledby={`tab-${role}`}
       >
         <div className="sticky-head">
-        <div className="topbar">
-          <div className="topbar-left">
-            <button
-              type="button"
-              className="kbd-btn topbar-side-btn"
-              onClick={toggleSidebar}
-              aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={sideCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
-              style={{ padding: "5px 7px" }}
-            >
-              {sideCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-            </button>
-            <span className="live-dot" aria-hidden="true" />
-            <span>
-              <b style={{ color: "var(--ink)" }}>Live Operations Ledger</b> · Week {open.id} ({shortDate(open.start)} – {shortDate(open.end)})
-            </span>
-            <span className={`pill ${pnl.actual < 0 ? "neg" : "pos"}`}>
-              Net: <Fig amount={pnl.actual} sign drill={pnl.drills.actual} />
-            </span>
-          </div>
-          <div className="topbar-right">
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={toggleTheme}
-              title={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} mode (current: ${themeChoice})`}
-              aria-label={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} theme`}
-            >
-              {resolvedScheme === "dark" ? (
-                <>
-                  <Sun size={13} style={{ color: "var(--yellow)" }} />
-                  <span>Light mode</span>
-                </>
-              ) : (
-                <>
-                  <Moon size={13} style={{ color: "#854d0e" }} />
-                  <span>Dark mode</span>
-                </>
-              )}
-            </button>
+          <div className="topbar">
+            <div className="topbar-left">
+              <button
+                type="button"
+                className="kbd-btn topbar-side-btn"
+                onClick={toggleSidebar}
+                aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={sideCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+                style={{ padding: "5px 7px" }}
+              >
+                {sideCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+              </button>
+              <span className="live-dot" aria-hidden="true" />
+              <span>
+                <b className="tb-title" style={{ color: "var(--ink)" }}>Live Operations Ledger · </b>Week {open.id}<span className="tb-dates"> ({shortDate(open.start)} – {shortDate(open.end)})</span>
+              </span>
+              <span className={`pill ${pnl.actual < 0 ? "neg" : "pos"}`}>
+                Net: <Fig amount={pnl.actual} sign drill={pnl.drills.actual} />
+              </span>
+            </div>
+            <div className="topbar-right">
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={toggleTheme}
+                title={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} mode (current: ${themeChoice})`}
+                aria-label={`Switch to ${resolvedScheme === "dark" ? "light" : "dark"} theme`}
+              >
+                {resolvedScheme === "dark" ? (
+                  <>
+                    <Sun size={13} style={{ color: "var(--yellow)" }} />
+                    <span className="tb-label">Light mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon size={13} style={{ color: "#854d0e" }} />
+                    <span className="tb-label">Dark mode</span>
+                  </>
+                )}
+              </button>
 
-            <button
-              type="button"
-              className="kbd-btn"
-              onClick={() => setCmdOpen(true)}
-              title="Open Quick Command Palette (Ctrl+K / ⌘K)"
-            >
-              <Command size={12} style={{ color: "var(--eyebrow-ink)" }} />
-              <span>Quick Actions</span>
-              <span className="kbd">⌘K</span>
-            </button>
+              <button
+                type="button"
+                className="kbd-btn"
+                onClick={() => setCmdOpen(true)}
+                title="Open Quick Command Palette (Ctrl+K / ⌘K)"
+              >
+                <Command size={12} style={{ color: "var(--eyebrow-ink)" }} />
+                <span className="tb-label">Quick Actions</span>
+                <span className="kbd">⌘K</span>
+              </button>
+            </div>
           </div>
-        </div>
-        <ActivityStrip />
+          <ActivityStrip />
         </div>
 
         <div className="main-in">
@@ -438,23 +443,34 @@ export function App() {
                 Viewing as {activePerson.name} · {activePerson.title}
               </div>
               <h1>
-                {role === "founder" && "Real Profit, Pay Rules & Weekly Close"}
+                {role === "founder" && "Track returns from every customer purchase"}
                 {role === "closer" && "Your Orders & Earnings"}
-                {role === "buyer" && "Ad Results: Booked vs Delivered Sales"}
-                {role === "lead" && "Team Bonus & Closer Quality"}
+                {role === "buyer" && "Your Ad Spend, Orders & Pay"}
+                {role === "lead" && "Your Team, Orders & Pay"}
                 {role === "accountant" && "Courier Cash, Payouts & the Bank File"}
                 {role === "stock" && "Warehouse Stock, Reorders & Purchase Orders"}
               </h1>
-              <p>
-                {role === "founder"
-                  ? "Only you can edit rules, close weeks, or mark courier cash as received. Every change recalculates the entire company live."
-                  : "Rules are locked by the founder. Click any payout or revenue figure to inspect the underlying orders."}
-              </p>
+              {role === "founder" && dataSource === "demo" && (
+                <p className="demo-note" id="demo-note">
+                  <b>Demo:</b> you are looking at a sample week ({open.id}) for a small home-goods seller. Click any figure to see the orders behind it, or load your own orders to see your business.
+                </p>
+              )}
+              {role !== "founder" && (
+                <p>{L.roleIntro[role]}</p>
+              )}
             </div>
             <div className="head-actions">
-              {!imported && (
-                <button type="button" className="btn sm" onClick={() => setGuide(!guideOpen)}>
-                  <Sparkles size={13} /> {guideOpen ? "Exit the tour" : "Take the tour"}
+              {canSeeRules(role) && (
+                <button type="button" className="btn sm" onClick={() => setRulesOpen(true)}>
+                  <SlidersHorizontal size={13} /> Pay rules
+                </button>
+              )}
+              <button type="button" className="btn sm light" onClick={() => setWaitOpen(true)}>
+                <Mail size={13} /> Join the waitlist
+              </button>
+              {!imported && !guideOpen && (
+                <button type="button" className="btn sm primary" onClick={() => setGuide(true, "demo")}>
+                  <Play size={13} /> {L.guidedDemo}
                 </button>
               )}
             </div>
@@ -481,42 +497,37 @@ export function App() {
             </div>
           )}
 
-          {/* Rules Strip (always visible, gated by role === 'founder') */}
-          {role !== "accountant" && <RulesStrip />}
+          {role === "founder" && <CashHero />}
 
           {/* Role-specific primary view */}
           {role === "founder" && <FounderView />}
           {role === "closer" && <CloserView />}
           {role === "buyer" && <BuyerView />}
           {role === "lead" && <LeadView />}
-          {role === "accountant" && (
-            <>
-              <AccountantView />
-              {/* The accountant's own work comes first; the pay rules are read-only for them. */}
-              <RulesStrip />
-            </>
-          )}
+          {role === "accountant" && <AccountantView />}
           {role === "stock" && <StockBook />}
 
-          {/* Cycle Lifecycle Bar */}
-          <CycleBar />
+          {/* Weekly payouts: everyone's for the founder and accountant; your own weeks for everyone else who is paid */}
+          {canSeeAllPayouts(role) ? <CycleBar /> : role !== "stock" && role !== "buyer" && <MyWeeklyPay />}
 
-          {/* Order Ledger (cards on closer view, full table otherwise) */}
+          {/* Manage Orders: only the orders each role works with */}
           <OrderLedger />
 
-          {/* Show StockBook on Founder view as well so founder has full visibility */}
+          {/* Stock book on the founder page too */}
           {role === "founder" && <StockBook />}
 
-          {/* Audit & Event Log */}
+          {/* Audit log: everything for founder and accountant, your own actions for everyone else */}
           <AuditLogCard />
         </div>
       </main>
 
       {/* Modals, Drawer, Command Palette & Toasts */}
       <DrillDrawer />
+      <RulesDrawer />
       <ReturnDialog />
       <NewOrderDialog />
       <ImportDialog />
+      <WaitlistDialog open={waitOpen} onClose={() => setWaitOpen(false)} />
       <CommandPalette
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}

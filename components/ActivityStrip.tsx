@@ -78,7 +78,24 @@ function EventLine({ entry, now, big }: { entry: AuditEntry; now: number; big?: 
   );
 }
 
-/** A live line on every tab: the latest event, and who and what it moved, for the role you are viewing as. */
+/** One line: who did what, and the one change that matters most to the person viewing. */
+function OneLine({ entry, now }: { entry: AuditEntry; now: number }) {
+  const data = useData();
+  const chipsFor = useChips();
+  const { chips } = chipsFor(entry);
+  const chip = chips.find((c) => c.mine) ?? chips[0];
+  return (
+    <span className="act-one">
+      <span className="act-one-text" title={entry.text}>
+        <b>{firstName(data, entry.actor)}</b> · {entry.text}
+      </span>
+      <span className="act-ago">{ago(entry.at, now)}</span>
+      {chip && <span className={`act-chip ${chip.tone}${chip.mine ? " mine" : ""}`}>{chip.text}</span>}
+    </span>
+  );
+}
+
+/** A live line on every tab: the latest event on a single row. "Details" opens who and what it moved, and earlier events. */
 export function ActivityStrip() {
   const data = useData();
   const role = useStore((s) => s.role);
@@ -108,24 +125,24 @@ export function ActivityStrip() {
   }, [latest]);
 
   return (
-    <div className={"activity" + (fresh ? " fresh" : "")} role="status" aria-live="polite" aria-label={`Live activity, viewing as ${role}`}>
+    <div className={"activity one-line" + (fresh ? " fresh" : "")} role="status" aria-live="polite" aria-label={`Live activity, viewing as ${role}`}>
       <span className="act-live">
         <Activity size={13} aria-hidden="true" /> Live
       </span>
       {latest ? (
-        <EventLine entry={latest} now={now} big />
+        <OneLine entry={latest} now={now} />
       ) : (
         <span className="act-empty">Nothing has happened yet. Mark an order delivered and watch who and what it moves.</span>
       )}
-      {events.length > 1 && (
+      {latest && (
         <button type="button" className="act-more" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="activity-earlier">
-          Earlier {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          Details {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
       )}
-      {open && events.length > 1 && (
+      {open && latest && (
         <div id="activity-earlier" className="act-earlier">
-          {events.slice(1).map((e) => (
-            <EventLine key={e.id} entry={e} now={now} />
+          {events.map((e, i) => (
+            <EventLine key={e.id} entry={e} now={now} big={i === 0} />
           ))}
         </div>
       )}

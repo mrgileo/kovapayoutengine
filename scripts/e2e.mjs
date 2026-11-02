@@ -148,7 +148,7 @@ try {
 
   // 1. Founder view & P&L headline
   const headlineText = await evaluate(`return document.querySelector(".headline h2")?.innerText;`);
-  assert.ok(headlineText && headlineText.includes("losing"), `Headline should show loss: ${headlineText}`);
+  assert.ok(headlineText && headlineText.includes("netting"), `Healthy demo week should show a net gain: ${headlineText}`);
   console.log("✓ [1/10] Founder view rendered with executive P&L headline:", headlineText);
 
   // 2. Drill-down modal on clicking figure
@@ -163,7 +163,19 @@ try {
   await evaluate(`document.querySelector('.drawer button[aria-label="Close drill-down"]').click();`);
   await sleep(100);
 
+  // The pay rules live in a drawer now (founder and accountant only).
+  const openRules = async () => {
+    await evaluate(`Array.from(document.querySelectorAll(".head-actions button")).find(b => /Pay rules/.test(b.innerText)).click();`);
+    for (let i = 0; i < 20 && !(await evaluate(`return Boolean(document.querySelector(".rules-drawer"))`)); i++) await sleep(100);
+  };
+  const closeRules = async () => {
+    await evaluate(`document.querySelector('.rules-drawer button[aria-label="Close pay rules"]').click();`);
+    await sleep(150);
+  };
+
   // 3. Rule toggle & live recalculation
+  assert.ok(!(await evaluate(`return Boolean(document.querySelector(".rules-grid"))`)), "The pay rules are tucked away in a drawer, not on the page");
+  await openRules();
   const beforeHeadline = await evaluate(`return document.querySelector(".headline h2")?.innerText;`);
   await evaluate(`
     const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Order booked"));
@@ -172,6 +184,7 @@ try {
   await sleep(150);
   const afterHeadline = await evaluate(`return document.querySelector(".headline h2")?.innerText;`);
   assert.notEqual(beforeHeadline, afterHeadline, "Switching trigger to Lead recalculates P&L headline");
+  assert.ok(!(await evaluate(`return Array.from(document.querySelectorAll(".rules-drawer .seg button")).some(b => b.querySelector(".wi"))`)), "No figures under the rule options");
   console.log("✓ [3/10] Switching rule to 'Lead' recalculated live:", afterHeadline);
 
   // Switch back to Delivery
@@ -180,22 +193,28 @@ try {
     btn.click();
   `);
   await sleep(100);
+  await closeRules();
 
   // 4. Switch to Closer role & verify rules are locked + stamp shown + phone cards rendered
   await evaluate(`document.querySelector('#tab-closer').click();`);
-  for (let i = 0; i < 30 && !(await evaluate(`return document.querySelectorAll(".ocard").length > 0 && document.querySelectorAll(".seg.locked").length > 0;`)); i++) await sleep(150);
+  for (let i = 0; i < 30 && !(await evaluate(`return document.querySelectorAll(".ocard").length > 0;`)); i++) await sleep(150);
   const closerChecks = await evaluate(`
-    const segLocked = document.querySelectorAll(".seg.locked").length;
-    const disabledBtns = document.querySelectorAll(".seg button:disabled").length;
-    const banner = document.querySelector(".lock-banner")?.innerText || "";
-    const cards = document.querySelectorAll(".ocard").length;
-    return { segLocked, disabledBtns, banner, cards };
+    const titles = Array.from(document.querySelectorAll(".card .card-head h2")).map(e => e.innerText);
+    return {
+      rulesBtn: Array.from(document.querySelectorAll(".head-actions button")).some(b => /Pay rules/.test(b.innerText)),
+      seg: document.querySelectorAll(".seg").length,
+      titles,
+      cards: document.querySelectorAll(".ocard").length,
+      ownOnly: Array.from(document.querySelectorAll(".ocard")).every(c => !/Chidi →|Tunde|Segun/.test(c.innerText) || /Amaka/.test(c.innerText)),
+    };
   `);
-  assert.equal(closerChecks.segLocked, 5, "All 5 rule groups must have .locked class for closer");
-  assert.ok(closerChecks.disabledBtns >= 12, "All rule buttons must be disabled for closer");
-  assert.ok(closerChecks.banner.includes("Set by the founder"), "Lock banner must display founder audit message");
-  assert.ok(closerChecks.cards > 0, "Closer view must render stacked order cards (.ocard)");
-  console.log(`✓ [4/10] Closer view: ${closerChecks.segLocked} locked rules, ${closerChecks.cards} phone order cards, banner="${closerChecks.banner}"`);
+  assert.equal(closerChecks.rulesBtn, false, "A closer has no Pay rules button");
+  assert.equal(closerChecks.seg, 0, "A closer never sees the rule options");
+  assert.ok(!closerChecks.titles.includes("Weekly payouts"), "A closer does not see everyone's weekly payouts: " + closerChecks.titles);
+  assert.ok(closerChecks.titles.includes("What you earned each week"), "A closer sees what they earned each week: " + closerChecks.titles);
+  assert.ok(closerChecks.titles.includes("Your actions"), "A closer's audit log is their own actions: " + closerChecks.titles);
+  assert.ok(closerChecks.cards > 0 && closerChecks.cards < 13, "A closer sees only their own order cards, got " + closerChecks.cards);
+  console.log(`✓ [4/10] Closer view: no pay rules, own weekly pay only, ${closerChecks.cards} own order cards, own-actions audit`);
 
   // 5. Mobile 390px horizontal overflow check on Closer view
   await send("Emulation.setDeviceMetricsOverride", {
@@ -251,9 +270,9 @@ try {
 
   // 7b. Ad budget card: simulated feed label, profit per order, flags against the founder max
   await evaluate(`document.querySelector('#tab-founder').click();`);
-  for (let i = 0; i < 30 && !(await evaluate(`return Array.from(document.querySelectorAll("section")).some(s => s.innerText.includes("Profit per order and ad cost"));`)); i++) await sleep(150);
+  for (let i = 0; i < 30 && !(await evaluate(`return Array.from(document.querySelectorAll("section")).some(s => s.innerText.includes("Advertising Costs"));`)); i++) await sleep(150);
   const adCard = await evaluate(`
-    const card = Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Profit per order and ad cost"));
+    const card = Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Advertising Costs"));
     return card ? { text: card.innerText, over: Array.from(card.querySelectorAll(".pill")).filter(p => p.innerText.includes("Over max")).length } : null;
   `);
   assert.ok(adCard, "Ad budget card should render on the founder view");
@@ -261,7 +280,7 @@ try {
   assert.ok(!/Prospecting|Retargeting/.test(adCard.text), "No fixed campaign labels");
   assert.equal(adCard.over, 2, "Both buyers are over the max on the seed");
   await evaluate(`
-    const input = document.querySelector('input[aria-label="Max cost per order"]');
+    const input = document.querySelector('input[aria-label="Max Cost Per Lead"]');
     input.focus();
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
     set.call(input, "100000");
@@ -289,13 +308,13 @@ try {
   assert.ok(flowInfo.text.includes("1,850,000") && flowInfo.text.includes("532,500"), "Funnel shows booked and kept values: " + flowInfo.text);
   assert.ok(flowInfo.text.includes("equals the delivered revenue"), "Funnel ties to the delivered revenue in the P&L");
   assert.equal(flowInfo.table, true, "A table view of the funnel exists");
-  assert.equal(flowInfo.leakRows, 6, "Six leak checks");
+  assert.equal(flowInfo.leakRows, 6, "Six leak checks (courier cash is the hero card, not repeated here)");
   // Scenario 7b raised the max cost per order to ₦100,000, so the ad-spend leak is clear too (2 clear on the seed + ads).
   assert.equal(flowInfo.leakClear, 3, "Pay-before-delivery, pay-kept and (after 7b) ad spend are clear");
   await evaluate(`document.querySelector(".leak-row .fig, .leak-row [data-fig], .leak-row .leak-amt > *")?.click();`);
   await sleep(300);
   const leakDrill = await evaluate(`return document.querySelector(".drawer h2")?.innerText || "";`);
-  assert.ok(leakDrill.includes("Cash still with the courier"), "Clicking a leak figure opens its orders, got: " + leakDrill);
+  assert.ok(leakDrill.includes("Orders waiting on stock"), "Clicking a leak figure opens its orders, got: " + leakDrill);
   await evaluate(`document.querySelector('.drawer button[aria-label="Close drill-down"]').click();`);
   await sleep(200);
   await evaluate(`document.querySelector(".flow-row .flow-amt > *")?.click();`);
@@ -307,7 +326,12 @@ try {
   console.log("✓ [7c] Revenue flow funnel + leaks panel: figures tie to the P&L, drill-downs open, table view present");
 
   // 7d. Live activity strip: an event on one tab shows who and what it moved, restricted by role
-  const stripText = () => evaluate(`return document.querySelector(".activity")?.innerText || "";`);
+  // The strip is one line; "Details" opens the full chips, so the test opens it before reading.
+  const stripText = async () => {
+    await evaluate(`const more = document.querySelector('.act-more[aria-expanded="false"]'); if (more) more.click();`);
+    await sleep(60);
+    return evaluate(`return document.querySelector(".activity")?.innerText || "";`);
+  };
   const waitStrip = async (needle) => {
     for (let i = 0; i < 30 && !(await stripText()).includes(needle); i++) await sleep(150);
     return stripText();
@@ -345,7 +369,7 @@ try {
   // the strip is sticky and the history opens
   const sticky = await evaluate(`return getComputedStyle(document.querySelector(".sticky-head")).position;`);
   assert.equal(sticky, "sticky", "The strip stays on screen under the top bar");
-  await evaluate(`document.querySelector(".act-more")?.click();`);
+  await evaluate(`const more = document.querySelector(".act-more"); if (more && more.getAttribute("aria-expanded") === "false") more.click();`);
   await sleep(200);
   assert.ok(await evaluate(`return document.querySelectorAll(".act-earlier .act-event").length > 0;`), "Earlier events can be opened");
   // on a phone the strip must not stay pinned (the top bar alone does), and nothing overflows
@@ -372,22 +396,24 @@ try {
   await gotoTab("stock", "Purchase Orders");
   const whBtns = await evaluate(`return Array.from(document.querySelectorAll("button:not(.seg button)")).map(b => b.innerText.trim());`);
   assert.ok(!whBtns.some((t) => /Cash received/.test(t)), "The warehouse must not be offered Cash received");
-  assert.ok(whBtns.some((t) => /Process return/.test(t)), "The warehouse still processes returns");
+  assert.ok(whBtns.some((t) => /^Return/.test(t)), "The warehouse still processes returns");
+  assert.ok(!(await evaluate(`return /Profit by product|Company prices/.test(document.body.innerText)`)), "The warehouse does not see prices or profit by product");
   await gotoTab("founder", "Weekly Close");
   assert.ok((await rowButtons(1047))?.some((t) => /Cash received/.test(t)), "The founder can still record cash");
 
   await gotoTab("accountant", "Courier Cash");
   const acc = await evaluate(`
     return {
-      locked: document.querySelectorAll(".seg.locked").length,
       buttons: Array.from(document.querySelectorAll("button")).map(b => b.innerText.trim()),
       title: document.querySelector("h1")?.innerText || "",
       tiles: document.querySelectorAll(".tile").length,
     };
   `);
-  assert.equal(acc.locked, 5, "Rules are locked for the accountant");
+  await openRules();
+  assert.equal(await evaluate(`return document.querySelectorAll(".rules-drawer .seg.locked").length`), 5, "Rules are locked (read-only) for the accountant");
+  await closeRules();
   assert.ok(acc.title.includes("Courier Cash"), "Accountant heading: " + acc.title);
-  const forbidden = /^(Confirm|Dispatch|Send out|Mark delivered|Failed delivery|Process return|Cancel|\+? ?New lead|Close & approve)/;
+  const forbidden = /^(Confirm|Dispatch|Send out|Mark delivered|Failed delivery|Return…|Cancel|\+? ?New lead|Close & approve)/;
   assert.deepEqual(acc.buttons.filter((t) => forbidden.test(t)), [], "The accountant has no sales, warehouse or approval buttons");
   assert.ok(acc.buttons.some((t) => /Bank file/.test(t)), "The accountant can export the bank file");
   assert.ok(acc.buttons.some((t) => /Record all as received \(3/.test(t)), "Bulk cash button shows three owed orders: " + acc.buttons.filter((t) => /Record/.test(t)));
@@ -412,15 +438,15 @@ try {
     return {
       discountButtons: Array.from(document.querySelectorAll("button")).filter(b => /discount/i.test(b.innerText)).length,
       mentionsDiscount: /discount/i.test(body),
-      ruleGroups: document.querySelectorAll(".rules-grid .rule").length,
-      advanced: /advanced/i.test(document.querySelector(".rules-grid")?.parentElement?.innerText || ""),
       row1043: Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1043"))?.innerText || "",
     };
   `);
   assert.equal(noDisc.discountButtons, 0, "No Discount button anywhere");
   assert.equal(noDisc.mentionsDiscount, false, "The word discount must not appear on screen");
-  assert.equal(noDisc.ruleGroups, 5, "Rules strip shows exactly five rules");
-  assert.equal(noDisc.advanced, false, "No Advanced section in the rules strip");
+  await openRules();
+  assert.equal(await evaluate(`return document.querySelectorAll(".rules-drawer .rules-grid .rule").length`), 5, "The Pay rules drawer shows exactly five rules");
+  assert.equal(await evaluate(`return /advanced/i.test(document.querySelector(".rules-drawer").innerText)`), false, "No Advanced section in the pay rules");
+  await closeRules();
   assert.ok(noDisc.row1043.includes("212,000"), "Order #1043 is priced at the company price");
   await evaluate(`
     const input = document.querySelector('input[aria-label="AIR-12 company price"]');
@@ -437,18 +463,21 @@ try {
 
   // 9. Post-close return on W43 order #1033 & Close cycle W44
   await evaluate(`
-    const filterPaid = Array.from(document.querySelectorAll(".filters .chip")).find(b => b.innerText.includes("Paid in W42/W43"));
+    const filterPaid = Array.from(document.querySelectorAll(".filters .chip")).find(b => b.innerText.startsWith("Delivered"));
     filterPaid.click();
   `);
   await sleep(150);
   await evaluate(`
     const row1033 = Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1033"));
-    const retBtn = Array.from(row1033.querySelectorAll("button")).find(b => b.innerText.includes("Process return"));
+    const retBtn = Array.from(row1033.querySelectorAll("button")).find(b => b.innerText.includes("Return"));
     retBtn.click();
   `);
   await sleep(150);
   const retConsequence = await evaluate(`return document.querySelector(".dialog .calc .tot")?.innerText;`);
-  assert.ok(retConsequence.includes("taken back"), `Return dialog should show pay-taken-back consequence: ${retConsequence}`);
+  assert.ok(retConsequence.includes("taken back"), `Return dialog should show the commission consequence: ${retConsequence}`);
+  assert.ok(await evaluate(`return Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Confirm return")).disabled`), "Confirm return is disabled until the tick is ticked");
+  await evaluate(`document.querySelector(".dialog .confirm-tick input").click();`);
+  await sleep(100);
   await evaluate(`
     const confirmRet = Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Confirm return"));
     confirmRet.click();
@@ -526,7 +555,7 @@ try {
   await sleep(400);
   const errText = await evaluate(`return document.getElementById("import-errors")?.innerText || "";`);
   assert.ok(/line 2/.test(errText) && /qty/.test(errText), "Errors must name the line and column: " + errText);
-  assert.ok(/stage/.test(errText) && /closer/.test(errText) && /date/.test(errText), "Every bad column is reported: " + errText);
+  assert.ok(/stage/.test(errText) && /date/.test(errText), "Every bad column is reported: " + errText);
   const disabled = await evaluate(`return Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Show my dashboard")).disabled;`);
   assert.equal(disabled, true, "Load button stays disabled while there are errors");
 
@@ -552,7 +581,7 @@ try {
   assert.equal(imported.tour, false, "The demo-only CEO tour is hidden on your own data");
 
   // revenue in the open week = #5004 only (₦187,000)
-  const revTile = await evaluate(`return Array.from(document.querySelectorAll(".tile")).find(t => t.innerText.includes("Delivered revenue"))?.innerText || "";`);
+  const revTile = await evaluate(`return document.querySelector("#cash-hero")?.innerText || "";`);
   assert.ok(revTile.includes("187,000"), "Open-week delivered revenue should be ₦187,000, got " + revTile);
 
   // The closer view works on imported data at 390px with no horizontal scroll
@@ -588,7 +617,7 @@ try {
   const back = await evaluate(`return { banner: Boolean(document.getElementById("imported-banner")), cycle: document.querySelector(".side-cycle .pill")?.innerText || "", head: document.querySelector(".headline h2")?.innerText || "" };`);
   assert.equal(back.banner, false, "Banner is gone after going back");
   assert.ok(back.cycle.includes("W44"), "Demo cycle W44 is back, got " + back.cycle);
-  assert.ok(back.head.includes("152,420"), "Demo headline is back: " + back.head);
+  assert.ok(back.head.includes("35,08"), "Demo headline is back: " + back.head);
   console.log("✓ [11] Import: clear row errors, loaded your data, 390px closer view fits, survives reload, back to demo data");
 
   // 12. Shared links: a link opens the chosen persona with the chosen rules, then tidies the address bar
@@ -600,28 +629,21 @@ try {
   assert.ok(/Rule changed . Pay staff when/.test(linked.text), "The rule change is in the audit log like any other");
   console.log("✓ [12] Shared links open the right persona with the right rules, ignore bad values, and tidy the URL");
 
-  // 13. The tour acts: each step changes the live demo, switches persona and lights up the result
-  await evaluate(`Array.from(document.querySelectorAll("button")).find(b => b.innerText.includes("Take the tour")).click();`);
+  // 13. The guided demo acts: it books, delivers and settles one order while the hero numbers move
+  assert.ok(!(await evaluate(`return document.body.innerText.includes("Take the tour")`)), "The old tour button is gone");
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(b => b.innerText.trim() === "Guided demo").click();`);
   const tourText = () => evaluate(`return document.querySelector(".tour")?.innerText || ""`);
-  for (let i = 0; i < 30 && !/step 1 of 6/i.test(await tourText()); i++) await sleep(150);
-  assert.ok(/step 1 of 6/i.test(await tourText()), "The tour opens on step 1: " + (await evaluate(`return JSON.stringify({buttons: Array.from(document.querySelectorAll("button")).filter(b => /tour/i.test(b.innerText)).map(b => b.innerText), toasts: document.querySelector(".toasts, [class*=toast]")?.innerText, url: location.href})`)));
+  for (let i = 0; i < 30 && !/guided demo 1 of 5/i.test(await tourText()); i++) await sleep(150);
+  assert.ok(/guided demo 1 of 5/i.test(await tourText()), "The guided demo opens on step 1");
   const tourNext = () => evaluate(`Array.from(document.querySelectorAll(".tour button")).find(b => /Next|Finish/.test(b.innerText)).click();`);
-  const waitTab = async (tab) => { for (let i = 0; i < 40 && !(await evaluate(`return document.querySelector("#tab-${tab}")?.getAttribute("aria-selected") === "true"`)); i++) await sleep(150); };
-  await tourNext(); await waitTab("closer");
-  assert.ok(/step 2 of 6/i.test(await tourText()), "Next moves to step 2");
-  assert.ok(await evaluate(`return document.body.innerText.includes("#1043")`), "Step 2 delivered order #1043");
+  const hero = () => evaluate(`return document.querySelector("#cash-hero")?.innerText || ""`);
+  for (let i = 0; i < 3; i++) { await tourNext(); await sleep(500); }
+  assert.ok(/606,000/.test(await hero()), "The delivered order raised cash earned: " + (await hero()));
+  await tourNext(); await sleep(500);
+  assert.ok(/420,500/.test(await hero()), "Recording the courier cash raised cash received: " + (await hero()));
   await tourNext();
-  for (let i = 0; i < 40 && !/is now set to Order booked/.test(await tourText()); i++) await sleep(150);
-  assert.ok(/is now set to Order booked.*That is ₦[1-9]/.test(await tourText()), "Step 3 flips the rule and quotes the live amount: " + (await tourText()).slice(0, 220));
-  assert.ok(await evaluate(`return Boolean(document.querySelector("#tour-rules.tour-hl"))`), "The rules strip is lit up");
-  await tourNext(); await tourNext(); await waitTab("stock");
-  assert.ok(await evaluate(`return /Stock loop closed|PO inbound/i.test(document.body.innerText)`), "Step 5 raised the purchase orders");
-  await tourNext(); await waitTab("accountant");
-  assert.ok(/step 6 of 6/i.test(await tourText()), "Step 6 of 6");
-  assert.ok(await evaluate(`return document.body.innerText.includes("W44 is approved")`), "The founder approved the week and the accountant can pay it");
-  await tourNext();
-  assert.equal(await tourText(), "", "Finish closes the tour");
-  console.log("✓ [13] The tour acts: delivers an order, flips a rule, returns an order, raises POs, hands pay to the accountant");
+  assert.equal(await tourText(), "", "Finish closes the guided demo");
+  console.log("✓ [13] The guided demo books, delivers and settles an order while the hero numbers move");
 
   // Reset back to clean seed so user gets fresh state if they open a new tab
   await evaluate(`

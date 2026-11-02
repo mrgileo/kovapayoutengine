@@ -1,7 +1,7 @@
-import type { DemoState, Order, Person, Product, Rules, RuleKey, Stamp } from "./types.ts";
-import { closeCycle, lockCycle, log, markPaid } from "./engine.ts";
+import type { DemoState, Lead, LeadSource, Order, Person, Product, Rules, RuleKey, Stamp } from "./types.ts";
+import { closeCycle, impactOf, lockCycle, log, markPaid } from "./engine.ts";
 
-export const SEED_VERSION = 9;
+export const SEED_VERSION = 12;
 export const DEFAULT_MAX_COST_PER_ORDER = 4000;
 
 const people: Person[] = [
@@ -66,7 +66,7 @@ const W44: Order[] = [
   mk("W44", { id: 1045, customer: "Ifeoma Chukwu", city: "Enugu", sku: "VAC-21", qty: 2, closer: "amaka", buyer: "tobi", stage: "confirmed" }),
   mk("W44", { id: 1046, customer: "Yakubu Musa", city: "Kano", sku: "BLN-07", closer: "chidi", buyer: "zainab", stage: "returned" }),
   mk("W44", { id: 1047, customer: "Ngozi Okonkwo", city: "Port Harcourt", sku: "STM-09", closer: "amaka", buyer: "tobi", stage: "delivered", cashIn: false }),
-  mk("W44", { id: 1048, customer: "Tunde Bakare", city: "Lagos", sku: "BLN-07", closer: "chidi", buyer: "zainab", stage: "new" }),
+  mk("W44", { id: 1048, customer: "Tunde Bakare", city: "Lagos", sku: "BLN-07", closer: "chidi", buyer: "zainab", stage: "cancelled", failed: true }),
   mk("W44", { id: 1049, customer: "Hauwa Ibrahim", city: "Abuja", sku: "AIR-12", closer: "amaka", buyer: "tobi", stage: "confirmed" }),
   mk("W44", { id: 1050, customer: "Chinedu Eze", city: "Enugu", sku: "BLN-07", closer: "chidi", buyer: "zainab", stage: "delivered", cashIn: false }),
   mk("W44", { id: 1051, customer: "Aisha Lawal", city: "Kano", sku: "VAC-21", closer: "amaka", buyer: "tobi", stage: "new" }),
@@ -83,12 +83,46 @@ const rulesMeta: Record<RuleKey, Stamp> = {
   payModel: { by: "chidinma", at: "2026-03-14T10:20:00+01:00" },
 };
 
+/** W44 Leads: 29 came in, 13 became the orders above (45%), 12 were lost and 4 have not been reached yet.
+ *  Most arrive as landing-page form fills. Leads never reserve stock or earn pay; only the booked order does. */
+function buildLeads(orders: Order[]): Lead[] {
+  const bookedSource: LeadSource[] = ["web_form", "web_form", "whatsapp", "web_form", "web_form", "call", "web_form", "web_form", "whatsapp", "web_form", "web_form", "whatsapp", "web_form"];
+  const leads: Lead[] = orders
+    .filter((o) => o.createdCycle === "W44")
+    .map((o, i) => ({ id: 2001 + i, cycle: "W44", customer: o.customer, city: o.city, source: bookedSource[i], status: "booked" as const, orderId: o.id }));
+  const lost: [string, string, LeadSource, string][] = [
+    ["Nkechi Obi", "Lagos", "web_form", "Never picked up the call"],
+    ["Samuel Eze", "Abuja", "web_form", "Never picked up the call"],
+    ["Rukky Alade", "Lagos", "web_form", "Said the price was too high"],
+    ["Peter Nwosu", "Port Harcourt", "web_form", "Just browsing"],
+    ["Joy Ekpo", "Enugu", "web_form", "Wrong number"],
+    ["Ahmed Garba", "Kano", "web_form", "Never picked up the call"],
+    ["Titi Coker", "Lagos", "web_form", "Changed their mind"],
+    ["Ugo Anyanwu", "Ibadan", "web_form", "Said the price was too high"],
+    ["Bimpe Salako", "Lagos", "whatsapp", "Stopped replying"],
+    ["Femi Okon", "Abuja", "whatsapp", "Said the price was too high"],
+    ["Dozie Obi", "Enugu", "call", "Ordered from someone else"],
+    ["Lola Martins", "Lagos", "instagram", "Just browsing"],
+  ];
+  const open: [string, string, LeadSource][] = [
+    ["Gift Udo", "Lagos", "web_form"],
+    ["Zubair Lawal", "Kano", "web_form"],
+    ["Amara Ndu", "Abuja", "web_form"],
+    ["Kola Fashola", "Ibadan", "instagram"],
+  ];
+  let id = 2001 + leads.length;
+  for (const [customer, city, source, reason] of lost) leads.push({ id: id++, cycle: "W44", customer, city, source, status: "lost", reason });
+  for (const [customer, city, source] of open) leads.push({ id: id++, cycle: "W44", customer, city, source, status: "open" });
+  return leads;
+}
+
 export function buildSeed(): DemoState {
   const d: DemoState = {
     version: SEED_VERSION,
     people: structuredClone(people),
     products: structuredClone(products),
     orders: [],
+    leads: [],
     cycles: [{ id: "W42", start: "2026-10-12", end: "2026-10-18", status: "open", carryIn: [] }],
     rules: { ...rules },
     rulesMeta: structuredClone(rulesMeta),
@@ -109,9 +143,10 @@ export function buildSeed(): DemoState {
   d.orders.push(...structuredClone(W43));
   closeCycle(d, "chidinma", "2026-10-26T09:05:00+01:00");
   markPaid(d, "W43", "chidinma", "2026-10-27T11:20:00+01:00");
-  d.spend.W44 = { tobi: 185000, zainab: 96000 };
+  d.spend.W44 = { tobi: 55000, zainab: 35000 };
 
   d.orders.push(...structuredClone(W44));
+  d.leads = buildLeads(d.orders);
 
   const seedLog: [string, string, string, Parameters<typeof log>[1]["kind"], string][] = [
     ["2026-10-19T09:12:00+01:00", "chidinma", "W42", "cycle", "Closed and approved W42 payouts"],
@@ -123,6 +158,27 @@ export function buildSeed(): DemoState {
     ["2026-10-28T17:30:00+01:00", "dayo", "W44", "order", "Order 1053 dispatched · opened by Amaka, closed by Chidi"],
   ];
   for (const [at, actor, cycle, kind, text] of seedLog) log(d, { at, actor, cycle, kind, text });
+
+  // Two live events with real impact, so the activity strip opens with a story instead of "nothing yet":
+  // a delivery whose cash is still with the courier, and a failed delivery. The earlier state is rebuilt by hand
+  // so the final seed (stock levels included) stays exactly as laid out above.
+  const event = (orderId: number, at: string, text: string, rewind: (before: DemoState) => void) => {
+    const before = structuredClone(d);
+    rewind(before);
+    log(d, { at, actor: "dayo", cycle: "W44", kind: "order", text, orderId, impact: impactOf(before, d) });
+  };
+  event(1048, "2026-10-29T09:40:00+01:00", "Order 1048 failed delivery · delivery fee lost, goods back on shelf", (b) => {
+    const o = b.orders.find((x) => x.id === 1048)!;
+    o.stage = "dispatched";
+    o.failed = undefined;
+    o.reversedCycle = undefined;
+  });
+  event(1050, "2026-10-29T14:15:00+01:00", "Order 1050 delivered · BLN-07 −1 on the shelf", (b) => {
+    const o = b.orders.find((x) => x.id === 1050)!;
+    o.stage = "dispatched";
+    o.deliveredCycle = undefined;
+    b.products.find((p) => p.sku === o.sku)!.onHand += o.qty;
+  });
   return d;
 }
 

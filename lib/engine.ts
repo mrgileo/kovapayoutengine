@@ -10,6 +10,7 @@ import type {
   Drill,
   DrillLine,
   Impact,
+  LeadSource,
   Order,
   PayLine,
   Person,
@@ -318,7 +319,7 @@ export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
     { ref: "−", label: L.refunds, amount: -refunds },
     { ref: "−", label: L.productCost, amount: -cogs },
     { ref: "−", label: L.damagedStock, amount: -writeoffs },
-    { ref: "−", label: `${L.salesPay} (after pay taken back)`, amount: -commission },
+    { ref: "−", label: `${L.salesPay} (after customer refunds)`, amount: -commission },
     { ref: "−", label: L.fixedSalary, amount: -base },
     { ref: "−", label: L.adSpend, amount: -adSpend },
     { ref: "−", label: L.deliveryFees, amount: -logistics },
@@ -343,7 +344,7 @@ export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
       refunds: d(L.refunds, refundL, "Orders delivered in an earlier week and returned this week"),
       cogs: d(L.productCost, cogsL, "What the goods cost Kova, not what they sold for"),
       writeoffs: d(L.damagedStock, writeoffL, "Returned and can't be resold"),
-      commission: d(L.salesPay, commissionL, "Every line, including pay taken back"),
+      commission: d(L.salesPay, commissionL, "Every line, including customer refunds"),
       base: d(L.fixedSalary, baseL, "Fixed salary for sales staff, one week's share"),
       adSpend: d("Ad spend", spendL),
       logistics: d(L.deliveryFees, logisticsL, L.deliveryFeeNote(DELIVERY_FEE)),
@@ -370,6 +371,34 @@ export function cashWithCourier(s: DemoState): Drill {
     .filter((o) => o.stage === "delivered" && !o.cashIn)
     .map((o) => ({ ref: orderRef(o), label: `${o.customer} · ${o.city}`, detail: `Delivered ${o.deliveredCycle} · the courier has not handed over the cash`, amount: orderValue(o) }));
   return { title: "Cash still with the courier", subtitle: "Delivered, but the courier has not handed over the money", lines, total: sum(lines.map((l) => l.amount)) };
+}
+
+/** This week's delivered sales split into cash in hand and cash still with the courier. earned = received + gap. */
+export interface CashGap {
+  earned: number;
+  received: number;
+  gap: number;
+  earnedDrill: Drill;
+  receivedDrill: Drill;
+  gapDrill: Drill;
+}
+
+export function cashGap(s: DemoState): CashGap {
+  const del = deliveredInCycle(s);
+  const line = (o: Order, detail: string) => ({ ref: orderRef(o), label: `${o.customer} · ${o.city}`, detail, amount: orderValue(o) });
+  const inHand = del.filter((o) => o.cashIn).map((o) => line(o, "Cash received"));
+  const out = del.filter((o) => !o.cashIn).map((o) => line(o, "Delivered · the courier has not handed over the cash"));
+  const received = sum(inHand.map((l) => l.amount));
+  const gap = sum(out.map((l) => l.amount));
+  const all = del.map((o) => line(o, o.cashIn ? "Cash received" : "Delivered · cash still with courier"));
+  return {
+    earned: received + gap,
+    received,
+    gap,
+    earnedDrill: { title: L.cashEarned, subtitle: L.cashEarnedSub, lines: all, total: received + gap },
+    receivedDrill: { title: L.cashReceived, subtitle: L.cashReceivedSub, lines: inHand, total: received },
+    gapDrill: { title: L.cashGap, subtitle: L.cashGapSub, lines: out, total: gap },
+  };
 }
 
 export function paidOnUndelivered(s: DemoState): Drill {
@@ -436,7 +465,7 @@ export function closerStats(s: DemoState, personId: string): CloserStats {
       const gross = orderValue(o) - unitCost(s, o) - DELIVERY_FEE;
       contribLines.push({
         ref: orderRef(o),
-        label: `${o.customer} · landed (${o.sku} ×${o.qty})`,
+        label: `${o.customer} · delivered (${o.sku} ×${o.qty})`,
         detail: `Sales ₦${orderValue(o).toLocaleString()} − product cost ₦${unitCost(s, o).toLocaleString()} − delivery ₦${DELIVERY_FEE.toLocaleString()}`,
         amount: gross,
       });
@@ -463,7 +492,7 @@ export function closerStats(s: DemoState, personId: string): CloserStats {
     contribLines.push({
       ref: "COMM",
       label: `${personOf(s, personId).name} · commission this week`,
-      detail: "Commission, after any pay taken back",
+      detail: "Commission, after any customer refunds",
       amount: -closerCommCost,
     });
   }
@@ -524,7 +553,7 @@ export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
   );
   const netMargin = deliveredRev - cogs - logistics - comm - spend;
   const drillLines: DrillLine[] = [
-    { ref: "+", label: "Delivered revenue", detail: `${del.length} landed orders`, amount: deliveredRev },
+    { ref: "+", label: "Delivered revenue", detail: `${del.length} delivered orders`, amount: deliveredRev },
     { ref: "−", label: L.productCost, detail: "What the delivered items cost", amount: -cogs },
     { ref: "−", label: L.deliveryFees, detail: `${del.length} delivered, ${ret.length} returned, ${failed.length} failed`, amount: -logistics },
     { ref: "−", label: L.salesPay, detail: "Closer + media buyer + team bonus", amount: -comm },
@@ -700,10 +729,70 @@ export function revenueFlow(s: DemoState): RevenueFlow {
   return { cycleId: C, steps, otherWeeksRevenue: computePnl(s).revenue - kept.value };
 }
 
+export interface LeadSourceRow {
+  source: LeadSource;
+  leads: number;
+  booked: number;
+}
+
+export interface LeadFunnel {
+  cycleId: string;
+  leads: number;
+  booked: number;
+  lost: number;
+  open: number;
+  /** Booked leads as a share of all leads that came in this week. */
+  rate: number;
+  /** Average value of the orders booked this week, used to price what the lost leads would have been worth. */
+  avgOrder: number;
+  lostValue: number;
+  bySource: LeadSourceRow[];
+  drill: Drill;
+}
+
+const LEAD_SOURCES: LeadSource[] = ["web_form", "whatsapp", "call", "instagram"];
+
+/** Leads this week and how many became orders. The lost ones are priced at this week's average order. */
+export function leadFunnel(s: DemoState): LeadFunnel {
+  const C = openCycle(s).id;
+  const mine = s.leads.filter((l) => l.cycle === C);
+  const orders = s.orders.filter((o) => o.createdCycle === C);
+  const avgOrder = orders.length ? Math.round(sum(orders.map(orderValue)) / orders.length) : 0;
+  const lostLeads = mine.filter((l) => l.status === "lost");
+  const booked = mine.filter((l) => l.status === "booked").length;
+  const lostValue = lostLeads.length * avgOrder;
+  return {
+    cycleId: C,
+    leads: mine.length,
+    booked,
+    lost: lostLeads.length,
+    open: mine.filter((l) => l.status === "open").length,
+    rate: mine.length ? booked / mine.length : 0,
+    avgOrder,
+    lostValue,
+    bySource: LEAD_SOURCES.map((source) => ({
+      source,
+      leads: mine.filter((l) => l.source === source).length,
+      booked: mine.filter((l) => l.source === source && l.status === "booked").length,
+    })).filter((r) => r.leads > 0),
+    drill: {
+      title: L.lostLeadsDrill,
+      subtitle: L.lostLeadsSub(C, avgOrder),
+      lines: lostLeads.map((l) => ({
+        ref: `L${l.id}`,
+        label: `${l.customer} · ${l.city}`,
+        detail: `${L.leadSource[l.source]}${l.campaign ? ` · ${l.campaign}` : ""} · ${l.reason ?? "no reason noted"}`,
+        amount: avgOrder,
+      })),
+      total: lostValue,
+    },
+  };
+}
+
 export type LeakKind = "stuck" | "costing";
 
 export interface Leak {
-  key: "cash" | "blocked" | "returns" | "ads" | "payEarly" | "payKept";
+  key: "cash" | "blocked" | "returns" | "ads" | "payEarly" | "payKept" | "lostLeads";
   kind: LeakKind;
   /** Money. Zero means this leak is clear. */
   amount: number;
@@ -778,7 +867,13 @@ export function leaks(s: DemoState): Leak[] {
   const kept = absorbedDrill(s);
   const payKept = make("payKept", "costing", L.leak.payKept.label, kept.subtitle ?? "", kept.lines);
 
-  return [cashLeak, blockedLeak, returnsLeak, adLeak, payEarly, payKept];
+  const out = [cashLeak, blockedLeak, returnsLeak, adLeak, payEarly, payKept];
+  // Only when the company records Leads; imported orders have none, and a fake "clear" would mislead.
+  if (s.leads.length > 0) {
+    const lf = leadFunnel(s);
+    out.push({ key: "lostLeads", kind: "costing", amount: lf.lostValue, count: lf.lost, drill: lf.drill });
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ impact of an event */
@@ -989,7 +1084,7 @@ export function skuEconomics(s: DemoState): SkuEconomics[] {
         title: `${p.sku} (${p.name}) · Unit Economics (${c.id})`,
         subtitle: `Unit cost ₦${p.cost.toLocaleString()} · Lifetime return rate ${Math.round((resolved ? retAll.length / resolved : 0) * 100)}%`,
         lines: [
-          { ref: "+", label: "Delivered revenue", detail: `${delC.length} order(s) landed in ${c.id}`, amount: revenue },
+          { ref: "+", label: "Delivered revenue", detail: `${delC.length} order(s) delivered in ${c.id}`, amount: revenue },
           { ref: "−", label: L.productCost, detail: `${sum(delC.map((o) => o.qty))} units × ₦${p.cost.toLocaleString()}`, amount: -cogs },
           ...(damagedLoss ? [{ ref: "−", label: L.damagedStock, detail: "Returned and can't be resold", amount: -damagedLoss }] : []),
           { ref: "−", label: L.deliveryFees, detail: "Delivery, return and failed-delivery trips", amount: -courierCost },
@@ -1053,12 +1148,50 @@ export const ACTION_LABEL: Record<ActionKey, string> = {
   deliver: "Mark delivered",
   fail: "Failed delivery",
   cash: "Cash received",
-  return: "Process return",
+  return: "Return…",
   cancel: "Cancel",
 };
 
 export function canEditRules(role: Role) {
   return role === "founder";
+}
+
+/* ------------------------------------------------------------------ who sees what */
+
+/** The pay rules drawer: the founder edits, the accountant reads. Everyone else is told by email. */
+export function canSeeRules(role: Role) {
+  return role === "founder" || role === "accountant";
+}
+
+/** Every person's weekly payout (the weekly payouts card). Others only see what they made themselves. */
+export function canSeeAllPayouts(role: Role) {
+  return role === "founder" || role === "accountant";
+}
+
+/** The whole audit log. Other roles only see the actions they took themselves. */
+export function canSeeFullAudit(role: Role) {
+  return role === "founder" || role === "accountant";
+}
+
+/** Company-wide money reports: P&L, leaks, ad costs, the revenue breakdown. */
+export function canSeeCompanyReports(role: Role) {
+  return role === "founder";
+}
+
+/** The orders a role works with. Closers see theirs, media buyers the ones their ads generated,
+ *  leads their team's, the founder, accountant and warehouse all of them. */
+export function ordersFor(s: DemoState, role: Role): Order[] {
+  const me = PERSONA[role];
+  switch (role) {
+    case "closer":
+      return s.orders.filter((o) => o.closer === me || o.openedBy === me);
+    case "buyer":
+      return s.orders.filter((o) => o.buyer === me);
+    case "lead":
+      return s.orders.filter((o) => personOf(s, o.closer).reportsTo === me || personOf(s, o.openedBy).reportsTo === me || o.closer === me);
+    default:
+      return s.orders;
+  }
 }
 
 /** Segregation of duties: whoever earns on an order never certifies its delivery. */
@@ -1115,6 +1248,7 @@ export function cloneState(d: DemoState): DemoState {
     people: d.people.map((x) => ({ ...x })),
     products: d.products.map((x) => ({ ...x })),
     orders: d.orders.map((x) => ({ ...x })),
+    leads: d.leads.map((x) => ({ ...x })),
     cycles: d.cycles.map((c) => ({ ...c })),
     rules: { ...d.rules },
     rulesMeta: Object.fromEntries(Object.entries(d.rulesMeta).map(([k, v]) => [k, { ...v }])) as DemoState["rulesMeta"],

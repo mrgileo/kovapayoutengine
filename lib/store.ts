@@ -51,6 +51,11 @@ interface Store {
   returnFor: number | null;
   newOrderOpen: boolean;
   guideOpen: boolean;
+  /** The pay rules drawer (founder edits, accountant reads). */
+  rulesOpen: boolean;
+  setRulesOpen: (open: boolean) => void;
+  /** "tour" = click through the six features; "demo" = the auto-playing story. */
+  guideMode: "tour" | "demo";
   /** Where the numbers come from: the built-in demo, or the user's own CSV files (never uploaded anywhere). */
   dataSource: "demo" | "imported";
   importSummary: ImportSummary | null;
@@ -64,7 +69,7 @@ interface Store {
   dismiss: (id: number) => void;
   setReturnFor: (id: number | null) => void;
   setNewOrderOpen: (open: boolean) => void;
-  setGuide: (open: boolean) => void;
+  setGuide: (open: boolean, mode?: "tour" | "demo") => void;
 
   setRule: <K extends RuleKey>(key: K, value: Rules[K]) => void;
   setMaxCostPerOrder: (amount: number) => void;
@@ -191,6 +196,9 @@ export const useStore = create<Store>()(
         returnFor: null,
         newOrderOpen: false,
         guideOpen: false,
+        rulesOpen: false,
+        setRulesOpen: (rulesOpen) => set({ rulesOpen }),
+        guideMode: "tour",
         dataSource: "demo",
         importSummary: null,
         importOpen: false,
@@ -207,7 +215,7 @@ export const useStore = create<Store>()(
         dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
         setReturnFor: (returnFor) => set({ returnFor }),
         setNewOrderOpen: (newOrderOpen) => set({ newOrderOpen }),
-        setGuide: (guideOpen) => set({ guideOpen }),
+        setGuide: (guideOpen, mode = "tour") => set({ guideOpen, guideMode: mode }),
 
         setProductPrice: (sku, price) => {
           if (!canEditRules(get().role)) {
@@ -309,7 +317,7 @@ export const useStore = create<Store>()(
                 break;
             }
             const before = get().data;
-            log(d, { at: now(), actor: actor(), kind: "order", text, deltas: peopleDeltas(before, d), impact: impactOf(before, d) });
+            log(d, { at: now(), actor: actor(), kind: "order", text, orderId, deltas: peopleDeltas(before, d), impact: impactOf(before, d) });
           });
           if (!res) return;
           const deltas = peopleDeltas(res.before, res.after);
@@ -396,6 +404,7 @@ export const useStore = create<Store>()(
               at: now(),
               actor: actor(),
               kind: "order",
+              orderId: o.id,
               text: `Lead #${o.id} created · ${o.customer} · ${o.sku} ×${o.qty}${splitNote}`,
               deltas: peopleDeltas(before, d),
               impact: impactOf(before, d),

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, ArrowDown, CheckCircle2 } from "lucide-react";
-import { leaks, revenueFlow, type FlowKey, type Leak } from "@/lib/engine";
+import { leadFunnel, leaks, revenueFlow, type FlowKey, type Leak } from "@/lib/engine";
 import { L } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { Card, Fig, useMoney } from "./ui";
@@ -15,10 +15,12 @@ export function FlowFunnel() {
   const m = useMoney();
   const flow = revenueFlow(data);
   const booked = flow.steps[0];
+  const lf = leadFunnel(data);
 
   return (
     <Card
-      title={`Where every order is · ${flow.cycleId}`}
+      title={`Order Breakdown · ${flow.cycleId}`}
+      tone="yellow"
       sub={`${L.flowIntro} Click any figure to see the orders.`}
       flush
     >
@@ -28,6 +30,21 @@ export function FlowFunnel() {
         </p>
       ) : (
         <div className="flow" role="list">
+          {lf.leads > 0 && (
+            <div className="flow-leads" id="lead-funnel" style={{ padding: "4px 0 12px", fontSize: 13 }}>
+              <div>
+                <b>{L.leadsLine(lf.leads, lf.booked, lf.rate)}</b> {lf.open > 0 && <span className="muted">{lf.open} not reached yet. </span>}
+                {lf.lost > 0 && (
+                  <span>
+                    <ArrowDown size={11} aria-hidden="true" /> {lf.lost} never became orders, worth about <Fig amount={lf.lostValue} drill={lf.drill} />
+                  </span>
+                )}
+              </div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                {lf.bySource.map((r) => `${L.leadSource[r.source]}: ${r.booked} of ${r.leads}`).join(" · ")}
+              </div>
+            </div>
+          )}
           {flow.steps.map((st) => {
             const label = L.flowStepLabel[st.key];
             const summary = `${label}: ${m(st.value)}. ${L.flowRowSub(st.key, st.orders, booked.orders)}, ${pctText(st.share)} of the value booked`;
@@ -135,7 +152,7 @@ function LeakRow({ leak }: { leak: Leak }) {
 export function LeaksPanel() {
   const data = useData();
   const m = useMoney();
-  const all = leaks(data);
+  const all = leaks(data).filter((l) => l.key !== "cash"); // courier cash is the hero card, so it is not repeated here
   const groups: { kind: Leak["kind"]; title: string; note: string }[] = [
     { kind: "stuck", title: "Stuck on the way in", note: "Money you should get, that hasn't arrived" },
     { kind: "costing", title: "Costing you", note: "Money that has gone out, or is going out, for little" },
@@ -145,6 +162,7 @@ export function LeaksPanel() {
   return (
     <Card
       title="Where money is stuck or leaking"
+      tone="yellow"
       sub={open === 0 ? "Nothing is stuck or leaking right now." : `${open} of ${all.length} checks need attention. These are different views of the same week, so they are not added together.`}
       flush
     >

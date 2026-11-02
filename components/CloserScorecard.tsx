@@ -1,15 +1,18 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import { closerStats, openLines, orderValue, payslip, personOf } from "@/lib/engine";
+import { canSeeAllPayouts, closerStats, openLines, orderValue, payslip, personOf } from "@/lib/engine";
 import { pct } from "@/lib/format";
 import { PAY_LINE_TEXT } from "@/lib/labels";
-import { useData } from "@/lib/store";
+import { useData, useStore } from "@/lib/store";
 import { Avatar, Card, Fig } from "./ui";
 import type { Drill } from "@/lib/types";
 
 export function CloserScorecard() {
   const data = useData();
+  const role = useStore((s) => s.role);
+  // Other people's pay is for the founder and accountant only; a team lead sees quality, not pay.
+  const showPay = canSeeAllPayouts(role);
   const closers = ["amaka", "chidi"];
   const lines = openLines(data);
   const cap = data.rules.returnCap ?? 1;
@@ -44,7 +47,7 @@ export function CloserScorecard() {
       sub={
         cap < 1
           ? `Quality gate active (${Math.round(cap * 100)}% return cap): closers above the cap have their commission halved automatically.`
-          : "Paying on volume alone encourages over-promising on the phone. Turn on the Return-rate gate above to penalise closers whose orders keep coming back."
+          : "Paying on volume alone encourages over-promising on the phone. The founder can turn on a Return-rate gate in Pay rules to penalise closers whose orders keep coming back."
       }
       flush
     >
@@ -55,8 +58,8 @@ export function CloserScorecard() {
               <th>Closer</th>
               <th className="r">Delivered sales</th>
               <th>Return rate</th>
-              <th className="r">This week's pay</th>
-              <th className="r">Profit contributed</th>
+              {showPay && <th className="r">This week's pay</th>}
+              {showPay && <th className="r">Profit contributed</th>}
             </tr>
           </thead>
           <tbody>
@@ -73,7 +76,7 @@ export function CloserScorecard() {
                       <div>
                         <b>{p.name}</b>
                         <span className="sub">
-                          {st.delivered} landed · {st.returned} returned{st.failed ? ` · ${st.failed} failed` : ""}
+                          {st.delivered} delivered · {st.returned} returned{st.failed ? ` · ${st.failed} failed` : ""}
                         </span>
                       </div>
                     </div>
@@ -120,21 +123,20 @@ export function CloserScorecard() {
                     </div>
                   </td>
 
-                  <td className="r mono">
+                  {showPay && <td className="r mono">
                     <b style={{ fontSize: 14 }}>
                       <Fig amount={ps.gross} drill={() => buildCloserDrill(id)} />
                     </b>
                     <span className="sub">
                       Commission: <Fig amount={st.earnedThisCycle} drill={() => buildCloserDrill(id)} />
                     </span>
-                  </td>
-
-                  <td className="r mono">
+                  </td>}
+                  {showPay && <td className="r mono">
                     <b className={st.netContribution < 0 ? "neg" : "pos"} style={{ fontSize: 14 }}>
                       <Fig amount={st.netContribution} sign drill={st.contributionDrill} />
                     </b>
                     <span className="sub">After product cost &amp; delivery fees</span>
-                  </td>
+                  </td>}
                 </tr>
               );
             })}
@@ -142,14 +144,14 @@ export function CloserScorecard() {
         </table>
       </div>
 
-      <div style={{ padding: "12px 20px 18px" }}>
+      {showPay && <div style={{ padding: "12px 20px 18px" }}>
         <div className="insight">
           <AlertTriangle size={17} />
           <div>
-            <b>Why this matters:</b> Volume alone hides quality: <b>{pct(worst.rate, 0)} of {worst.name}&apos;s resolved orders come back</b> (vs {best.name}&apos;s {pct(best.rate, 0)}). Set <b>Return-rate gate → 30% cap</b> in the rules above to halve a closer&apos;s commission until their return rate drops.
+            <b>Why this matters:</b> Volume alone hides quality: <b>{pct(worst.rate, 0)} of {worst.name}&apos;s resolved orders come back</b> (vs {best.name}&apos;s {pct(best.rate, 0)}). Set <b>Return-rate gate → 30% cap</b> in Pay rules to halve a closer&apos;s commission until their return rate drops.
           </div>
         </div>
-      </div>
+      </div>}
     </Card>
   );
 }

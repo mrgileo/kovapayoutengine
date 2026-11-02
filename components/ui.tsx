@@ -156,6 +156,7 @@ export function Card({
   children,
   flush,
   id,
+  tone,
 }: {
   title: ReactNode;
   sub?: ReactNode;
@@ -163,6 +164,8 @@ export function Card({
   children: ReactNode;
   flush?: boolean;
   id?: string;
+  /** "yellow" gives the header a yellow band in light mode, to set key cards apart. */
+  tone?: "yellow";
 }) {
   function onPointerMove(e: PointerEvent<HTMLElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -172,7 +175,7 @@ export function Card({
 
   return (
     <section
-      className={"card" + (flush ? " flush" : "")}
+      className={"card" + (flush ? " flush" : "") + (tone === "yellow" ? " card-yellow" : "")}
       id={id}
       aria-label={typeof title === "string" ? title : undefined}
       onPointerMove={onPointerMove}

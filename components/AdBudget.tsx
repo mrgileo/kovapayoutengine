@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Radio } from "lucide-react";
-import { adCost, canEditRules, openCycle, personOf, profitPerOrder } from "@/lib/engine";
+import { adCost, campaignStats, canEditRules, openCycle, personOf } from "@/lib/engine";
 import { L } from "@/lib/labels";
 import { useData, useStore } from "@/lib/store";
 import { Avatar, Card, Fig, Tile, useMoney } from "./ui";
@@ -17,7 +17,10 @@ export function AdBudget() {
   const open = openCycle(data);
   const buyers = data.people.filter((p) => p.role === "buyer").map((p) => p.id);
   const editable = canEditRules(role);
-  const ppo = profitPerOrder(data);
+  // Two totals for the week: what was spent on ads, and the delivered sales those ads produced.
+  const stats = buyers.map((id) => ({ id, name: personOf(data, id).name, c: campaignStats(data, id) }));
+  const totalSpend = stats.reduce((a, x) => a + x.c.spend, 0);
+  const totalRevenue = stats.reduce((a, x) => a + x.c.deliveredRev, 0);
 
   const [draft, setDraft] = useState(String(data.maxCostPerOrder));
   useEffect(() => setDraft(String(data.maxCostPerOrder)), [data.maxCostPerOrder]);
@@ -29,8 +32,10 @@ export function AdBudget() {
 
   return (
     <Card
-      title="Profit per order and ad cost"
-      sub={`${L.simulatedFeedNote} Ad cost is flagged against your max; it never changes anyone's pay.`}
+      title="Advertising Costs"
+      tone="yellow"
+      flush
+      sub={`${L.simulatedFeedNote}`}
       actions={
         <span className="pill warn">
           <Radio size={12} style={{ marginRight: 5 }} />
@@ -38,16 +43,27 @@ export function AdBudget() {
         </span>
       }
     >
+      <div style={{ padding: "16px 20px 6px" }}>
       <dl className="tiles" style={{ marginBottom: 14 }}>
-        <Tile
-          label={L.profitPerOrderBeforePay}
-          note={`Revenue − product cost − ads, over ${ppo.orders} delivered order${ppo.orders === 1 ? "" : "s"}`}
-          tone={ppo.before < 0 ? "neg" : "pos"}
-        >
-          <Fig amount={ppo.before} sign drill={ppo.beforeDrill} />
+        <Tile label="Total ad spend" note={`All media buyers · ${open.id}`}>
+          <Fig
+            amount={totalSpend}
+            drill={{
+              title: `${open.id} · Total ad spend`,
+              lines: stats.map((x) => ({ ref: "Sim. feed", label: x.name, amount: x.c.spend })),
+              total: totalSpend,
+            }}
+          />
         </Tile>
-        <Tile label={L.profitPerOrderAfterPay} note="The same, after fixed salary and commission" tone={ppo.after < 0 ? "neg" : "pos"}>
-          <Fig amount={ppo.after} sign drill={ppo.afterDrill} />
+        <Tile label="Revenue from those ads" note="Delivered sales from orders the buyers' ads brought in" tone="pos">
+          <Fig
+            amount={totalRevenue}
+            drill={{
+              title: `${open.id} · Revenue from ads`,
+              lines: stats.map((x) => ({ ref: "Delivered", label: x.name, amount: x.c.deliveredRev })),
+              total: totalRevenue,
+            }}
+          />
         </Tile>
       </dl>
 
@@ -70,6 +86,8 @@ export function AdBudget() {
           {editable ? "Set by you." : "Set by the founder."} Now {m(data.maxCostPerOrder)} per delivered order.
         </span>
       </label>
+
+      </div>
 
       <div className="tbl-wrap">
         <table className="tbl">

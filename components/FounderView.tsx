@@ -3,13 +3,10 @@
 import { AlertCircle } from "lucide-react";
 import {
   TARGETS,
-  absorbedDrill,
-  cashWithCourier,
+  cashGap,
   computePnl,
-  deferredDrill,
   needsAttention,
   openCycle,
-  paidOnUndelivered,
 } from "@/lib/engine";
 import { pct } from "@/lib/format";
 import { L, PNL_TEXT as P } from "@/lib/labels";
@@ -17,19 +14,57 @@ import { useData } from "@/lib/store";
 import { AdBudget } from "./AdBudget";
 import { FlowFunnel, LeaksPanel } from "./RevenueFlow";
 import { CloserScorecard } from "./CloserScorecard";
-import { Card, Fig, Tile, useMoney } from "./ui";
+import { Card, Fig, useMoney } from "./ui";
 import type { PnLKey } from "@/lib/types";
+
+/** Low or out-of-stock products, right under the three cash cards. Hidden when stock is fine. */
+function StockAlerts() {
+  const data = useData();
+  const alerts = needsAttention(data);
+  if (alerts.length === 0) return null;
+  return (
+    <div className="alert warn stock-alert" id="stock-alert" role="status">
+      <AlertCircle size={16} />
+      <span>
+        <b>Low or out of stock:</b> {alerts.map((r) => r.product.sku).join(", ")}. Reorder from the Stock section below.
+      </span>
+    </div>
+  );
+}
+
+/** The hero: cash earned vs cash actually received. Shown first on the founder page. */
+export function CashHero() {
+  const data = useData();
+  const cash = cashGap(data);
+  return (
+    <>
+    <section className="cash-hero" id="cash-hero" aria-label="Cash earned versus cash received">
+      <div className="ch-cell">
+        <span>{L.cashEarned}</span>
+        <b><Fig amount={cash.earned} drill={cash.earnedDrill} /></b>
+        <em>{L.cashEarnedSub}</em>
+      </div>
+      <div className="ch-cell">
+        <span>{L.cashReceived}</span>
+        <b className="ok"><Fig amount={cash.received} drill={cash.receivedDrill} /></b>
+        <em>{L.cashReceivedSub}</em>
+      </div>
+      <div className={`ch-cell ch-gap${cash.gap > 0 ? " warn" : ""}`}>
+        <span>{L.cashGap}</span>
+        <b><Fig amount={cash.gap} drill={cash.gapDrill} /></b>
+        <em>{cash.gap > 0 ? L.cashGapSub : "Every delivered naira is in hand"}</em>
+      </div>
+    </section>
+    <StockAlerts />
+    </>
+  );
+}
 
 export function FounderView() {
   const data = useData();
   const m = useMoney();
   const pnl = computePnl(data);
   const open = openCycle(data);
-  const courierCash = cashWithCourier(data);
-  const undelivered = paidOnUndelivered(data);
-  const absorbed = absorbedDrill(data);
-  const deferred = deferredDrill(data);
-  const stockAlerts = needsAttention(data);
 
   const naiveNet = pnl.revenue - pnl.commission;
   const coreActual = pnl.revenue - pnl.cogs - pnl.commission - pnl.adSpend;
@@ -47,32 +82,34 @@ export function FounderView() {
     cls: string;
     isTotal?: boolean;
   }[] = [
-    { key: "revenue", label: P.revenue.label, sub: P.revenue.sub(open.id), amount: pnl.revenue, sign: 1, cls: "rev" },
-    { key: "refunds", label: P.refunds.label, sub: P.refunds.sub, amount: pnl.refunds, sign: -1, cls: "cost" },
-    { key: "cogs", label: P.cogs.label, sub: P.cogs.sub, amount: pnl.cogs, sign: -1, cls: "cost" },
-    { key: "writeoffs", label: P.writeoffs.label, sub: P.writeoffs.sub, amount: pnl.writeoffs, sign: -1, cls: "cost" },
-    { key: "commission", label: P.commission.label, sub: P.commission.sub, amount: pnl.commission, sign: -1, cls: "cost comm" },
-    { key: "base", label: P.base.label, sub: P.base.sub, amount: pnl.base, sign: -1, cls: "cost comm" },
-    { key: "adSpend", label: P.adSpend.label, sub: P.adSpend.sub, amount: pnl.adSpend, sign: -1, cls: "cost" },
-    { key: "logistics", label: P.logistics.label, sub: P.logistics.sub, amount: pnl.logistics, sign: -1, cls: "cost" },
-  ];
+      { key: "revenue", label: P.revenue.label, sub: P.revenue.sub(open.id), amount: pnl.revenue, sign: 1, cls: "rev" },
+      { key: "refunds", label: P.refunds.label, sub: P.refunds.sub, amount: pnl.refunds, sign: -1, cls: "cost" },
+      { key: "cogs", label: P.cogs.label, sub: P.cogs.sub, amount: pnl.cogs, sign: -1, cls: "cost" },
+      { key: "writeoffs", label: P.writeoffs.label, sub: P.writeoffs.sub, amount: pnl.writeoffs, sign: -1, cls: "cost" },
+      { key: "commission", label: P.commission.label, sub: P.commission.sub, amount: pnl.commission, sign: -1, cls: "cost comm" },
+      { key: "base", label: P.base.label, sub: P.base.sub, amount: pnl.base, sign: -1, cls: "cost comm" },
+      { key: "adSpend", label: P.adSpend.label, sub: P.adSpend.sub, amount: pnl.adSpend, sign: -1, cls: "cost" },
+      { key: "logistics", label: P.logistics.label, sub: P.logistics.sub, amount: pnl.logistics, sign: -1, cls: "cost" },
+    ];
 
   return (
     <div className="stack">
-      {/* Headline moment: "payout ratio healthy, business underwater" */}
       <section className="headline" aria-label="Executive P&L headline">
         <div>
           <div className="eyebrow">Founder summary · {open.id}</div>
           <h2>
-            {L.headline(pct(pnl.commissionRatio))}{" "}
-            {pnl.actual < 0 ? "losing " : "netting "}
-            <Fig
-              amount={pnl.actual}
-              sign
-              drill={pnl.drills.actual}
-              className={pnl.actual < 0 ? "" : "ok"}
-            />{" "}
-            this week.
+            {L.headline}
+            <br />
+            <span className="hl-sub">
+              {L.headlineNet(pnl.actual < 0)}{" "}
+              <Fig
+                amount={pnl.actual}
+                sign
+                drill={pnl.drills.actual}
+                className={pnl.actual < 0 ? "" : "ok"}
+              />
+              .
+            </span>
           </h2>
           <p>
             {L.headlineBody.intro} <b>{L.headlineBody.productCost}</b> (<Fig amount={pnl.cogs} drill={pnl.drills.cogs} />), <b>{L.headlineBody.adSpend}</b> (<Fig amount={pnl.adSpend} drill={pnl.drills.adSpend} />),{" "}
@@ -147,61 +184,12 @@ export function FounderView() {
         <LeaksPanel />
       </div>
 
-      {/* Key founder tiles */}
-      <dl className="tiles">
-        <Tile label="Delivered revenue" note={`${pnl.drills.revenue.lines.length} order${pnl.drills.revenue.lines.length === 1 ? "" : "s"} delivered in ${open.id} and not returned`}>
-          <Fig amount={pnl.revenue} drill={pnl.drills.revenue} />
-        </Tile>
-        <Tile
-          label="Cash still with courier"
-          note={courierCash.total > 0 ? `${courierCash.lines.length} delivered order${courierCash.lines.length === 1 ? "" : "s"}: the courier has not handed over the cash` : "All delivered cash received"}
-          tone={courierCash.total > 0 ? "warn" : "pos"}
-        >
-          <Fig amount={courierCash.total} drill={courierCash} />
-        </Tile>
-        <Tile
-          label="Paid on undelivered orders"
-          note={undelivered.total > 0 ? `Commission paid on ${undelivered.lines.length} order${undelivered.lines.length === 1 ? "" : "s"} that ${undelivered.lines.length === 1 ? "has" : "have"} not been delivered yet` : "No commission is paid before delivery"}
-          tone={undelivered.total > 0 ? "neg" : "pos"}
-        >
-          <Fig amount={undelivered.total} drill={undelivered} />
-        </Tile>
-        <Tile
-          label={
-            data.rules.onReturn === "offset"
-              ? L.payTakenBackNextWeek
-              : L.payKeptOnReturns
-          }
-          note={
-            data.rules.onReturn === "offset"
-              ? "Comes off next week's payout"
-              : absorbed.total > 0
-                ? "Staff keep it, the business takes the loss"
-                : "Nothing kept: pay on returned orders is taken back"
-          }
-          tone={absorbed.total > 0 ? "neg" : deferred.total < 0 ? "warn" : "pos"}
-        >
-          {data.rules.onReturn === "offset" ? (
-            <Fig amount={Math.abs(deferred.total)} drill={deferred} />
-          ) : (
-            <Fig amount={absorbed.total} drill={absorbed} />
-          )}
-        </Tile>
-        <Tile
-          label="Products to reorder"
-          note={stockAlerts.length ? `Low or out of stock: ${stockAlerts.map((r) => r.product.sku).join(", ")}` : "Every product has enough stock for open orders"}
-          tone={stockAlerts.length ? "warn" : "pos"}
-        >
-          <span className="num">{stockAlerts.length}</span>
-        </Tile>
-      </dl>
-
       <AdBudget />
 
       <div className="grid-2">
         {/* True P&L Waterfall */}
         <Card
-          title={`Where the money went · ${open.id}`}
+          title={`Revenue Flow Breakdown · ${open.id}`}
           sub="Staff pay is two lines: Fixed salary (the weekly share of monthly pay) and Commission paid (earned on delivered orders). Click any row to see what is behind it."
           flush
         >

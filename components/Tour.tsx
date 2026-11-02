@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { leaks, needsAttention, openCycle } from "@/lib/engine";
+import { cashGap, leaks, needsAttention, openCycle } from "@/lib/engine";
 import { buildSeed } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 import type { DemoState } from "@/lib/types";
@@ -22,11 +22,11 @@ const naira = (n: number) => "₦" + Math.round(n).toLocaleString();
 
 const STEPS: Step[] = [
   {
-    title: "Sales look fine, but the business is losing money",
+    title: "Earned is not the same as in your hand",
     run: () => st().setRole("founder"),
-    target: ".headline",
+    target: "#cash-hero",
     text: () =>
-      "You are the founder. Staff pay looks small next to sales, yet once you subtract what the products cost, ad spend, salaries and courier fees, this week is a loss. Click any number to see the orders behind it.",
+      "You are the founder. These three numbers are the gap that hurts most: cash you have earned from delivered orders, cash you have actually received, and the money still sitting with the couriers. Below, the real profit is what you keep after product cost, ads, salaries and courier fees. Click any number to see the orders behind it.",
   },
   {
     title: "One delivery updates everyone",
@@ -87,10 +87,79 @@ const STEPS: Step[] = [
   },
 ];
 
+
+/** The guided demo: one story, played start to finish. A new order is booked, delivered and paid for. */
+const STORY_CUSTOMER = "Chiamaka Eze";
+const storyOrder = () => st().data.orders.find((o) => o.customer === STORY_CUSTOMER);
+
+const DEMO_STEPS: Step[] = [
+  {
+    title: "A normal week",
+    run: () => st().setRole("founder"),
+    target: "#cash-hero",
+    text: (d) => {
+      const g = cashGap(d);
+      return `You are the founder. This week you have earned ${naira(g.earned)} from delivered orders, but only ${naira(g.received)} has reached you. ${naira(g.gap)} is still with the couriers. Watch what one new order does to these numbers.`;
+    },
+  },
+  {
+    title: "A customer says yes",
+    run: () => {
+      st().setRole("closer");
+      if (!storyOrder()) st().createOrder({ customer: STORY_CUSTOMER, city: "Lagos", sku: "BLN-07", qty: 1, openedBy: "amaka", closer: "amaka", buyer: "tobi" });
+      const o = storyOrder();
+      if (o?.stage === "new") st().act(o.id, "confirm");
+    },
+    target: ".activity",
+    text: () =>
+      `You are now Amaka, a closer. She just booked a blender for ${STORY_CUSTOMER} in Lagos and confirmed it. Nothing is paid out yet: she only earns when the order is delivered.`,
+  },
+  {
+    title: "The courier delivers",
+    run: () => {
+      st().setRole("stock");
+      const o = storyOrder();
+      if (o?.stage === "confirmed") st().act(o.id, "dispatch");
+      const n = storyOrder();
+      if (n?.stage === "dispatched") st().act(n.id, "deliver");
+      st().setRole("closer");
+    },
+    target: ".activity",
+    text: () =>
+      "Dayo in the warehouse sent it out and marked it delivered. That one click raised Amaka's pay, took a blender off the shelf and added to the week's sales.",
+  },
+  {
+    title: "Earned, but not yet in your hand",
+    run: () => st().setRole("founder"),
+    target: "#cash-hero",
+    text: (d) => {
+      const g = cashGap(d);
+      return `Back as the founder: earned is now ${naira(g.earned)}, but ${naira(g.gap)} is still with the couriers. The sale counts, the cash has not arrived. Click any figure to see the orders behind it.`;
+    },
+  },
+  {
+    title: "The courier hands over the cash",
+    run: () => {
+      st().setRole("accountant");
+      const o = storyOrder();
+      if (o?.stage === "delivered" && !o.cashIn) st().act(o.id, "cash");
+      st().setRole("founder");
+    },
+    target: "#cash-hero",
+    text: (d) => {
+      const g = cashGap(d);
+      return `Bisi, the accountant, recorded the courier's payment. Received is now ${naira(g.received)}. Every naira is tracked from the order to your bank, and every step is in the audit log. Want this for your own business? Join the waitlist.`;
+    },
+  },
+];
+
 /** The guided tour: each step changes the live demo the way a person would, then points at the result. */
 export function Tour() {
   const open = useStore((s) => s.guideOpen);
   const setGuide = useStore((s) => s.setGuide);
+  const mode = useStore((s) => s.guideMode);
+  const steps = mode === "demo" ? DEMO_STEPS : STEPS;
+  const [paused, setPaused] = useState(false);
   const data = useStore((s) => s.data);
   const dataSource = useStore((s) => s.dataSource);
   const [i, setI] = useState(0);
@@ -112,7 +181,7 @@ export function Tour() {
 
   useEffect(() => {
     if (!open) return;
-    STEPS[i].run();
+    steps[i].run();
     document.documentElement.setAttribute("data-tour", "");
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -140,7 +209,7 @@ export function Tour() {
       tick();
     };
     const light = () => {
-      const el = document.querySelector(STEPS[i].target);
+      const el = document.querySelector(steps[i].target);
       if (!el) {
         if (tries++ < 20) timer = setTimeout(light, 100);
         return;
@@ -160,7 +229,7 @@ export function Tour() {
       lit.current?.classList.remove("tour-hl");
       lit.current = null;
     };
-  }, [open, i]);
+  }, [open, i, steps]);
 
   useEffect(() => {
     if (open) return;
@@ -168,17 +237,29 @@ export function Tour() {
     setI(0);
   }, [open]);
 
+  // The guided demo plays itself, one step every few seconds. Pause stops it; reduced-motion users get no autoplay.
+  const last = i === steps.length - 1;
+  useEffect(() => {
+    if (!open || mode !== "demo" || paused || last) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setTimeout(() => setI((n) => n + 1), 8000);
+    return () => clearTimeout(t);
+  }, [open, mode, paused, last, i]);
+
+  useEffect(() => {
+    if (!open) setPaused(false);
+  }, [open]);
+
   if (!open) return null;
-  const step = STEPS[i];
-  const last = i === STEPS.length - 1;
+  const step = steps[i];
 
   return (
     <>
     <div ref={spot} className="tour-spot" aria-hidden="true" />
-    <div className="tour" role="region" aria-label="Guided tour">
+    <div className="tour" role="region" aria-label={mode === "demo" ? "Guided demo" : "Guided tour"}>
       <div className="tour-top">
         <span className="tour-count">
-          Step {i + 1} of {STEPS.length}
+          {mode === "demo" ? "Guided demo" : "Step"} {i + 1} of {steps.length}
         </span>
         <button type="button" className="btn xs ghost" onClick={() => setGuide(false)} aria-label="Exit the tour">
           <X size={13} /> Exit
@@ -191,10 +272,15 @@ export function Tour() {
           <ChevronLeft size={14} /> Back
         </button>
         <span className="tour-dots" aria-hidden="true">
-          {STEPS.map((_, n) => (
+          {steps.map((_, n) => (
             <i key={n} className={n === i ? "on" : ""} />
           ))}
         </span>
+        {mode === "demo" && !last && (
+          <button type="button" className="btn sm" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
+            {paused ? "Resume" : "Pause"}
+          </button>
+        )}
         <button type="button" className="btn sm primary" onClick={() => (last ? setGuide(false) : setI(i + 1))}>
           {last ? "Finish" : "Next"} {!last && <ChevronRight size={14} />}
         </button>

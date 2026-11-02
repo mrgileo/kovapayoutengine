@@ -259,7 +259,24 @@ export function importData(files: ImportFiles): ImportResult {
     closerKey.set(c.name.toLowerCase(), c);
     closerKey.set(c.name.split(" ")[0].toLowerCase(), c);
   }
-  const closerNames = closers.map((c) => c.name).join(", ");
+  // Closers not in the demo team are created from the file, so a prospect never has to rename their own people.
+  const MAX_NEW_CLOSERS = 12;
+  const newClosers = new Map<string, Person>();
+  const closerFor = (raw: string): Person | null => {
+    const typed = raw.trim().replace(/s+/g, " ");
+    if (!typed) return null;
+    const known = closerKey.get(typed.toLowerCase());
+    if (known) return known;
+    const made = newClosers.get(typed.toLowerCase());
+    if (made) return made;
+    if (newClosers.size >= MAX_NEW_CLOSERS) return null;
+    const slug = typed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "closer";
+    let id = "imp-" + slug;
+    for (let n = 2; closerKey.has(id) || [...newClosers.values()].some((p) => p.id === id); n++) id = "imp-" + slug + "-" + n;
+    const p: Person = { id, name: typed, role: "closer", title: "Closer", monthlyBase: closers[0]?.monthlyBase ?? 70000, reportsTo: closers[0]?.reportsTo };
+    newClosers.set(typed.toLowerCase(), p);
+    return p;
+  };
 
   /* ---- products (optional) */
   const catalog = new Map<string, { name?: string; cost?: number; onHand?: number; price?: number }>();
@@ -342,8 +359,8 @@ export function importData(files: ImportFiles): ImportResult {
     const st = STAGES[r.get("stage").toLowerCase()];
     if (!st) err("orders", r.line, "stage", `Stage "${r.get("stage")}" must be one of: new, confirmed, dispatched, delivered, returned, cancelled, failed.`);
 
-    const closer = closerKey.get(r.get("closer").toLowerCase());
-    if (!closer) err("orders", r.line, "closer", `Closer "${r.get("closer")}" is not on the team. Use one of: ${closerNames}.`);
+    const closer = closerFor(r.get("closer"));
+    if (!closer) err("orders", r.line, "closer", r.get("closer").trim() ? `More than ${MAX_NEW_CLOSERS} different closer names. Check the closer column for typos.` : "The closer is empty. Put the name of the person who sold the order.");
 
     if (errors.length === start && id !== null && date && qty !== null && price !== null && st && closer) {
       parsed.push({ line: r.line, id, date, customer, city, sku, qty, price, stage: st.stage, failed: Boolean(st.failed), closer: closer.id, campaign: r.get("campaign") });
@@ -449,9 +466,19 @@ export function importData(files: ImportFiles): ImportResult {
   }
 
   /* ---- people: the demo team, with one media buyer standing in for every campaign */
+  const usedClosers = new Set(parsed.map((p) => p.closer));
   const people: Person[] = base.people
     .filter((p) => p.role !== "buyer" || p.id === IMPORT_BUYER_ID)
-    .map((p) => (p.id === IMPORT_BUYER_ID ? { ...p, name: IMPORT_BUYER_NAME, title: "Media buyer" } : p));
+    .map((p) => {
+      if (p.id === IMPORT_BUYER_ID) return { ...p, name: IMPORT_BUYER_NAME, title: "Media buyer" };
+      // Demo closers who sold nothing in the file are not charged a salary against the prospect's own data.
+      if (newClosers.size > 0 && p.role === "closer" && !usedClosers.has(p.id)) return { ...p, monthlyBase: 0 };
+      return p;
+    })
+    .concat([...newClosers.values()]);
+  if (newClosers.size > 0) {
+    notes.push(`Closers created from your file: ${[...newClosers.values()].map((p) => p.name).join(", ")}. Each gets the demo closer salary (₦${(closers[0]?.monthlyBase ?? 70000).toLocaleString()}/month) and reports to the demo team lead.`);
+  }
   notes.push(
     `All orders are credited to one media buyer (${IMPORT_BUYER_NAME}, salary ₦${people.find((p) => p.id === IMPORT_BUYER_ID)!.monthlyBase.toLocaleString()}/month as in the demo). The team lead, salaries and pay rules are the demo's.`,
   );
@@ -463,6 +490,7 @@ export function importData(files: ImportFiles): ImportResult {
     people,
     products,
     orders: [],
+    leads: [],
     cycles: [{ id: cycleIds[0], start: firstMonday, end: addDaysIso(firstMonday, 6), status: "open", carryIn: [] }],
     rules: { ...base.rules },
     rulesMeta: structuredClone(base.rulesMeta),
