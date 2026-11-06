@@ -320,7 +320,7 @@ export function CommandPalette({
   const editable = canEditRules(role);
   const roles: Role[] = ["founder", "closer", "buyer", "lead", "accountant", "stock"];
 
-  const items: { label: string; tag: string; run: () => void }[] = [
+  const items: { label: string; tag: string; run: () => void; top?: boolean }[] = [
     ...(onSelectTheme
       ? [
           {
@@ -355,6 +355,7 @@ export function CommandPalette({
     {
       label: "Create new customer order / lead",
       tag: "Action",
+      top: true,
       run: () => {
         setNewOrderOpen(true);
         onClose();
@@ -375,6 +376,7 @@ export function CommandPalette({
           {
             label: "Close this week and approve the pay",
             tag: "Cycle",
+            top: true,
             run: () => {
               closeCycle();
               onClose();
@@ -385,6 +387,7 @@ export function CommandPalette({
     {
       label: "Copy a link to this view",
       tag: "Share",
+      top: true,
       run: () => {
         const url = buildDeepLink(window.location.origin + window.location.pathname, role, data.rules, buildSeed().rules);
         const done = (ok: boolean) => toast(ok ? "ok" : "err", ok ? "Link copied. It opens this persona with these pay rules." : `Couldn't copy. Link: ${url}`);
@@ -395,6 +398,7 @@ export function CommandPalette({
     {
       label: "Reset the demo to its starting data",
       tag: "System",
+      top: true,
       run: () => {
         reset();
         onClose();
@@ -402,9 +406,10 @@ export function CommandPalette({
     },
   ];
 
-  const filtered = items.filter((it) =>
-    `${it.label} ${it.tag}`.toLowerCase().includes(q.trim().toLowerCase()),
-  );
+  const needle = q.trim().toLowerCase();
+  const filtered = needle
+    ? items.filter((it) => `${it.label} ${it.tag}`.toLowerCase().includes(needle))
+    : items.filter((it) => it.top);
 
   return (
     <>
@@ -441,6 +446,11 @@ export function CommandPalette({
             </li>
           ))}
         </ul>
+        {!needle && (
+          <p className="muted" style={{ margin: "10px 2px 0", fontSize: 12 }}>
+            Type to find themes, people and pay rules.
+          </p>
+        )}
       </div>
     </>
   );

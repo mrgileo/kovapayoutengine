@@ -805,7 +805,7 @@ const bodyElements = [
     "**4. Live Lead Intake Modal (`NewOrderDialog`):** Opens when clicking **+ New lead** in the Order Ledger or Command Palette. Allows creating a live order with custom `Customer name`, `Delivery city` (`Lagos`, `Abuja`, `Port Harcourt`, `Ibadan`, `Enugu`, `Kano`), `Product SKU`, `Quantity (1–3)`, `Opened by (First touch)`, `Closed by (Last touch)`, and `Campaign / Media buyer`, while previewing warehouse availability and total commission pool.",
   ),
   bullet(
-    "**5. Quick Command Palette (`CommandPalette` — `⌘K` / `Ctrl+K`):** Keyboard-driven spotlight modal with instant search filter to switch themes (`Light`, `Dark`, `System`), jump to any role persona, create a new lead, toggle any founder rule, close the active payout cycle, or reset demo state.",
+    "**5. Quick Command Palette (`CommandPalette` — `⌘K` / `Ctrl+K`):** Keyboard-driven spotlight modal. With an empty search box it shows only the four common actions (create a new lead, close the week and approve the pay for the founder, copy a link to the view, reset demo state). Typing searches everything else: themes (`Light`, `Dark`), jumping to any role persona, and toggling any founder rule.",
   ),
   bullet(
     "**6. Immutable Audit & Event Log (`AuditLogCard`) & Toast Tray (`ToastTray`):** Every state mutation appends a timestamped entry to the Audit Log with the actor's avatar, role, cycle ID, description, and signed P&L/payout delta pills (`Actual net: −₦14,622`, `Team payout: +₦14,622`), while firing a color-coded toast notification (`ok` dark green, `warn` yellow, `err` light red) in the bottom-right corner.",
