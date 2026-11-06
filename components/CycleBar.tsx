@@ -1,10 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import { Download, Lock, CheckCircle2, ArrowRight } from "lucide-react";
-import { canApprove, canSettle, cycleLines, openCycle, payoutCsv, payslip, personOf, pnlFor, salesPeople, sum } from "@/lib/engine";
+import { canApprove, canSettle, cycleLines, openCycle, payoutCsv, payslipsFor, personOf, salesPeople, sum } from "@/lib/engine";
+import { linesOf, pnlOf } from "@/lib/derived";
 import { dateTime, shortDate, shortName } from "@/lib/format";
 import { downloadText } from "@/lib/download";
 import { useData, useStore } from "@/lib/store";
+import { askCloseCycle, askLockCycle, askMarkPaid } from "@/lib/askActions";
 import { Card, Fig } from "./ui";
 import type { Cycle, Drill } from "@/lib/types";
 
@@ -26,13 +29,26 @@ export function CycleBar() {
   const data = useData();
   const role = useStore((s) => s.role);
   const imported = useStore((s) => s.dataSource) === "imported";
-  const closeCycle = useStore((s) => s.closeCycle);
-  const markPaid = useStore((s) => s.markPaid);
-  const lockCycle = useStore((s) => s.lockCycle);
+  const closeCycle = askCloseCycle;
+  const markPaid = askMarkPaid;
+  const lockCycle = askLockCycle;
   const toast = useStore((s) => s.toast);
   const canClose = canApprove(role);
   const settle = canSettle(role);
   const open = openCycle(data);
+
+  // Each week's total and P&L, worked out once per change instead of on every render (this card is on two pages).
+  const infos = useMemo(() => {
+    const ids = salesPeople(data).map((p) => p.id);
+    return new Map(
+      data.cycles.map((c) => {
+        const slips = payslipsFor(c.status === "open" ? linesOf(data) : (c.lines ?? []), ids);
+        let total = 0;
+        for (const v of slips.values()) total += v.payable;
+        return [c.id, { pnl: c.status === "open" ? pnlOf(data) : c.pnl, total }] as const;
+      }),
+    );
+  }, [data]);
 
   function downloadCsv(cycleId: string) {
     downloadText(`kova-payouts-${cycleId}.csv`, payoutCsv(data, cycleId));
@@ -40,13 +56,13 @@ export function CycleBar() {
   }
 
   function buildCycleDrill(c: Cycle): Drill {
-    const lines = cycleLines(data, c.id);
     const people = salesPeople(data);
+    const slips = payslipsFor(cycleLines(data, c.id), people.map((p) => p.id));
     return {
       title: `${c.id} Payout Breakdown (${STATUS_LABEL[c.status]})`,
       subtitle: `${shortDate(c.start)} – ${shortDate(c.end)} · Fixed salary + commission, less any customer refunds`,
       lines: people.map((p) => {
-        const ps = payslip(lines, p.id);
+        const ps = slips.get(p.id)!;
         const parts: string[] = [];
         if (ps.base) parts.push(`Salary: ₦${ps.base.toLocaleString()}`);
         if (ps.commission) parts.push(`Commission: ₦${Math.round(ps.commission).toLocaleString()}`);
@@ -59,7 +75,7 @@ export function CycleBar() {
           amount: ps.payable,
         };
       }),
-      total: sum(people.map((p) => payslip(lines, p.id).payable)),
+      total: sum(people.map((p) => slips.get(p.id)!.payable)),
     };
   }
 
@@ -82,9 +98,7 @@ export function CycleBar() {
     >
       <div className="cycles">
         {data.cycles.map((c) => {
-          const pnl = pnlFor(data, c.id);
-          const lines = cycleLines(data, c.id);
-          const totalPayable = sum(salesPeople(data).map((p) => payslip(lines, p.id).payable));
+          const { pnl, total: totalPayable } = infos.get(c.id)!;
           const steps = STEP_INDEX[c.status];
 
           return (

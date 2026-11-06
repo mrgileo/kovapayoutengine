@@ -37,6 +37,8 @@ export interface Person {
   /** Monthly base in naira. Pro-rated into each weekly cycle. */
   monthlyBase: number;
   reportsTo?: string;
+  /** Personal commission rate (a fraction, e.g. 0.05). Overrides the company rate for this person's role. */
+  commissionRate?: number;
 }
 
 export interface Product {
@@ -48,6 +50,8 @@ export interface Product {
   /** Company selling price per unit. Set by the founder; closers cannot change it. */
   price: number;
   leadDays: number;
+  category?: string;
+  supplier?: string;
 }
 
 export interface Order {
@@ -65,6 +69,12 @@ export interface Order {
   buyer: string;
   /** Optional free-text label. Any media buyer can run any campaign. */
   campaign?: string;
+  /** Ad platform the lead came from: meta, tiktok, x, google, snapchat or other. */
+  platform?: string;
+  /** Courier that carried it. Used to match the courier's cash statement. */
+  courier?: string;
+  /** Why it came back, as the customer or courier said. */
+  returnReason?: string;
   stage: Stage;
   /** Courier has remitted the cash (COD). */
   cashIn: boolean;
@@ -152,6 +162,8 @@ export interface AuditEntry {
   impact?: Impact;
   /** The order this event is about, so the order table can say "Confirmed by Amaka". */
   orderId?: number;
+  /** The reason or reference the person typed when they confirmed (cancel reason, courier reference, bank reference…). */
+  note?: string;
 }
 
 /** Where an enquiry came from. Most arrive as form fills from the landing page. */
@@ -166,11 +178,25 @@ export interface Lead {
   source: LeadSource;
   /** Optional free-text label, the same idea as Order.campaign. */
   campaign?: string;
+  platform?: string;
   /** open = not reached yet; booked = became the order in orderId; lost = never became an order. */
   status: "open" | "booked" | "lost";
   /** Why a lost lead was lost. */
   reason?: string;
   orderId?: number;
+}
+
+/** One line of a platform's ad export: what a platform billed for a campaign on a day. */
+export interface AdSpendRow {
+  date: string;
+  platform: string;
+  buyer: string;
+  campaign: string;
+  account?: string;
+  spend: number;
+  impressions?: number;
+  clicks?: number;
+  leads?: number;
 }
 
 export interface DemoState {
@@ -185,6 +211,8 @@ export interface DemoState {
   rulesMeta: Record<RuleKey, Stamp>;
   /** cycle id -> buyer id -> ad spend (simulated Meta feed in this demo) */
   spend: Record<string, Record<string, number>>;
+  /** The same spend line by line (per day, platform, campaign). Absent on data that only has weekly totals. */
+  adSpend?: AdSpendRow[];
   /** Ad spend per delivered order above which a media buyer is flagged. Founder-set; never affects pay. */
   maxCostPerOrder: number;
   pos: PurchaseOrder[];

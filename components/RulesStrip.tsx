@@ -6,13 +6,14 @@ import { RULE_DEFS } from "@/lib/rules";
 import { canEditRules, personOf } from "@/lib/engine";
 import { shortDate, shortName } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
+import { askSetRule } from "@/lib/askActions";
 import type { RuleKey } from "@/lib/types";
 
 /** The five pay rules, as shown inside the Pay rules drawer. */
 export function RulesBody() {
   const data = useData();
   const role = useStore((s) => s.role);
-  const setRule = useStore((s) => s.setRule);
+  const setRule = askSetRule;
   const editable = canEditRules(role);
 
   // Latest rule edit across all keys for the header audit stamp

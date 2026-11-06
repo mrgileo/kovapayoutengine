@@ -2,6 +2,8 @@
 // only the words people read do. Pure strings, no imports, so the engine and the UI can both use it.
 
 export const L = {
+  // The strip under the top bar that shows the latest event
+  whatHappenedNow: "What happened now",
   // Three ways to read the week
   salesReport: "What your sales report says",
   afterProductAndAds: "Left after product and ads",
@@ -105,7 +107,7 @@ export const L = {
     stock: "Stock on the shelf, what to reorder, and the orders waiting for the warehouse.",
   } as Record<"founder" | "accountant" | "closer" | "buyer" | "lead" | "stock", string>,
   headline: "See what you actually keep after delivery.",
-  headlineNet: (loss: boolean) => (loss ? "This week the business is losing" : "This week the business is netting"),
+  headlineNet: (loss: boolean) => (loss ? "This week the busilostosing" : "Business profit so far this week"),
   cashEarned: "Cash you've earned",
   cashEarnedSub: "Sales delivered this week",
   cashReceived: "Cash you've received",

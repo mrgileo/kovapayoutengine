@@ -2,6 +2,7 @@
 
 import { AlertTriangle, ArrowDown, CheckCircle2 } from "lucide-react";
 import { leadFunnel, leaks, revenueFlow, type FlowKey, type Leak } from "@/lib/engine";
+import { flowOf, funnelOf, leaksOf } from "@/lib/derived";
 import { L } from "@/lib/labels";
 import { useData } from "@/lib/store";
 import { Card, Fig, useMoney } from "./ui";
@@ -13,9 +14,9 @@ const pctText = (n: number) => `${Math.round(n * 100)}%`;
 export function FlowFunnel() {
   const data = useData();
   const m = useMoney();
-  const flow = revenueFlow(data);
+  const flow = flowOf(data);
   const booked = flow.steps[0];
-  const lf = leadFunnel(data);
+  const lf = funnelOf(data);
 
   return (
     <Card
@@ -152,7 +153,7 @@ function LeakRow({ leak }: { leak: Leak }) {
 export function LeaksPanel() {
   const data = useData();
   const m = useMoney();
-  const all = leaks(data).filter((l) => l.key !== "cash"); // courier cash is the hero card, so it is not repeated here
+  const all = leaksOf(data).filter((l) => l.key !== "cash"); // courier cash is the hero card, so it is not repeated here
   const groups: { kind: Leak["kind"]; title: string; note: string }[] = [
     { kind: "stuck", title: "Stuck on the way in", note: "Money you should get, that hasn't arrived" },
     { kind: "costing", title: "Costing you", note: "Money that has gone out, or is going out, for little" },

@@ -1,8 +1,12 @@
 import type { DemoState, Lead, LeadSource, Order, Person, Product, Rules, RuleKey, Stamp } from "./types.ts";
 import { closeCycle, impactOf, lockCycle, log, markPaid } from "./engine.ts";
 
-export const SEED_VERSION = 12;
+export const SEED_VERSION = 13;
 export const DEFAULT_MAX_COST_PER_ORDER = 4000;
+
+/** Every quantity in the demo (order units, shelf stock, reorder levels, ad spend) is ten times the original small
+ *  sample, so the books look like a real operation: about ₦5.3M of delivered sales in the current week. */
+const SCALE = 10;
 
 const people: Person[] = [
   { id: "amaka", name: "Amaka Obi", role: "closer", title: "Closer", monthlyBase: 70000, reportsTo: "ngozi" },
@@ -15,20 +19,19 @@ const people: Person[] = [
   { id: "chidinma", name: "Chidinma Okoro", role: "founder", title: "Founder & CEO", monthlyBase: 0 },
 ];
 
-const products: Product[] = [
+const products: Product[] = ([
   { sku: "AIR-12", name: "Air fryer 5.5L", onHand: 4, reorder: 3, cost: 78000, price: 212000, leadDays: 7 },
   { sku: "BLN-07", name: "Blender Pro 1200W", onHand: 12, reorder: 4, cost: 34000, price: 73500, leadDays: 5 },
   { sku: "KET-03", name: "Electric kettle 1.7L", onHand: 2, reorder: 5, cost: 19500, price: 45000, leadDays: 4 },
   { sku: "VAC-21", name: "Handheld vacuum", onHand: 2, reorder: 3, cost: 96000, price: 187000, leadDays: 10 },
   { sku: "STM-09", name: "Garment steamer", onHand: 9, reorder: 3, cost: 52000, price: 112000, leadDays: 6 },
-];
+] as Product[]).map((p) => ({ ...p, onHand: p.onHand * SCALE, reorder: p.reorder * SCALE }));
 
 type Seed = Partial<Order> & Pick<Order, "id" | "customer" | "city" | "sku" | "closer" | "buyer" | "stage">;
 
 function mk(cycle: string, x: Seed): Order {
   const landed = x.stage === "delivered" || x.stage === "returned";
   return {
-    qty: 1,
     unitPrice: products.find((p) => p.sku === x.sku)!.price,
     openedBy: x.closer,
     cashIn: landed,
@@ -37,6 +40,7 @@ function mk(cycle: string, x: Seed): Order {
     reversedCycle: x.stage === "returned" || x.stage === "cancelled" ? cycle : undefined,
     returnCondition: x.stage === "returned" ? "resellable" : undefined,
     ...x,
+    qty: (x.qty ?? 1) * SCALE,
   };
 }
 
@@ -126,7 +130,7 @@ export function buildSeed(): DemoState {
     cycles: [{ id: "W42", start: "2026-10-12", end: "2026-10-18", status: "open", carryIn: [] }],
     rules: { ...rules },
     rulesMeta: structuredClone(rulesMeta),
-    spend: { W42: { tobi: 160000, zainab: 88000 } },
+    spend: { W42: { tobi: 160000 * SCALE, zainab: 88000 * SCALE } },
     maxCostPerOrder: DEFAULT_MAX_COST_PER_ORDER,
     pos: [],
     audit: [],
@@ -138,12 +142,12 @@ export function buildSeed(): DemoState {
   closeCycle(d, "chidinma", "2026-10-19T09:12:00+01:00");
   markPaid(d, "W42", "chidinma", "2026-10-20T10:03:00+01:00");
   lockCycle(d, "W42", "chidinma", "2026-10-26T08:40:00+01:00");
-  d.spend.W43 = { tobi: 172000, zainab: 92000 };
+  d.spend.W43 = { tobi: 172000 * SCALE, zainab: 92000 * SCALE };
 
   d.orders.push(...structuredClone(W43));
   closeCycle(d, "chidinma", "2026-10-26T09:05:00+01:00");
   markPaid(d, "W43", "chidinma", "2026-10-27T11:20:00+01:00");
-  d.spend.W44 = { tobi: 55000, zainab: 35000 };
+  d.spend.W44 = { tobi: 55000 * SCALE, zainab: 35000 * SCALE };
 
   d.orders.push(...structuredClone(W44));
   d.leads = buildLeads(d.orders);

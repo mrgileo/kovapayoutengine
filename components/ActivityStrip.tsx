@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Activity, ChevronDown, ChevronUp } from "lucide-react";
-import { PERSONA, firstName, impactFor, impactIsEmpty } from "@/lib/engine";
+import { firstName, impactFor, impactIsEmpty } from "@/lib/engine";
 import { L } from "@/lib/labels";
-import { useData, useStore } from "@/lib/store";
+import { useData, useMe, useStore } from "@/lib/store";
 import type { AuditEntry, Impact } from "@/lib/types";
 import { useMoney } from "./ui";
 
@@ -34,11 +34,11 @@ function useChips() {
   const data = useData();
   const role = useStore((s) => s.role);
   const m = useMoney();
-  const me = PERSONA[role];
+  const me = useMe();
 
   return (entry: AuditEntry): { chips: Chip[]; any: boolean } => {
     if (!entry.impact) return { chips: [], any: false };
-    const i: Impact = impactFor(data, entry.impact, role);
+    const i: Impact = impactFor(data, entry.impact, role, me);
     const chips: Chip[] = [];
     for (const p of i.pay) {
       chips.push({ key: "pay-" + p.personId, text: `${p.personId === me ? "You" : firstName(data, p.personId)} ${m(p.amount, { sign: true })}`, tone: p.amount >= 0 ? "good" : "bad", mine: p.personId === me });
@@ -125,9 +125,9 @@ export function ActivityStrip() {
   }, [latest]);
 
   return (
-    <div className={"activity one-line" + (fresh ? " fresh" : "")} role="status" aria-live="polite" aria-label={`Live activity, viewing as ${role}`}>
+    <div className={"activity one-line" + (fresh ? " fresh" : "")} role="status" aria-live="polite" aria-label={`${L.whatHappenedNow}, viewing as ${role}`}>
       <span className="act-live">
-        <Activity size={13} aria-hidden="true" /> Live
+        <Activity size={13} aria-hidden="true" /> {L.whatHappenedNow}
       </span>
       {latest ? (
         <OneLine entry={latest} now={now} />

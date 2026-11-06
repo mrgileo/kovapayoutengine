@@ -159,7 +159,6 @@ export function Tour() {
   const setGuide = useStore((s) => s.setGuide);
   const mode = useStore((s) => s.guideMode);
   const steps = mode === "demo" ? DEMO_STEPS : STEPS;
-  const [paused, setPaused] = useState(false);
   const data = useStore((s) => s.data);
   const dataSource = useStore((s) => s.dataSource);
   const [i, setI] = useState(0);
@@ -174,7 +173,7 @@ export function Tour() {
       setGuide(false);
       return;
     }
-    useStore.setState({ data: buildSeed(), importSummary: null, drill: null, returnFor: null, newOrderOpen: false, role: "founder" });
+    useStore.setState({ data: buildSeed(), importSummary: null, drill: null, asking: null, newOrderOpen: false, role: "founder" });
     // Only on opening.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -237,18 +236,8 @@ export function Tour() {
     setI(0);
   }, [open]);
 
-  // The guided demo plays itself, one step every few seconds. Pause stops it; reduced-motion users get no autoplay.
+  // The guided demo moves only when the person presses Next or Back, so it never changes by itself.
   const last = i === steps.length - 1;
-  useEffect(() => {
-    if (!open || mode !== "demo" || paused || last) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setTimeout(() => setI((n) => n + 1), 8000);
-    return () => clearTimeout(t);
-  }, [open, mode, paused, last, i]);
-
-  useEffect(() => {
-    if (!open) setPaused(false);
-  }, [open]);
 
   if (!open) return null;
   const step = steps[i];
@@ -276,11 +265,6 @@ export function Tour() {
             <i key={n} className={n === i ? "on" : ""} />
           ))}
         </span>
-        {mode === "demo" && !last && (
-          <button type="button" className="btn sm" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
-            {paused ? "Resume" : "Pause"}
-          </button>
-        )}
         <button type="button" className="btn sm primary" onClick={() => (last ? setGuide(false) : setI(i + 1))}>
           {last ? "Finish" : "Next"} {!last && <ChevronRight size={14} />}
         </button>

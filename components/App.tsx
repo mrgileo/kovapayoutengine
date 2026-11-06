@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { isEmptyLink, parseDeepLink } from "@/lib/deeplink";
 import { L } from "@/lib/labels";
 import { Command, FileUp, Mail, Moon, Play, PanelLeftClose, PanelLeftOpen, RotateCcw, ShieldCheck, SlidersHorizontal, Sun } from "lucide-react";
-import { PERSONA, canSeeAllPayouts, canSeeFullAudit, canSeeRules, cashDesk, computePnl, needsAttention, openCycle, personOf } from "@/lib/engine";
+import { canSeeAllPayouts, canSeeFullAudit, canSeeRules, cashDesk, computePnl, needsAttention, openCycle, personOf, viewerOf } from "@/lib/engine";
+import { cashDeskOf, needsAttentionOf, pnlOf } from "@/lib/derived";
 import { CCY, Currency, shortDate } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
 import type { Role } from "@/lib/types";
@@ -21,15 +22,15 @@ import {
   CommandPalette,
   DrillDrawer,
   NewOrderDialog,
-  ReturnDialog,
   ToastTray,
 } from "./Overlays";
+import { ActionDialog } from "./ActionDialog";
 import { RulesDrawer } from "./RulesDrawer";
 import { MyWeeklyPay } from "./MyWeeklyPay";
 import { StockBook } from "./StockBook";
 import { Tour } from "./Tour";
 import { WaitlistDialog } from "./WaitlistDialog";
-import { Avatar, Fig, useMoney, useTableColumnResize } from "./ui";
+import { Avatar, Deferred, Fig, useMoney, useTableColumnResize } from "./ui";
 
 const ROLE_ORDER: Role[] = ["founder", "closer", "buyer", "lead", "accountant", "stock"];
 const SCHEME_KEY = "kova-color-scheme";
@@ -50,6 +51,12 @@ function applyScheme(choice: ThemeChoice, save: boolean) {
 
 export function App() {
   const [hydrated, setHydrated] = useState(false);
+  // The saved company is read asynchronously (large companies live in IndexedDB), so wait for it before drawing numbers.
+  const [stored, setStored] = useState(false);
+  useEffect(() => {
+    if (useStore.persist.hasHydrated()) setStored(true);
+    return useStore.persist.onFinishHydration(() => setStored(true));
+  }, []);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [waitOpen, setWaitOpen] = useState(false);
   const [sideCollapsed, setSideCollapsed] = useState(false);
@@ -62,6 +69,8 @@ export function App() {
   const setCcy = useStore((s) => s.setCcy);
   const setGuide = useStore((s) => s.setGuide);
   const setRulesOpen = useStore((s) => s.setRulesOpen);
+  const viewers = useStore((s) => s.viewers);
+  const setViewer = useStore((s) => s.setViewer);
   const reset = useStore((s) => s.reset);
   const dataSource = useStore((s) => s.dataSource);
   const importSummary = useStore((s) => s.importSummary);
@@ -146,7 +155,7 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!hydrated) {
+  if (!hydrated || !stored) {
     // Rendered on the server too, so the first paint is the shape of the page rather than a blank line while the data loads.
     return (
       <div className="skeleton" role="status" aria-busy="true" aria-label="Loading Kova">
@@ -177,10 +186,14 @@ export function App() {
   }
 
   const open = openCycle(data);
-  const pnl = computePnl(data);
-  const stockAlerts = needsAttention(data).length;
-  const cashOwed = cashDesk(data).outstanding.length;
-  const activePerson = personOf(data, PERSONA[role]);
+  const pnl = pnlOf(data);
+  const stockAlerts = needsAttentionOf(data).length;
+  const cashOwed = cashDeskOf(data).outstanding.length;
+  const activePerson = personOf(data, viewerOf(data, role, viewers));
+  const sameRole = data.people.filter((p) => p.role === role);
+  // The page body below is remounted whenever the role or the person being viewed changes (see the Deferred key), so
+  // what one person typed (a search, a chosen file) is never shown to another.
+  const viewKey = `${role}:${activePerson.id}`;
 
   function switchRoleWithTransition(nextRole: Role) {
     if (nextRole === role) return;
@@ -194,7 +207,8 @@ export function App() {
       ) => { finished?: Promise<unknown>; ready?: Promise<unknown> };
     };
 
-    if (typeof doc.startViewTransition === "function") {
+    // Snapshotting a page with thousands of rows is itself slow, so big companies switch without the slide.
+    if (typeof doc.startViewTransition === "function" && data.orders.length < 3000) {
       try {
         const vt = doc.startViewTransition({
           update: () => setRole(nextRole),
@@ -263,7 +277,7 @@ export function App() {
             aria-orientation="vertical"
           >
             {ROLE_ORDER.map((r, idx) => {
-              const p = personOf(data, PERSONA[r]);
+              const p = personOf(data, viewerOf(data, r, viewers));
               const selected = role === r;
               return (
                 <button
@@ -441,6 +455,20 @@ export function App() {
             <div>
               <div className="eyebrow">
                 Viewing as {activePerson.name} · {activePerson.title}
+                {sameRole.length > 1 && (
+                  <select
+                    className="viewer-pick"
+                    aria-label={`Which ${role} to view as`}
+                    value={activePerson.id}
+                    onChange={(e) => setViewer(role, e.target.value)}
+                  >
+                    {sameRole.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <h1>
                 {role === "founder" && "Track returns from every customer purchase"}
@@ -497,6 +525,7 @@ export function App() {
             </div>
           )}
 
+          <Deferred key={viewKey}>
           {role === "founder" && <CashHero />}
 
           {/* Role-specific primary view */}
@@ -510,6 +539,10 @@ export function App() {
           {/* Weekly payouts: everyone's for the founder and accountant; your own weeks for everyone else who is paid */}
           {canSeeAllPayouts(role) ? <CycleBar /> : role !== "stock" && role !== "buyer" && <MyWeeklyPay />}
 
+          {/* "Compare Statements" (components/ReconcileView.tsx) is parked: statements are not always on hand.
+              To bring it back, render <ReconcileView kinds={...} /> here per role (founder: all four,
+              accountant: courier/payouts/ads, stock: stock). */}
+
           {/* Manage Orders: only the orders each role works with */}
           <OrderLedger />
 
@@ -518,14 +551,15 @@ export function App() {
 
           {/* Audit log: everything for founder and accountant, your own actions for everyone else */}
           <AuditLogCard />
+          </Deferred>
         </div>
       </main>
 
       {/* Modals, Drawer, Command Palette & Toasts */}
       <DrillDrawer />
       <RulesDrawer />
-      <ReturnDialog />
       <NewOrderDialog />
+      <ActionDialog />
       <ImportDialog />
       <WaitlistDialog open={waitOpen} onClose={() => setWaitOpen(false)} />
       <CommandPalette

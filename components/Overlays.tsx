@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { X, AlertTriangle, CheckCircle2, Info, RotateCcw, Search } from "lucide-react";
 import {
   DELIVERY_FEE,
-  PERSONA,
+  viewerOf,
   RATES,
   canEditRules,
   canSeeFullAudit,
@@ -19,14 +19,20 @@ import { dateTime, shortName } from "@/lib/format";
 import { RULE_DEFS, ruleOptionLabel } from "@/lib/rules";
 import { buildDeepLink } from "@/lib/deeplink";
 import { buildSeed } from "@/lib/seed";
-import { useData, useStore } from "@/lib/store";
+import { useData, useMe, useStore } from "@/lib/store";
+import { askCloseCycle, askSetRule } from "@/lib/askActions";
+import { matchesQuery } from "@/lib/sort";
 import { Avatar, Card, useMoney } from "./ui";
+import { NoMatches, SearchBox } from "./table";
 import type { Role } from "@/lib/types";
 
 export function DrillDrawer() {
   const drill = useStore((s) => s.drill);
   const close = useStore((s) => s.closeDrill);
   const m = useMoney();
+  // A drill can list thousands of orders; show the first 100 and let the person ask for more.
+  const [shownLines, setShownLines] = useState(100);
+  useEffect(() => setShownLines(100), [drill]);
 
   useEffect(() => {
     if (!drill) return;
@@ -64,7 +70,7 @@ export function DrillDrawer() {
             </div>
           ) : (
             <ul className="dl">
-              {drill.lines.map((l, idx) => (
+              {drill.lines.slice(0, shownLines).map((l, idx) => (
                 <li key={idx}>
                   <span className="ref">{l.ref}</span>
                   <div>
@@ -78,124 +84,20 @@ export function DrillDrawer() {
               ))}
             </ul>
           )}
+          {drill.lines.length > shownLines && (
+            <div style={{ padding: "10px 20px 18px" }}>
+              <button type="button" className="btn xs" onClick={() => setShownLines((n) => n + 200)}>
+                Show more ({(drill.lines.length - shownLines).toLocaleString()} not shown)
+              </button>
+            </div>
+          )}
         </div>
 
         <footer className="drawer-foot">
           <span>Every figure is derived live from order &amp; cycle records.</span>
-          <span className="mono">{drill.lines.length} line(s)</span>
+          <span className="mono">{drill.lines.length.toLocaleString()} line(s)</span>
         </footer>
       </aside>
-    </>
-  );
-}
-
-export function ReturnDialog() {
-  const data = useData();
-  const orderId = useStore((s) => s.returnFor);
-  const close = useStore((s) => s.setReturnFor);
-  const act = useStore((s) => s.act);
-  const m = useMoney();
-
-  const order = data.orders.find((o) => o.id === orderId);
-  const [cond, setCond] = useState<"resellable" | "damaged">("resellable");
-  const [sure, setSure] = useState(false);
-
-  // A fresh tick for every order: returning one order never pre-approves the next.
-  useEffect(() => setSure(false), [orderId]);
-
-  if (!order) return null;
-
-  const p = productOf(data, order.sku);
-  const cogsAtRisk = p.cost * order.qty;
-  const creditedCycle = order.creditedCycle ? cycleById(data, order.creditedCycle) : undefined;
-  const paidLines = (creditedCycle?.lines ?? []).filter((l) => l.orderId === order.id && l.kind === "commission");
-  const paidAmt = sum(paidLines.map((l) => l.amount));
-
-  return (
-    <>
-      <div className="scrim" onClick={() => close(null)} aria-hidden="true" />
-      <div className="dialog" role="dialog" aria-modal="true" aria-label="Process customer return">
-        <div>
-          <div className="eyebrow">Customer return · Order #{order.id}</div>
-          <h2>
-            {order.customer} · {order.sku} ×{order.qty}
-          </h2>
-          <p>
-            Delivered in <b>{order.deliveredCycle}</b> ({m(orderValue(order))}). Say what condition it came back in, and see what the{" "}
-            <b>{ruleOptionLabel("onReturn", data.rules.onReturn)}</b> rule does to the commission.
-          </p>
-        </div>
-
-        <div className="choice" role="group" aria-label="Return item condition">
-          <button
-            type="button"
-            aria-pressed={cond === "resellable"}
-            onClick={() => setCond("resellable")}
-          >
-            <b>Resellable · Return to shelf (+{order.qty} {order.sku})</b>
-            <span>Goods pass inspection. Restocked into available inventory; only the ₦{DELIVERY_FEE.toLocaleString()} return delivery fee is lost.</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={cond === "damaged"}
-            onClick={() => setCond("damaged")}
-          >
-            <b>Damaged in transit · Write off product cost ({m(cogsAtRisk)})</b>
-            <span>Cannot be resold. Stock is not incremented and {m(cogsAtRisk)} is written off as damaged stock.</span>
-          </button>
-        </div>
-
-        <div className="calc">
-          <div>
-            <span>Payout cycle status</span>
-            <span className="mono">
-              {creditedCycle ? `${creditedCycle.id} (${creditedCycle.status.toUpperCase()})` : "This week (not paid yet)"}
-            </span>
-          </div>
-          <div>
-            <span>Current rule</span>
-            <span className="mono">{ruleOptionLabel("onReturn", data.rules.onReturn)}</span>
-          </div>
-          <div className="tot">
-            <span>What happens to the commission</span>
-            <span className="mono">
-              {!creditedCycle
-                ? data.rules.onReturn === "absorb"
-                  ? "Staff keep it (business absorbs)"
-                  : "Not yet paid, so it is cancelled"
-                : creditedCycle.status === "locked"
-                  ? `Kept (${creditedCycle.id} is locked)`
-                  : data.rules.onReturn === "clawback"
-                    ? `−${m(paidAmt)} taken back this week`
-                    : data.rules.onReturn === "offset"
-                      ? `−${m(paidAmt)} taken back next week`
-                      : `${m(paidAmt)} kept by staff (business absorbs)`}
-            </span>
-          </div>
-        </div>
-
-        <label className="confirm-tick">
-          <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
-          <span>This order really came back. This can&apos;t be undone.</span>
-        </label>
-
-        <div className="dialog-foot">
-          <button type="button" className="btn ghost" onClick={() => close(null)}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn danger"
-            disabled={!sure}
-            onClick={() => {
-              act(order.id, "return", { condition: cond });
-              close(null);
-            }}
-          >
-            Confirm return ({cond})
-          </button>
-        </div>
-      </div>
     </>
   );
 }
@@ -211,9 +113,9 @@ export function NewOrderDialog() {
   const [city, setCity] = useState("Lagos");
   const [skuPick, setSku] = useState("AIR-12");
   const [qty, setQty] = useState(1);
-  const [openedBy, setOpenedBy] = useState("amaka");
-  const [closer, setCloser] = useState("chidi");
-  const [buyer, setBuyer] = useState("tobi");
+  const [openedByPick, setOpenedBy] = useState("");
+  const [closerPick, setCloser] = useState("");
+  const [buyerPick, setBuyer] = useState("");
 
   if (!open) return null;
 
@@ -222,6 +124,12 @@ export function NewOrderDialog() {
   const p = productOf(data, sku);
   const sr = stockRow(data, p);
   const buyers = data.people.filter((x) => x.role === "buyer");
+  const closers = data.people.filter((x) => x.role === "closer");
+  // Defaults: the first closer opens it and the second closes it (a split-touch order), as in the demo. Any pick that no longer exists falls back.
+  const known = (id: string, list: { id: string }[]) => (list.some((x) => x.id === id) ? id : "");
+  const openedBy = known(openedByPick, closers) || closers[0]?.id || "";
+  const closer = known(closerPick, closers) || closers[1]?.id || closers[0]?.id || "";
+  const buyer = known(buyerPick, buyers) || buyers[0]?.id || "";
   const totalList = p.price * qty;
   const r = RATES[data.rules.creditOn];
 
@@ -297,8 +205,11 @@ export function NewOrderDialog() {
               onChange={(e) => setOpenedBy(e.target.value)}
               style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line-strong)", font: "inherit" }}
             >
-              <option value="amaka">Amaka Obi</option>
-              <option value="chidi">Chidi Nwosu</option>
+              {closers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600 }}>
@@ -308,8 +219,11 @@ export function NewOrderDialog() {
               onChange={(e) => setCloser(e.target.value)}
               style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line-strong)", font: "inherit" }}
             >
-              <option value="amaka">Amaka Obi</option>
-              <option value="chidi">Chidi Nwosu</option>
+              {closers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600, gridColumn: "1 / -1" }}>
@@ -380,11 +294,12 @@ export function CommandPalette({
 }) {
   const data = useData();
   const role = useStore((s) => s.role);
-  const setRule = useStore((s) => s.setRule);
+  const setRule = askSetRule;
   const setNewOrderOpen = useStore((s) => s.setNewOrderOpen);
-  const closeCycle = useStore((s) => s.closeCycle);
+  const closeCycle = askCloseCycle;
   const reset = useStore((s) => s.reset);
   const toast = useStore((s) => s.toast);
+  const viewers = useStore((s) => s.viewers); // every hook stays above the early return below
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -427,7 +342,7 @@ export function CommandPalette({
         ]
       : []),
     ...roles.map((r) => {
-      const p = personOf(data, PERSONA[r]);
+      const p = personOf(data, viewerOf(data, r, viewers));
       return {
         label: `Switch persona → ${p.name} (${p.title})`,
         tag: r === role ? "Active" : "Persona",
@@ -537,8 +452,13 @@ export function AuditLogCard() {
   const reset = useStore((s) => s.reset);
   const m = useMoney();
   const full = canSeeFullAudit(role);
-  const me = PERSONA[role];
-  const entries = full ? data.audit : data.audit.filter((e) => e.actor === me);
+  const me = useMe();
+  const [query, setQuery] = useState("");
+  const entries = useMemo(() => {
+    const mine = full ? data.audit : data.audit.filter((e) => e.actor === me);
+    if (!query.trim()) return mine;
+    return mine.filter((e) => matchesQuery(query, `${e.text} ${e.note ?? ""} ${e.cycle} ${personOf(data, e.actor).name}`));
+  }, [data, full, me, query]);
 
   return (
     <Card
@@ -549,16 +469,20 @@ export function AuditLogCard() {
           : "What you did, and when. For example: Order 1043 confirmed by you."
       }
       actions={
-        full ? (
-          <button type="button" className="btn sm ghost" onClick={reset}>
-            <RotateCcw size={13} /> Reset demo data
-          </button>
-        ) : undefined
+        <div className="filters" style={{ alignItems: "center" }}>
+          {data.audit.length > 6 && <SearchBox value={query} onChange={setQuery} label="Search the audit log" placeholder="Search who, what, why…" />}
+          {full && (
+            <button type="button" className="btn sm ghost" onClick={reset}>
+              <RotateCcw size={13} /> Reset demo data
+            </button>
+          )}
+        </div>
       }
       flush
     >
-      {entries.length === 0 && <p className="muted" style={{ padding: "14px 20px", margin: 0, fontSize: 13 }}>Nothing yet. When you take an action, such as confirming an order, it shows up here.</p>}
-      <ol className="audit">
+      {entries.length === 0 && query.trim() ? <NoMatches query={query} /> : null}
+      {entries.length === 0 && !query.trim() && <p className="muted" style={{ padding: "14px 20px", margin: 0, fontSize: 13 }}>Nothing yet. When you take an action, such as confirming an order, it shows up here.</p>}
+      <ol className="audit scroll">
         {entries.map((e) => {
           const p = personOf(data, e.actor);
           return (
@@ -566,6 +490,7 @@ export function AuditLogCard() {
               <Avatar id={p.id} name={p.name} size="sm" />
               <div>
                 <div className="txt">{e.text}</div>
+                {e.note && <div className="note">“{e.note}”</div>}
                 {e.deltas && e.deltas.length > 0 && (
                   <div className="deltas">
                     {e.deltas.map((d, i) => (

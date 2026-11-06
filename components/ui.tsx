@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type PointerEvent, type ReactNode } from "react";
 import type { Drill, Stage } from "@/lib/types";
 import { useStore } from "@/lib/store";
 import { initials, money } from "@/lib/format";
@@ -318,3 +318,49 @@ export function useTableColumnResize() {
   }, []);
 }
 
+
+
+/** Resolves after the browser has painted once. Lets a spinner appear before a long, blocking piece of work starts. */
+export const afterPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+/** The shape of a page while it is being built, so a slow switch shows structure instead of a frozen screen. */
+export function PageSkeleton() {
+  return (
+    <div className="page-skel" role="status" aria-busy="true" aria-label="Loading this page">
+      <div className="sk-tiles">
+        {[0, 1, 2, 3].map((n) => (
+          <div key={n} className="sk-tile" />
+        ))}
+      </div>
+      <div className="sk-card" />
+      <div className="sk-card tall" />
+      <span className="sr-only">Loading…</span>
+    </div>
+  );
+}
+
+/**
+ * Shows `fallback` for one paint, then mounts the children. A heavy card therefore appears after the page frame
+ * instead of blocking it. Give it a `key` that changes with the page so every switch gets the skeleton first.
+ */
+export function Deferred({ children, fallback = <PageSkeleton /> }: { children: ReactNode; fallback?: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void afterPaint().then(() => live && setReady(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return <>{ready ? children : fallback}</>;
+}
+
+/** A button that shows a spinner and refuses clicks while its work is running. */
+export function LoadingButton({ busy, children, className, ...rest }: ComponentProps<"button"> & { busy?: boolean }) {
+  return (
+    <button {...rest} type={rest.type ?? "button"} className={className} aria-busy={busy || undefined} disabled={rest.disabled || busy}>
+      {busy && <span className="spin" aria-hidden="true" />}
+      {children}
+    </button>
+  );
+}

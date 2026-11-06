@@ -8,6 +8,7 @@ import {
   needsAttention,
   openCycle,
 } from "@/lib/engine";
+import { cashGapOf, needsAttentionOf, pnlOf } from "@/lib/derived";
 import { pct } from "@/lib/format";
 import { L, PNL_TEXT as P } from "@/lib/labels";
 import { useData } from "@/lib/store";
@@ -20,7 +21,7 @@ import type { PnLKey } from "@/lib/types";
 /** Low or out-of-stock products, right under the three cash cards. Hidden when stock is fine. */
 function StockAlerts() {
   const data = useData();
-  const alerts = needsAttention(data);
+  const alerts = needsAttentionOf(data);
   if (alerts.length === 0) return null;
   return (
     <div className="alert warn stock-alert" id="stock-alert" role="status">
@@ -35,7 +36,7 @@ function StockAlerts() {
 /** The hero: cash earned vs cash actually received. Shown first on the founder page. */
 export function CashHero() {
   const data = useData();
-  const cash = cashGap(data);
+  const cash = cashGapOf(data);
   return (
     <>
     <section className="cash-hero" id="cash-hero" aria-label="Cash earned versus cash received">
@@ -63,7 +64,7 @@ export function CashHero() {
 export function FounderView() {
   const data = useData();
   const m = useMoney();
-  const pnl = computePnl(data);
+  const pnl = pnlOf(data);
   const open = openCycle(data);
 
   const naiveNet = pnl.revenue - pnl.commission;

@@ -47,6 +47,13 @@ export const PERSONA: Record<Role, string> = {
   founder: "chidinma",
   accountant: "bisi",
 };
+/** The person a role is viewing as: the one picked for that role, else the first person with that role, else the demo persona.
+ *  On the demo company the first person of each role is exactly PERSONA, so nothing changes there. */
+export function viewerOf(s: DemoState, role: Role, picks?: Partial<Record<Role, string>>): string {
+  const picked = picks?.[role];
+  if (picked && s.people.some((p) => p.id === picked && p.role === role)) return picked;
+  return s.people.find((p) => p.role === role)?.id ?? PERSONA[role];
+}
 /** Ad spend is a demo figure, never a live Meta connection. */
 export const SIM_FEED_NOTE = "Simulated Meta feed (demo figures, not a live connection)";
 
@@ -62,7 +69,14 @@ export const cycleById = (s: DemoState, id: string) => s.cycles.find((c) => c.id
 export const salesPeople = (s: DemoState) => s.people.filter((p) => SALES_ROLES.includes(p.role));
 export const weeklyBase = (p: Person) => Math.round((p.monthlyBase * 12) / 52);
 export const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-const pctTxt = (n: number) => (n * 100).toFixed(n * 100 < 1 ? 2 : 1).replace(/\.0+$/, "") + "%";
+/** Thousands separators without Intl: toLocaleString is far too slow to call once per order. */
+const grouped = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const pctMemo = new Map<number, string>();
+const pctTxt = (n: number) => {
+  let t = pctMemo.get(n);
+  if (t === undefined) pctMemo.set(n, (t = (n * 100).toFixed(n * 100 < 1 ? 2 : 1).replace(/\.0+$/, "") + "%"));
+  return t;
+};
 
 /* ------------------------------------------------------------------ crediting */
 
@@ -78,8 +92,23 @@ export function isCredited(o: Order, rules: Rules): boolean {
   return o.stage === "delivered" && o.cashIn;
 }
 
+const closerIndex = new WeakMap<Order[], { size: number; by: Map<string, Order[]> }>();
+/** Every closer's orders, grouped once per orders list (a scan per closer is slow with 20,000 orders and 35 closers). */
+function ordersByCloser(s: DemoState): Map<string, Order[]> {
+  const hit = closerIndex.get(s.orders);
+  if (hit && hit.size === s.orders.length) return hit.by;
+  const by = new Map<string, Order[]>();
+  for (const o of s.orders) {
+    const list = by.get(o.closer);
+    if (list) list.push(o);
+    else by.set(o.closer, [o]);
+  }
+  closerIndex.set(s.orders, { size: s.orders.length, by });
+  return by;
+}
+
 export function closerReturnRate(s: DemoState, personId: string): number {
-  const mine = s.orders.filter((o) => o.closer === personId);
+  const mine = ordersByCloser(s).get(personId) ?? [];
   const delivered = mine.filter((o) => o.stage === "delivered").length;
   const returned = mine.filter((o) => o.stage === "returned").length;
   const resolved = delivered + returned;
@@ -91,17 +120,35 @@ export function returnCapBreached(s: DemoState, personId: string, rules: Rules =
   return cap < 1 && closerReturnRate(s, personId) > cap + 1e-9;
 }
 
-export function commissionLines(s: DemoState, o: Order, rules: Rules, cycleId: string): PayLine[] {
+/** Return rate of every closer in one pass, for loops that price many orders (avoids a full scan per order). */
+export function returnRates(s: DemoState): Map<string, number> {
+  const tally = new Map<string, { delivered: number; returned: number }>();
+  for (const o of s.orders) {
+    if (o.stage !== "delivered" && o.stage !== "returned") continue;
+    let t = tally.get(o.closer);
+    if (!t) tally.set(o.closer, (t = { delivered: 0, returned: 0 }));
+    if (o.stage === "delivered") t.delivered++;
+    else t.returned++;
+  }
+  const out = new Map<string, number>();
+  for (const [id, t] of tally) out.set(id, t.returned / (t.delivered + t.returned));
+  return out;
+}
+
+export function commissionLines(s: DemoState, o: Order, rules: Rules, cycleId: string, rates?: Map<string, number>): PayLine[] {
   const v = orderValue(o);
   const r = RATES[rules.creditOn];
   const out: PayLine[] = [];
-  const closerRate = r.closer;
-  const pool = v * closerRate;
+  // A person's own commission rate (from the staff file) replaces the company rate for their role.
+  const closerRateOf = (personId: string) => personOf(s, personId).commissionRate ?? r.closer;
+  const closerRate = closerRateOf(o.closer);
+  const rateNow = (personId: string) => rates?.get(personId) ?? closerReturnRate(s, personId);
   const addCloser = (personId: string, share: number, label: string) => {
-    const capHit = returnCapBreached(s, personId, rules);
+    const cap = rules.returnCap ?? 1;
+    const capHit = cap < 1 && rateNow(personId) > cap + 1e-9;
     const amt = share * (capHit ? 0.5 : 1);
     const capNote = capHit
-      ? ` · halved: ${Math.round(closerReturnRate(s, personId) * 100)}% return rate exceeds ${Math.round((rules.returnCap ?? 1) * 100)}% quality gate`
+      ? ` · halved: ${Math.round(rateNow(personId) * 100)}% return rate exceeds ${Math.round((rules.returnCap ?? 1) * 100)}% quality gate`
       : "";
     out.push({
       key: `${cycleId}-${o.id}-${personId}-commission-${out.length}`,
@@ -118,18 +165,23 @@ export function commissionLines(s: DemoState, o: Order, rules: Rules, cycleId: s
   if (o.openedBy !== o.closer) {
     const opener = firstName(s, o.openedBy);
     const closer = firstName(s, o.closer);
-    if (rules.split === "first") addCloser(o.openedBy, pool, `Closer ${pctTxt(closerRate)} · first touch: ${opener} opened it`);
-    else if (rules.split === "last") addCloser(o.closer, pool, `Closer ${pctTxt(closerRate)} · last touch: ${closer} closed it`);
+    const openerRate = closerRateOf(o.openedBy);
+    if (rules.split === "first") addCloser(o.openedBy, v * openerRate, `Closer ${pctTxt(openerRate)} · first touch: ${opener} opened it`);
+    else if (rules.split === "last") addCloser(o.closer, v * closerRate, `Closer ${pctTxt(closerRate)} · last touch: ${closer} closed it`);
     else {
-      addCloser(o.openedBy, pool / 2, `Closer ${pctTxt(closerRate)} · 50-50 split, opened`);
-      addCloser(o.closer, pool / 2, `Closer ${pctTxt(closerRate)} · 50-50 split, closed`);
+      addCloser(o.openedBy, (v * openerRate) / 2, `Closer ${pctTxt(openerRate)} · 50-50 split, opened`);
+      addCloser(o.closer, (v * closerRate) / 2, `Closer ${pctTxt(closerRate)} · 50-50 split, closed`);
     }
   } else {
-    addCloser(o.closer, pool, `Closer ${pctTxt(closerRate)}`);
+    addCloser(o.closer, v * closerRate, `Closer ${pctTxt(closerRate)}`);
   }
-  add(o.buyer, "commission", v * r.buyer, `Media buyer ${pctTxt(r.buyer)}${o.campaign ? ` · ${o.campaign}` : ""}`);
+  const buyerRate = personOf(s, o.buyer).commissionRate ?? r.buyer;
+  add(o.buyer, "commission", v * buyerRate, `Media buyer ${pctTxt(buyerRate)}${o.campaign ? ` · ${o.campaign}` : ""}`);
   const lead = personOf(s, o.closer).reportsTo;
-  if (lead) add(lead, "commission", v * r.lead, `${L.teamBonus} ${pctTxt(r.lead)}`);
+  if (lead) {
+    const leadRate = personOf(s, lead).commissionRate ?? r.lead;
+    add(lead, "commission", v * leadRate, `${L.teamBonus} ${pctTxt(leadRate)}`);
+  }
   return out;
 }
 
@@ -144,6 +196,21 @@ export interface Reversals {
 export function reversals(s: DemoState, rules: Rules): Reversals {
   const c = openCycle(s);
   const res: Reversals = { clawbacks: [], deferred: [], absorbed: [] };
+  const paidIndex = new Map<string, Map<number, PayLine[]>>();
+  const paidLinesOf = (pc: Cycle, orderId: number): PayLine[] => {
+    let idx = paidIndex.get(pc.id);
+    if (!idx) {
+      idx = new Map();
+      for (const l of pc.lines ?? []) {
+        if (l.kind !== "commission" || l.orderId === undefined) continue;
+        const arr = idx.get(l.orderId);
+        if (arr) arr.push(l);
+        else idx.set(l.orderId, [l]);
+      }
+      paidIndex.set(pc.id, idx);
+    }
+    return idx.get(orderId) ?? [];
+  };
   for (const o of s.orders) {
     if (o.reversedCycle !== c.id) continue;
     if (o.stage !== "returned" && o.stage !== "cancelled") continue;
@@ -157,7 +224,7 @@ export function reversals(s: DemoState, rules: Rules): Reversals {
     }
     const pc = cycleById(s, o.creditedCycle);
     if (!pc) continue;
-    const paid = (pc.lines ?? []).filter((l) => l.orderId === o.id && l.kind === "commission");
+    const paid = paidLinesOf(pc, o.id);
     const total = sum(paid.map((l) => l.amount));
     if (pc.status === "locked") {
       res.absorbed.push({ order: o, amount: total, reason: `${pc.id} is locked · return window closed` });
@@ -198,9 +265,11 @@ export function openLines(s: DemoState, rules: Rules = s.rules): PayLine[] {
       lines.push({ key: `${c.id}-base-${p.id}`, personId: p.id, kind: "base", amount: weeklyBase(p), note: "Fixed salary, one week's share" });
     }
   }
+  // One pass for every closer's return rate, so a big order list is not rescanned for each order priced.
+  const rates = (rules.returnCap ?? 1) < 1 ? returnRates(s) : undefined;
   for (const o of s.orders) {
     if (o.creditedCycle || o.closedOut || !isCredited(o, rules)) continue;
-    lines.push(...commissionLines(s, o, rules, c.id));
+    for (const l of commissionLines(s, o, rules, c.id, rates)) lines.push(l);
   }
   lines.push(...reversals(s, rules).clawbacks);
   return lines;
@@ -239,15 +308,31 @@ export function payslip(lines: PayLine[], personId: string): Payslip {
   };
 }
 
+/** Everyone's payslip from one pass over the lines (a filter per person is slow with many staff and thousands of lines). */
+export function payslipsFor(lines: PayLine[], personIds: string[]): Map<string, Payslip> {
+  const by = new Map<string, PayLine[]>();
+  for (const id of personIds) by.set(id, []);
+  for (const l of lines) by.get(l.personId)?.push(l);
+  const out = new Map<string, Payslip>();
+  for (const id of personIds) out.set(id, payslip(by.get(id)!, id));
+  return out;
+}
+
 /* ------------------------------------------------------------------ P&L */
 
-const unitCost = (s: DemoState, o: Order) => productOf(s, o.sku).cost * o.qty;
+const productIndex = new WeakMap<Product[], Map<string, Product>>();
+const unitCost = (s: DemoState, o: Order) => {
+  let m = productIndex.get(s.products);
+  if (!m || m.size !== s.products.length) productIndex.set(s.products, (m = new Map(s.products.map((p) => [p.sku, p]))));
+  return (m.get(o.sku) ?? productOf(s, o.sku)).cost * o.qty;
+};
 const orderRef = (o: Order) => `#${o.id}`;
 
-export function computePnl(s: DemoState, rules: Rules = s.rules): PnL {
+/** `linesIn` lets a caller that already has this week's pay lines (for the same rules) skip working them out again. */
+export function computePnl(s: DemoState, rules: Rules = s.rules, linesIn?: PayLine[]): PnL {
   const c = openCycle(s);
   const C = c.id;
-  const lines = openLines(s, rules);
+  const lines = linesIn ?? openLines(s, rules);
 
   const revOrders = s.orders.filter((o) => o.deliveredCycle === C && !(o.stage === "returned" && o.reversedCycle === C));
   const refundOrders = s.orders.filter((o) => o.stage === "returned" && o.reversedCycle === C && o.deliveredCycle !== C);
@@ -401,9 +486,9 @@ export function cashGap(s: DemoState): CashGap {
   };
 }
 
-export function paidOnUndelivered(s: DemoState): Drill {
+export function paidOnUndelivered(s: DemoState, linesIn?: PayLine[]): Drill {
   const byId = new Map(s.orders.map((o) => [o.id, o]));
-  const lines = openLines(s)
+  const lines = (linesIn ?? openLines(s))
     .filter((l) => l.kind === "commission" && l.orderId)
     .map((l) => ({ l, o: byId.get(l.orderId!)! }))
     .filter(({ o }) => o.stage !== "delivered")
@@ -441,21 +526,29 @@ export interface CloserStats {
   contributionDrill: Drill;
 }
 
-export function closerStats(s: DemoState, personId: string): CloserStats {
+/** What each person earned in a closed cycle's frozen lines (commission and refunds, not base or carry).
+ *  Closed lines are never edited in place, so the array itself is a safe cache key. */
+const closedPayCache = new WeakMap<PayLine[], Map<string, number>>();
+function closedPay(lines: PayLine[]): Map<string, number> {
+  let m = closedPayCache.get(lines);
+  if (!m) {
+    m = new Map();
+    for (const l of lines) if (l.kind !== "base" && l.kind !== "carry") m.set(l.personId, (m.get(l.personId) ?? 0) + l.amount);
+    closedPayCache.set(lines, m);
+  }
+  return m;
+}
+
+export function closerStats(s: DemoState, personId: string, openLinesNow?: PayLine[]): CloserStats {
   const c = openCycle(s);
-  const mine = s.orders.filter((o) => o.closer === personId);
+  const mine = ordersByCloser(s).get(personId) ?? [];
   const delivered = mine.filter((o) => o.stage === "delivered");
   const returned = mine.filter((o) => o.stage === "returned");
   const failed = mine.filter((o) => o.stage === "cancelled" && o.failed);
   const resolved = delivered.length + returned.length;
-  const closedComm = sum(
-    s.cycles
-      .filter((cy) => cy.status !== "open")
-      .flatMap((cy) => cy.lines ?? [])
-      .filter((l) => l.personId === personId && l.kind !== "base" && l.kind !== "carry")
-      .map((l) => l.amount),
-  );
-  const lines = openLines(s);
+  let closedComm = 0;
+  for (const cy of s.cycles) if (cy.status !== "open") closedComm += closedPay(cy.lines ?? []).get(personId) ?? 0;
+  const lines = openLinesNow ?? openLines(s);
   const open = payslip(lines, personId);
 
   // Net margin contribution in the open cycle
@@ -466,7 +559,7 @@ export function closerStats(s: DemoState, personId: string): CloserStats {
       contribLines.push({
         ref: orderRef(o),
         label: `${o.customer} · delivered (${o.sku} ×${o.qty})`,
-        detail: `Sales ₦${orderValue(o).toLocaleString()} − product cost ₦${unitCost(s, o).toLocaleString()} − delivery ₦${DELIVERY_FEE.toLocaleString()}`,
+        detail: `Sales ₦${grouped(orderValue(o))} − product cost ₦${grouped(unitCost(s, o))} − delivery ₦${grouped(DELIVERY_FEE)}`,
         amount: gross,
       });
     } else if (o.stage === "returned" && o.reversedCycle === c.id) {
@@ -533,24 +626,28 @@ export interface CampaignStats {
   marginDrill: Drill;
 }
 
-export function campaignStats(s: DemoState, buyerId: string): CampaignStats {
+export function campaignStats(s: DemoState, buyerId: string, openLinesNow?: PayLine[]): CampaignStats {
   const c = openCycle(s);
   const spend = s.spend[c.id]?.[buyerId] ?? 0;
-  const ords = s.orders.filter((o) => o.buyer === buyerId && o.createdCycle === c.id);
+  const ords: Order[] = [];
+  const ret: Order[] = [];
+  const failed: Order[] = [];
+  for (const o of s.orders) {
+    if (o.buyer !== buyerId) continue;
+    if (o.createdCycle === c.id) ords.push(o);
+    if (o.stage === "returned" && o.reversedCycle === c.id) ret.push(o);
+    if (o.failed && o.reversedCycle === c.id) failed.push(o);
+  }
   const del = ords.filter((o) => o.stage === "delivered");
-  const ret = s.orders.filter((o) => o.buyer === buyerId && o.stage === "returned" && o.reversedCycle === c.id);
-  const failed = s.orders.filter((o) => o.buyer === buyerId && o.failed && o.reversedCycle === c.id);
 
   const bookedRev = sum(ords.map(orderValue));
   const deliveredRev = sum(del.map(orderValue));
   const cogs = sum(del.map((o) => unitCost(s, o)));
   const logistics = del.length * DELIVERY_FEE + ret.length * (DELIVERY_FEE * 2) + failed.length * DELIVERY_FEE;
-  const lines = openLines(s);
-  const comm = sum(
-    lines
-      .filter((l) => l.orderId && ords.some((o) => o.id === l.orderId) && l.kind === "commission")
-      .map((l) => l.amount),
-  );
+  const lines = openLinesNow ?? openLines(s);
+  const mineIds = new Set(ords.map((o) => o.id));
+  let comm = 0;
+  for (const l of lines) if (l.orderId && l.kind === "commission" && mineIds.has(l.orderId)) comm += l.amount;
   const netMargin = deliveredRev - cogs - logistics - comm - spend;
   const drillLines: DrillLine[] = [
     { ref: "+", label: "Delivered revenue", detail: `${del.length} delivered orders`, amount: deliveredRev },
@@ -673,7 +770,7 @@ const failedCancel = (o: Order) => o.stage === "cancelled" && Boolean(o.failed);
 
 /** Where every order booked this week has got to, with the money at each step.
  *  Each step is "reached this stage or beyond", so a step can only be smaller than the one before it. */
-export function revenueFlow(s: DemoState): RevenueFlow {
+export function revenueFlow(s: DemoState, pnlIn?: PnL): RevenueFlow {
   const C = openCycle(s).id;
   const mine = s.orders.filter((o) => o.createdCycle === C);
   const value = (os: Order[]) => sum(os.map(orderValue));
@@ -726,7 +823,7 @@ export function revenueFlow(s: DemoState): RevenueFlow {
     };
   });
   const kept = steps.find((x) => x.key === "kept")!;
-  return { cycleId: C, steps, otherWeeksRevenue: computePnl(s).revenue - kept.value };
+  return { cycleId: C, steps, otherWeeksRevenue: (pnlIn ?? computePnl(s)).revenue - kept.value };
 }
 
 export interface LeadSourceRow {
@@ -802,7 +899,7 @@ export interface Leak {
 
 /** Money that is stuck on its way in, or that is costing you. Not additive to the P&L:
  *  each row is a different lens on the same week, so there is deliberately no grand total. */
-export function leaks(s: DemoState): Leak[] {
+export function leaks(s: DemoState, linesIn?: PayLine[]): Leak[] {
   const C = openCycle(s).id;
   const make = (key: Leak["key"], kind: LeakKind, title: string, subtitle: string, lines: DrillLine[]): Leak => ({
     key,
@@ -862,7 +959,7 @@ export function leaks(s: DemoState): Leak[] {
   }
   const adLeak = make("ads", "costing", L.leak.ads.label, "Ad spend above your max cost per delivered order", adLines);
 
-  const early = paidOnUndelivered(s);
+  const early = paidOnUndelivered(s, linesIn);
   const payEarly = make("payEarly", "costing", L.leak.payEarly.label, early.subtitle ?? "", early.lines);
   const kept = absorbedDrill(s);
   const payKept = make("payKept", "costing", L.leak.payKept.label, kept.subtitle ?? "", kept.lines);
@@ -880,15 +977,21 @@ export function leaks(s: DemoState): Leak[] {
 
 /** Compare the company before and after an event: whose pay moved, and what it did to revenue,
  *  profit, cash with the courier and stock. It is the same engine, so nothing here is estimated. */
-export function impactOf(before: DemoState, after: DemoState): Impact {
-  const lb = openLines(before);
+export function impactOf(
+  before: DemoState,
+  after: DemoState,
+  /** Figures for `before` that the caller already has (the screen shows them), so they are not worked out again. */
+  known: { lines?: PayLine[]; pnl?: PnL; stock?: ReturnType<typeof stockRows>; stuckCash?: number } = {},
+): Impact {
+  const lb = known.lines ?? openLines(before);
   const la = openLines(after);
-  const pay = salesPeople(after)
-    .map((p) => ({ personId: p.id, amount: payslip(la, p.id).gross - payslip(lb, p.id).gross }))
-    .filter((x) => Math.abs(x.amount) > 0.5);
-  const pb = computePnl(before);
-  const pa = computePnl(after);
-  const rb = stockRows(before);
+  const ids = salesPeople(after).map((p) => p.id);
+  const slipsBefore = payslipsFor(lb, ids);
+  const slipsAfter = payslipsFor(la, ids);
+  const pay = ids.map((id) => ({ personId: id, amount: slipsAfter.get(id)!.gross - slipsBefore.get(id)!.gross })).filter((x) => Math.abs(x.amount) > 0.5);
+  const pb = known.pnl ?? computePnl(before, before.rules, lb);
+  const pa = computePnl(after, after.rules, la);
+  const rb = known.stock ?? stockRows(before);
   const stock = stockRows(after)
     .map((row) => {
       const was = rb.find((x) => x.product.sku === row.product.sku);
@@ -898,7 +1001,7 @@ export function impactOf(before: DemoState, after: DemoState): Impact {
   const out: Impact = { pay, stock };
   const dRevenue = pa.revenue - pb.revenue;
   const dProfit = pa.actual - pb.actual;
-  const dStuck = cashWithCourier(after).total - cashWithCourier(before).total;
+  const dStuck = cashWithCourier(after).total - (known.stuckCash ?? cashWithCourier(before).total);
   if (Math.abs(dRevenue) > 0.5) out.revenue = dRevenue;
   if (Math.abs(dProfit) > 0.5) out.profit = dProfit;
   if (Math.abs(dStuck) > 0.5) out.stuckCash = dStuck;
@@ -907,8 +1010,8 @@ export function impactOf(before: DemoState, after: DemoState): Impact {
 
 /** What each role is allowed to see of an event's impact. Founders see everything; the team lead sees
  *  their own closers' pay and their own; closers and buyers see only their own pay; the warehouse sees stock. */
-export function impactFor(s: DemoState, impact: Impact, role: Role): Impact {
-  const me = PERSONA[role];
+export function impactFor(s: DemoState, impact: Impact, role: Role, viewer?: string): Impact {
+  const me = viewer ?? viewerOf(s, role);
   switch (role) {
     case "founder":
       return impact;
@@ -1043,11 +1146,26 @@ export interface SkuEconomics {
   drill: Drill;
 }
 
-export function skuEconomics(s: DemoState): SkuEconomics[] {
+export function skuEconomics(s: DemoState, linesIn?: PayLine[]): SkuEconomics[] {
   const c = openCycle(s);
-  const lines = openLines(s);
+  const lines = linesIn ?? openLines(s);
+  // One pass over the orders and one over the pay lines, instead of a scan of both for every product.
+  const ordersBySku = new Map<string, Order[]>();
+  const skuOfOrder = new Map<number, string>();
+  for (const o of s.orders) {
+    const list = ordersBySku.get(o.sku);
+    if (list) list.push(o);
+    else ordersBySku.set(o.sku, [o]);
+    skuOfOrder.set(o.id, o.sku);
+  }
+  const commissionBySku = new Map<string, number>();
+  for (const l of lines) {
+    if (!l.orderId || (l.kind !== "commission" && l.kind !== "clawback")) continue;
+    const sku = skuOfOrder.get(l.orderId);
+    if (sku !== undefined) commissionBySku.set(sku, (commissionBySku.get(sku) ?? 0) + l.amount);
+  }
   return s.products.map((p) => {
-    const allSku = s.orders.filter((o) => o.sku === p.sku);
+    const allSku = ordersBySku.get(p.sku) ?? [];
     const delAll = allSku.filter((o) => o.stage === "delivered");
     const retAll = allSku.filter((o) => o.stage === "returned");
     const resolved = delAll.length + retAll.length;
@@ -1060,11 +1178,7 @@ export function skuEconomics(s: DemoState): SkuEconomics[] {
     const cogs = sum(delC.map((o) => o.qty * p.cost));
     const damagedLoss = sum(retC.filter((o) => o.returnCondition === "damaged").map((o) => o.qty * p.cost));
     const courierCost = (delC.length + retC.length * 2 + failC.length) * DELIVERY_FEE;
-    const commission = sum(
-      lines
-        .filter((l) => l.orderId && allSku.some((o) => o.id === l.orderId) && (l.kind === "commission" || l.kind === "clawback"))
-        .map((l) => l.amount),
-    );
+    const commission = commissionBySku.get(p.sku) ?? 0;
     const netProfit = revenue - cogs - damagedLoss - courierCost - commission;
 
     return {
@@ -1119,8 +1233,9 @@ export interface StockRow {
   suggested: number;
 }
 
-export function stockRow(s: DemoState, p: Product): StockRow {
-  const committed = sum(s.orders.filter((o) => o.sku === p.sku && (o.stage === "confirmed" || o.stage === "dispatched")).map((o) => o.qty));
+export function stockRow(s: DemoState, p: Product, knownCommitted?: number): StockRow {
+  const committed =
+    knownCommitted ?? sum(s.orders.filter((o) => o.sku === p.sku && (o.stage === "confirmed" || o.stage === "dispatched")).map((o) => o.qty));
   const open = s.pos.filter((x) => x.sku === p.sku && x.status === "open");
   const onOrder = sum(open.map((x) => x.qty));
   const available = p.onHand - committed;
@@ -1135,7 +1250,12 @@ export function stockRow(s: DemoState, p: Product): StockRow {
   return { product: p, onHand: p.onHand, committed, onOrder, available, projected, status, nextEta, suggested: Math.max(p.reorder * 3 - projected, p.reorder) };
 }
 
-export const stockRows = (s: DemoState) => s.products.map((p) => stockRow(s, p));
+export function stockRows(s: DemoState): StockRow[] {
+  // One pass over the orders for every product, instead of one pass per product.
+  const committed = new Map<string, number>();
+  for (const o of s.orders) if (o.stage === "confirmed" || o.stage === "dispatched") committed.set(o.sku, (committed.get(o.sku) ?? 0) + o.qty);
+  return s.products.map((p) => stockRow(s, p, committed.get(p.sku) ?? 0));
+}
 export const needsAttention = (s: DemoState) => stockRows(s).filter((r) => r.status === "out" || r.status === "reorder");
 
 /* ------------------------------------------------------------------ permissions */
@@ -1180,8 +1300,8 @@ export function canSeeCompanyReports(role: Role) {
 
 /** The orders a role works with. Closers see theirs, media buyers the ones their ads generated,
  *  leads their team's, the founder, accountant and warehouse all of them. */
-export function ordersFor(s: DemoState, role: Role): Order[] {
-  const me = PERSONA[role];
+export function ordersFor(s: DemoState, role: Role, viewer?: string): Order[] {
+  const me = viewer ?? viewerOf(s, role);
   switch (role) {
     case "closer":
       return s.orders.filter((o) => o.closer === me || o.openedBy === me);
@@ -1195,8 +1315,8 @@ export function ordersFor(s: DemoState, role: Role): Order[] {
 }
 
 /** Segregation of duties: whoever earns on an order never certifies its delivery. */
-export function actionsFor(s: DemoState, role: Role, o: Order): ActionKey[] {
-  const viewer = PERSONA[role];
+export function actionsFor(s: DemoState, role: Role, o: Order, me?: string): ActionKey[] {
+  const viewer = me ?? viewerOf(s, role);
   const own = o.closer === viewer || o.openedBy === viewer;
   const sales = (role === "closer" && own) || role === "lead" || role === "founder";
   const ops = role === "stock" || role === "founder";

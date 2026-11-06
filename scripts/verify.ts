@@ -1,4 +1,18 @@
+import { DATASETS, generateBadFiles, generateDataset } from "./data-gen.mjs";
+import { addBankStatement } from "./data-bank.mjs";
+import {
+  parseBankStatement,
+  parseRemittances,
+  parseReportedSpend,
+  parseStockCount,
+  reconcileAdSpend,
+  reconcileCourierCash,
+  reconcilePayouts,
+  reconcileStock,
+} from "../lib/reconcile.ts";
 import assert from "node:assert/strict";
+import { NOTE_SPECS, PERMANENT_WARNING, noteMissing, previewImpact } from "../lib/ask.ts";
+import { compareValues, matchesQuery, nextSort, sortRows } from "../lib/sort.ts";
 import { buildSeed } from "../lib/seed.ts";
 import { TEMPLATES, importData, isoWeekNumber, parseCsv } from "../lib/importer.ts";
 import { L, PNL_TEXT, RULE_TEXT, PAY_LINE_TEXT } from "../lib/labels.ts";
@@ -47,6 +61,7 @@ import {
   openLines,
   paidOnUndelivered,
   payslip,
+  payslipsFor,
   raisePO,
   receivePO,
   reversals,
@@ -68,10 +83,10 @@ assert.equal(actionsFor(s, "stock", dispatchedOrder).includes("deliver"), true, 
 
 // 2. Real P&L vs naive net
 const pnlCommOnly = computePnl(s, { ...s.rules, payModel: "commission" });
-assert.equal(pnlCommOnly.revenue, 532500, "Delivered revenue in W44 should be ₦532,500");
-assert.equal(pnlCommOnly.cogs, 222500, "COGS in W44 should be ₦222,500");
-assert.equal(Math.round(pnlCommOnly.commission), 34613, "Commission in W44 should be ₦34,613");
-assert.equal(pnlCommOnly.adSpend, 90000, "Ad spend in W44 should be ₦90,000");
+assert.equal(pnlCommOnly.revenue, 5325000, "Delivered revenue in W44 should be ₦5,325,000");
+assert.equal(pnlCommOnly.cogs, 2225000, "COGS in W44 should be ₦2,225,000");
+assert.equal(Math.round(pnlCommOnly.commission), 346125, "Commission in W44 should be ₦346,125");
+assert.equal(pnlCommOnly.adSpend, 900000, "Ad spend in W44 should be ₦900,000");
 assert.equal(pnlCommOnly.actual > 0, true, "The demo week is healthy: profitable even after real costs");
 
 // 3. Cycles & post-close returns (clawback vs offset vs locked)
@@ -96,9 +111,9 @@ assert.equal(amakaStats.returnRate > chidiStats.returnRate, true, "Amaka has hig
 
 // 5. One company price per SKU: no discounts, order value = unit price × qty, closer pay is 4% of it
 const o1049 = s.orders.find((o) => o.id === 1049)!;
-assert.equal(orderValue(o1049), 212000, "AIR-12 sells at the company price");
+assert.equal(orderValue(o1049), 2120000, "AIR-12 sells at the company price");
 const lines1049 = commissionLines(s, { ...o1049, stage: "delivered" }, s.rules, "W44");
-assert.equal(lines1049.find((l) => l.personId === "amaka")!.amount, 212000 * 0.04, "Closer rate is a flat 4%, nothing halves it");
+assert.equal(lines1049.find((l) => l.personId === "amaka")!.amount, 2120000 * 0.04, "Closer rate is a flat 4%, nothing halves it");
 assert.equal("discount" in o1049 || "list" in o1049, false, "Orders carry no discount or list-price fields");
 
 // 6. Split credit on #1053 (opened by Amaka, closed by Chidi)
@@ -106,8 +121,8 @@ const o1053 = s.orders.find((o) => o.id === 1053)!;
 const firstTouch = commissionLines(s, { ...o1053, stage: "delivered" }, { ...s.rules, split: "first" }, "W44");
 const lastTouch = commissionLines(s, { ...o1053, stage: "delivered" }, { ...s.rules, split: "last" }, "W44");
 const halfTouch = commissionLines(s, { ...o1053, stage: "delivered" }, { ...s.rules, split: "half" }, "W44");
-assert.equal(firstTouch.some((l) => l.personId === "amaka" && l.amount === 73500 * 0.04), true);
-assert.equal(lastTouch.some((l) => l.personId === "chidi" && l.amount === 73500 * 0.04), true);
+assert.equal(firstTouch.some((l) => l.personId === "amaka" && l.amount === 735000 * 0.04), true);
+assert.equal(lastTouch.some((l) => l.personId === "chidi" && l.amount === 735000 * 0.04), true);
 assert.equal(halfTouch.filter((l) => l.personId === "amaka" || l.personId === "chidi").length, 2);
 
 // 7. Inventory loop: Raise PO clears alert, Receive PO adds onHand
@@ -146,29 +161,29 @@ assert.equal(Math.round(amakaGated), Math.round(amakaUngated * 0.5), "30% return
 assert.equal(Math.round(chidiGated), Math.round(chidiUngated), "30% return cap leaves Chidi untouched");
 
 // 11. Stock on hand at cost reconciles to the spec (BLN-07 holds 12 after #1046's resellable return)
-assert.equal(sum(s.products.map((p) => p.onHand * p.cost)), 1419000, "Stock on hand at cost should be ₦1,419,000");
-assert.equal(s.products.find((p) => p.sku === "BLN-07")!.onHand, 12, "BLN-07 on hand should be 12");
+assert.equal(sum(s.products.map((p) => p.onHand * p.cost)), 14190000, "Stock on hand at cost should be ₦14,190,000");
+assert.equal(s.products.find((p) => p.sku === "BLN-07")!.onHand, 120, "BLN-07 on hand should be 120");
 
 // 12. Committed stock counts confirmed/dispatched orders only (delivered #1041 is not committed)
 const air = stockRows(s).find((r) => r.product.sku === "AIR-12")!;
-assert.equal(air.committed, 2, "AIR-12 committed = #1043 (dispatched) + #1049 (confirmed)");
-assert.equal(air.available, 2, "AIR-12 available = 4 on hand − 2 committed");
-assert.equal(sum(stockRows(s).map((r) => r.committed)), 6, "Units committed across SKUs should be 6");
+assert.equal(air.committed, 20, "AIR-12 committed = #1043 (dispatched) + #1049 (confirmed)");
+assert.equal(air.available, 20, "AIR-12 available = 40 on hand − 20 committed");
+assert.equal(sum(stockRows(s).map((r) => r.committed)), 60, "Units committed across SKUs should be 60");
 
-// 13. Tobi net payout = pro-rated base + 1.5% of the ₦202,000 he delivered
+// 13. Tobi net payout = pro-rated base + 1.5% of the ₦2,020,000 he delivered
 const tobiSlip = payslip(openLines(s), "tobi");
 assert.equal(tobiSlip.base, 27692);
-assert.equal(tobiSlip.commission, 202000 * 0.015);
-assert.equal(Math.round(tobiSlip.payable), 30722, "Tobi net payout should be ₦30,722");
+assert.equal(tobiSlip.commission, 2020000 * 0.015);
+assert.equal(Math.round(tobiSlip.payable), 57992, "Tobi net payout should be ₦57,992");
 
 // 14. Courier legs: 5 delivered + #1046 return leg + #1046 outbound + #1048 failed attempt = 8. Dispatched-not-delivered orders are not charged yet.
 assert.equal(computePnl(s).logistics, 8 * DELIVERY_FEE, "W44 courier fees should be 8 legs × ₦3,500");
 
-// 15. Commission paid on orders that have not landed: none under Delivery, ₦32,189 under Lead
+// 15. Commission paid on orders that have not landed: none under Delivery, ₦321,888 under Lead
 assert.equal(paidOnUndelivered(s).total, 0, "No pre-delivery payout under the Delivery trigger");
 const sLead = structuredClone(s);
 sLead.rules.creditOn = "lead";
-assert.equal(Math.round(paidOnUndelivered(sLead).total), 32189, "Paid on undelivered under Lead should be ₦32,189");
+assert.equal(Math.round(paidOnUndelivered(sLead).total), 321888, "Paid on undelivered under Lead should be ₦321,888");
 
 // 16. Plain language: none of the old accounting terms reach the screen via labels, rules or drills
 const OLD_TERMS = /COGS|cost of goods|naive|core actual|full operating|variable commission|fixed base|base pay|override|ROAS|clawback|claw back|clawed|write-off|courier leg|payout ratio|credit a sale|refund.*(staff|commission)|prospecting|retargeting/i;
@@ -207,9 +222,9 @@ assert.equal(`${L.payTakenBack}|${L.refunds}`, "Customer refunded|Refunds", "The
 // 17. Profit per order = (revenue − product cost − ad spend) ÷ delivered orders, before and after staff pay
 const ppo = profitPerOrder(s);
 assert.equal(ppo.orders, 5, "W44 has 5 delivered orders");
-assert.equal(ppo.before, (532500 - 222500 - 90000) / 5, "Profit per order before staff pay should be +₦44,000");
+assert.equal(ppo.before, (5325000 - 2225000 - 900000) / 5, "Profit per order before staff pay should be +₦440,000");
 assert.equal(ppo.after, ppo.before - (computePnl(s).commission + computePnl(s).base) / 5, "After staff pay subtracts commission and fixed salary per order");
-assert.equal(Math.round(ppo.after), 12616);
+assert.equal(Math.round(ppo.after), 346314);
 assert.equal(Math.abs(ppo.beforeDrill.total - ppo.before) < 1e-6 && Math.abs(ppo.afterDrill.total - ppo.after) < 1e-6, true, "Drill totals match the figures");
 
 // 18. Any media buyer can run any campaign; max cost per order is a flag and never moves pay
@@ -217,11 +232,11 @@ assert.equal(s.maxCostPerOrder, 4000, "Default max cost per order is ₦4,000");
 assert.equal(s.orders.some((o) => o.campaign !== undefined), false, "No fixed campaign labels on seed orders");
 const tobiCost = adCost(s, "tobi");
 const zainabCost = adCost(s, "zainab");
-assert.equal(tobiCost.costPerOrder, 55000 / 2);
-assert.equal(zainabCost.costPerOrder, 35000 / 3);
+assert.equal(tobiCost.costPerOrder, 550000 / 2);
+assert.equal(zainabCost.costPerOrder, 350000 / 3);
 assert.equal(tobiCost.overMax && zainabCost.overMax, true, "Both buyers are over ₦4,000 per delivered order on the seed");
 const sLoose = structuredClone(s);
-sLoose.maxCostPerOrder = 100000;
+sLoose.maxCostPerOrder = 1000000;
 assert.equal(adCost(sLoose, "tobi").overMax || adCost(sLoose, "zainab").overMax, false, "A higher max clears the flags");
 assert.equal(computePnl(sLoose).payout, computePnl(s).payout, "Max cost per order does not change pay");
 assert.equal(computePnl(sLoose).actual, computePnl(s).actual, "Max cost per order does not change real profit");
@@ -233,7 +248,7 @@ for (const o of s.orders) {
 }
 const sPrice = structuredClone(s);
 assert.equal(setProductPrice(sPrice, "AIR-12", 230000), null);
-assert.equal(orderValue(sPrice.orders.find((o) => o.id === 1041)!), 212000, "Existing orders keep the price they were created at");
+assert.equal(orderValue(sPrice.orders.find((o) => o.id === 1041)!), 2120000, "Existing orders keep the price they were created at");
 const fresh = createOrder(sPrice, { customer: "Test", city: "Lagos", sku: "AIR-12", qty: 2, openedBy: "amaka", closer: "amaka", buyer: "tobi" });
 assert.equal(orderValue(fresh), 460000, "New orders use the updated price");
 assert.notEqual(setProductPrice(sPrice, "AIR-12", 0), null, "A zero price is rejected");
@@ -253,27 +268,50 @@ for (const role of ["founder", "closer", "buyer", "lead", "stock"] as const) {
 // 21. Import: the shipped templates produce a working dashboard through the same engine
 assert.equal(isoWeekNumber("2026-10-26"), 44, "26 Oct 2026 is ISO week 44 (the demo W44)");
 assert.equal(isoWeekNumber("2026-10-12"), 42);
-const imp = importData({ orders: TEMPLATES.orders, adSpend: TEMPLATES.adSpend, products: TEMPLATES.products });
-assert.equal(imp.ok, true, "Templates must import cleanly");
+const imp = importData({
+  orders: TEMPLATES.orders,
+  staff: TEMPLATES.staff,
+  products: TEMPLATES.products,
+  leads: TEMPLATES.leads,
+  adSpend: TEMPLATES.adSpend,
+  purchaseOrders: TEMPLATES.purchaseOrders,
+});
+assert.equal(imp.ok, true, "Templates must import cleanly: " + (imp.ok ? "" : JSON.stringify(imp.errors.slice(0, 3))));
 if (imp.ok) {
   const st = imp.state;
   assert.equal(imp.summary.orders, 6);
   assert.equal(imp.summary.weeks, 2);
-  assert.deepEqual(st.cycles.map((c) => c.id + ":" + c.status), ["W43:paid", "W44:open"]);
-  assert.equal(st.spend.W43.tobi, 75000, "Ad spend is summed into its Monday–Sunday week");
-  assert.equal(st.spend.W44.tobi, 75000);
+  assert.equal(imp.summary.staff, 7);
+  assert.equal(imp.summary.leads, 4);
+  assert.equal(imp.summary.purchaseOrders, 2);
+  assert.deepEqual(st.cycles.map((c) => c.id + ":" + c.status), ["W44:paid", "W45:open"]);
+  assert.equal(st.spend.W44.buyer1, 75000, "Ad spend is summed into its Monday–Sunday week, per buyer");
+  assert.equal(st.spend.W45.buyer1, 45000);
+  assert.equal(st.adSpend?.length, 4, "Every platform line is kept");
   for (const o of st.orders) assert.equal(orderValue(o), o.unitPrice * o.qty);
   const pnl = computePnl(st);
-  assert.equal(pnl.cycleId, "W44");
-  assert.equal(pnl.revenue, 187000, "Only #3004 is delivered in the open week");
-  assert.equal(pnl.adSpend, 75000);
-  assert.equal(pnl.cogs, 96000);
-  assert.equal(st.people.some((p) => p.id === "zainab"), false, "One imported media buyer");
+  assert.equal(pnl.cycleId, "W45");
+  assert.equal(pnl.revenue, 187000, "Only #3004 is delivered in the open week (and #3003's return lands in the same week)");
+  assert.equal(pnl.adSpend, 45000);
+  assert.equal(pnl.cogs, 62000, "Product cost of #3004 (96,000) less the 34,000 blender that came back resellable");
+  assert.equal(pnl.refunds, 73500, "#3003 was delivered in W44 and refunded in W45");
+  assert.equal(st.people.some((p) => p.id === "zainab"), false, "The demo buyers are replaced by the staff file");
+  assert.equal(st.people.find((p) => p.id === "closer02")?.commissionRate, 0.05, "A person's own commission rate is kept");
   assert.equal(st.audit.some((a) => a.text.includes("Imported 6 orders")), true);
-  assert.equal(payslip(openLines(st), "amaka").gross >= 0, true);
   assert.equal(stockRows(st).length, 5);
-  assert.equal(imp.summary.adSpendTotal, 150000);
+  assert.equal(imp.summary.adSpendTotal, 120000);
+  // dated events land in the week they happened: #3003 was delivered in W44 and returned in W45
+  const o3003 = st.orders.find((o) => o.id === 3003)!;
+  assert.equal([o3003.deliveredCycle, o3003.reversedCycle, o3003.stage].join(), "W44,W45,returned");
+  assert.equal(st.orders.find((o) => o.id === 3001)!.cashIn, true, "cash_received_date means the cash is in");
+  assert.equal(st.orders.find((o) => o.id === 3002)!.cashIn, false, "no cash date means it is still with the courier");
+  // closer02 sells at 5% instead of the company 4%
+  const lines = openLines(st);
+  assert.equal(lines.some((l) => l.personId === "closer02" && l.kind === "commission" && /5%/.test(l.note)), true, "closer02 is paid at their own rate");
 }
+// without a staff file the same orders still import, with closers created from the file
+const noStaff = importData({ orders: TEMPLATES.orders, products: TEMPLATES.products });
+assert.equal(noStaff.ok, true, "Orders alone still import");
 
 // 22. Import: bad files fail with the line, the column and a plain message (and never throw)
 const HDR = "order_id,date,customer,city,sku,qty,price,stage,closer,campaign\n";
@@ -332,12 +370,12 @@ const flow = revenueFlow(s);
 assert.deepEqual(
   flow.steps.map((st) => [st.key, st.orders, st.value]),
   [
-    ["booked", 13, 1850000],
-    ["confirmed", 12, 1663000],
-    ["dispatched", 10, 1077000],
-    ["delivered", 6, 606000],
-    ["kept", 5, 532500],
-    ["cash", 3, 347000],
+    ["booked", 13, 18500000],
+    ["confirmed", 12, 16630000],
+    ["dispatched", 10, 10770000],
+    ["delivered", 6, 6060000],
+    ["kept", 5, 5325000],
+    ["cash", 3, 3470000],
   ],
 );
 for (let i = 1; i < flow.steps.length; i++) {
@@ -354,7 +392,7 @@ assert.equal(flow.otherWeeksRevenue, 0);
 const sCash = structuredClone(s);
 transition(sCash, 1047, "cash");
 transition(sCash, 1050, "cash");
-assert.equal(revenueFlow(sCash).steps.find((x) => x.key === "cash")!.value, 532500, "Marking cash received lifts the last step");
+assert.equal(revenueFlow(sCash).steps.find((x) => x.key === "cash")!.value, 5325000, "Marking cash received lifts the last step");
 // a brand-new empty week is safe (no NaN, no crash)
 const sNext = structuredClone(s);
 closeCycle(sNext, "chidinma", "2026-11-02T09:00:00Z");
@@ -368,13 +406,13 @@ const by = (k: string) => lk.find((l) => l.key === k)!;
 assert.deepEqual(
   lk.map((l) => [l.key, l.kind, Math.round(l.amount)]),
   [
-    ["cash", "stuck", 185500],
-    ["blocked", "stuck", 187000],
+    ["cash", "stuck", 1855000],
+    ["blocked", "stuck", 1870000],
     ["returns", "costing", 10500],
-    ["ads", "costing", 70000],
+    ["ads", "costing", 880000],
     ["payEarly", "costing", 0],
     ["payKept", "costing", 0],
-    ["lostLeads", "costing", 1707696],
+    ["lostLeads", "costing", 17076924],
   ],
 );
 {
@@ -392,43 +430,43 @@ assert.deepEqual(
 for (const l of lk) assert.equal(Math.abs(l.drill.total - l.amount) < 1e-6, true, l.key + " drill total matches");
 assert.equal(by("cash").amount, cashWithCourier(s).total, "Cash leak is the same figure as the courier tile");
 assert.equal(by("returns").amount, 3 * DELIVERY_FEE, "#1046 cost two delivery fees and #1048 one failed attempt");
-assert.equal(by("ads").amount, 55000 - 2 * 4000 + (35000 - 3 * 4000), "Ad leak is spend above max × delivered orders");
+assert.equal(by("ads").amount, 550000 - 2 * 4000 + (350000 - 3 * 4000), "Ad leak is spend above max × delivered orders");
 const sFix = structuredClone(s);
-sFix.maxCostPerOrder = 100000;
+sFix.maxCostPerOrder = 1000000;
 assert.equal(leaks(sFix).find((l) => l.key === "ads")!.amount, 0, "A higher max clears the ad leak");
-sFix.products.find((p) => p.sku === "VAC-21")!.onHand = 10;
+sFix.products.find((p) => p.sku === "VAC-21")!.onHand = 100;
 assert.equal(leaks(sFix).find((l) => l.key === "blocked")!.amount, 0, "Stock arriving clears the blocked orders");
 const sLead2 = structuredClone(s);
 sLead2.rules.creditOn = "lead";
-assert.equal(Math.round(leaks(sLead2).find((l) => l.key === "payEarly")!.amount), 32189, "Pay before delivery shows up under the Lead rule");
+assert.equal(Math.round(leaks(sLead2).find((l) => l.key === "payEarly")!.amount), 321888, "Pay before delivery shows up under the Lead rule");
 
 // 26. Live activity: an event's impact is the engine's own before/after difference, shown per role
 const deliveredAfter = structuredClone(s);
 assert.equal(transition(deliveredAfter, 1043, "deliver"), null);
 const imp1043 = impactOf(s, deliveredAfter);
 const payOf = (i: typeof imp1043, id: string) => i.pay.find((p) => p.personId === id)?.amount;
-assert.equal(payOf(imp1043, "amaka"), 212000 * 0.04, "Closer earns 4% when #1043 lands");
-assert.equal(payOf(imp1043, "tobi"), 212000 * 0.015, "Media buyer earns 1.5%");
-assert.equal(payOf(imp1043, "ngozi"), 212000 * 0.01, "Team lead earns 1%");
+assert.equal(payOf(imp1043, "amaka"), 2120000 * 0.04, "Closer earns 4% when #1043 lands");
+assert.equal(payOf(imp1043, "tobi"), 2120000 * 0.015, "Media buyer earns 1.5%");
+assert.equal(payOf(imp1043, "ngozi"), 2120000 * 0.01, "Team lead earns 1%");
 assert.equal(
   Math.abs(sum(imp1043.pay.map((p) => p.amount)) - (computePnl(deliveredAfter).payout - computePnl(s).payout)) < 1e-6,
   true,
   "The pay deltas add up to the change in total staff pay",
 );
-assert.equal(imp1043.revenue, 212000, "Delivered revenue rises by the order value");
-assert.equal(imp1043.profit, 212000 - 78000 - 13780 - DELIVERY_FEE, "Real profit moves by revenue − product cost − commission − delivery fee");
-assert.equal(imp1043.stuckCash, 212000, "Delivered but cash not yet in: cash with the courier rises");
-assert.deepEqual(imp1043.stock, [{ sku: "AIR-12", onHand: [4, 3], available: [2, 2] }], "On hand drops, free stock is unchanged because the unit was already reserved");
+assert.equal(imp1043.revenue, 2120000, "Delivered revenue rises by the order value");
+assert.equal(imp1043.profit, 2120000 - 780000 - 137800 - DELIVERY_FEE, "Real profit moves by revenue − product cost − commission − delivery fee");
+assert.equal(imp1043.stuckCash, 2120000, "Delivered but cash not yet in: cash with the courier rises");
+assert.deepEqual(imp1043.stock, [{ sku: "AIR-12", onHand: [40, 30], available: [20, 20] }], "On hand drops, free stock is unchanged because the unit was already reserved");
 
 const confirmed = structuredClone(s);
 assert.equal(transition(confirmed, 1048, "confirm"), null);
 const impConfirm = impactOf(s, confirmed);
-assert.deepEqual(impConfirm.stock, [{ sku: "BLN-07", onHand: [12, 12], available: [11, 10] }], "Confirming reserves a unit: free stock drops, on hand does not");
+assert.deepEqual(impConfirm.stock, [{ sku: "BLN-07", onHand: [120, 120], available: [110, 100] }], "Confirming reserves a unit: free stock drops, on hand does not");
 assert.equal(impConfirm.pay.length === 0 && impConfirm.revenue === undefined, true, "Confirming moves no money under the Delivery rule");
 
 const cashed = structuredClone(deliveredAfter);
 assert.equal(transition(cashed, 1043, "cash"), null);
-assert.equal(impactOf(deliveredAfter, cashed).stuckCash, -212000, "Cash received clears the cash with the courier");
+assert.equal(impactOf(deliveredAfter, cashed).stuckCash, -2120000, "Cash received clears the cash with the courier");
 
 assert.equal(impactIsEmpty(impactOf(s, structuredClone(s))), true, "No change, no impact");
 
@@ -490,9 +528,9 @@ assert.equal(cd.oldestWeeks, 0);
 assert.deepEqual(
   cd.rows.map((r) => [r.cycleId, r.delivered, r.received, r.outstanding]),
   [
-    ["W42", 417500, 417500, 0],
-    ["W43", 487500, 487500, 0],
-    ["W44", 532500, 347000, 185500],
+    ["W42", 4175000, 4175000, 0],
+    ["W43", 4875000, 4875000, 0],
+    ["W44", 5325000, 3470000, 1855000],
   ],
 );
 assert.equal(sum(cd.rows.map((r) => r.outstanding)), cd.total, "By-week rows add up to the total owed");
@@ -574,5 +612,210 @@ assert.equal(ordersFor(s, "closer").every((o) => o.closer === "amaka" || o.opene
 assert.equal(ordersFor(s, "founder").length, s.orders.length, "The founder sees every order");
 assert.equal(ordersFor(s, "stock").length, s.orders.length, "The warehouse sees every order");
 
-console.log("ALL 30 ENGINE INVARIANTS PASSED.");
+// 31. A realistic company: generated files (about 2,000 orders, 35 staff, 50 products, four ad platforms) import cleanly,
+//     and every reconciler finds exactly the discrepancies the generator planted.
+const gen = generateDataset(DATASETS.small);
+await addBankStatement(gen);
+const gf = gen.files;
+const big = importData({
+  orders: gf["orders.csv"],
+  staff: gf["staff.csv"],
+  products: gf["products.csv"],
+  leads: gf["leads.csv"],
+  adSpend: gf["ad_spend.csv"],
+  purchaseOrders: gf["purchase_orders.csv"],
+});
+assert.equal(big.ok, true, "Generated files import: " + (big.ok ? "" : JSON.stringify(big.errors.slice(0, 3))));
+if (big.ok) {
+  const st = big.state;
+  const exp = gen.expected;
+  assert.equal(st.orders.length, exp.counts.orders, "Every generated order is imported");
+  assert.equal(st.people.length, exp.counts.staff, "Every person in the staff file");
+  assert.equal(st.products.length, exp.counts.products);
+  assert.equal(st.leads.length, exp.counts.leads, "Leads for the open week");
+  assert.equal(big.summary.adSpendTotal, exp.counts.adSpendTotal, "Ad spend by platform adds up to the file");
+  assert.equal(st.pos.length, exp.counts.purchaseOrders);
+  const stageNow: Record<string, number> = {};
+  for (const o of st.orders) {
+    const key = o.stage === "cancelled" && o.failed ? "failed" : o.stage;
+    stageNow[key] = (stageNow[key] ?? 0) + 1;
+  }
+  assert.deepEqual(stageNow, exp.counts.stages, "Stages survive the weekly replay");
+  assert.deepEqual(st.cycles.map((c) => c.status), ["paid", "open"], "One closed week, then the open week");
+  assert.equal(st.people.filter((p) => p.role === "closer").length, 20);
+  assert.equal(
+    st.orders.every((o) => st.people.some((p) => p.id === o.closer && p.role === "closer") && st.people.some((p) => p.id === o.buyer && p.role === "buyer")),
+    true,
+    "Orders point at real closers and buyers",
+  );
+  // stock on hand is exactly what the products file said, whatever was replayed
+  const prodRows = gf["products.csv"].trim().split("\n").slice(1).map((l) => l.split(","));
+  assert.equal(prodRows.every((r) => st.products.find((p) => p.sku === r[0])!.onHand === Number(r[5])), true, "Stock on hand is the file's number");
+
+  const cat = (r: { categories: { key: string; count: number }[] }, k: string) => r.categories.find((c) => c.key === k)!.count;
+  const pl = exp.planted;
+
+  // ---- courier cash
+  const stmt = parseRemittances(gf["courier_remittances.csv"]);
+  assert.equal(stmt.errors.length, 0);
+  const cc = reconcileCourierCash(st, stmt.rows);
+  assert.equal(cat(cc, "short"), pl.shortPaid.length, "Short-paid lines found");
+  assert.equal(cat(cc, "over"), pl.overPaid.length, "Over-paid lines found");
+  assert.equal(cat(cc, "duplicate"), pl.duplicates.length, "Duplicate lines found");
+  assert.equal(cat(cc, "notDelivered"), pl.remittedUndelivered.length, "Cash for orders that are not delivered");
+  assert.equal(cat(cc, "recordedMissing"), pl.recordedNotOnStatement.length, "Recorded as received but not on the statement");
+  assert.equal(cat(cc, "notRecorded"), pl.remittedNotRecorded.length, "On the statement but not recorded here");
+  assert.equal(cat(cc, "owed"), pl.deliveredNeverRemitted.length, "Delivered and still owed");
+  assert.equal(cc.recordable.length, pl.remittedNotRecorded.length);
+  assert.equal(
+    cc.categories.find((c) => c.key === "short")!.drill.lines.map((l) => Number(l.ref.slice(1))).sort((a, b) => a - b).join(),
+    [...pl.shortPaid].sort((a, b) => a - b).join(),
+    "The very same orders",
+  );
+
+  // ---- ad spend
+  const rep = parseReportedSpend(gf["ad_reported.csv"]);
+  assert.equal(rep.errors.length, 0);
+  const ar = reconcileAdSpend(st.adSpend ?? [], rep.rows);
+  assert.equal(cat(ar, "differ"), pl.adReportedDifferences.length, "Different ad spend amounts found");
+  assert.equal(cat(ar, "unreported"), pl.adReportedMissing.length, "Ad spend the buyers did not report");
+  assert.equal(cat(ar, "extra"), 0);
+
+  // ---- stock
+  const cnt = parseStockCount(gf["stock_count.csv"]);
+  assert.equal(cnt.errors.length, 0);
+  const sr = reconcileStock(st, cnt.rows);
+  const off = sr.categories.filter((c) => c.key === "short" || c.key === "surplus").flatMap((c) => c.drill.lines).map((l) => l.ref).sort();
+  assert.deepEqual(off, Object.keys(pl.stockVariance).sort(), "Exactly the SKUs the count disagreed on");
+  assert.equal(sr.netUnits, Object.values(pl.stockVariance).reduce((a, b) => a + b, 0), "Net units counted minus system");
+
+  // ---- payouts against the bank
+  const bank = parseBankStatement(gf["bank_statement.csv"]);
+  assert.equal(bank.errors.length, 0);
+  const pb = pl.bank!;
+  const po = reconcilePayouts(st, pb.cycle!, bank.rows);
+  assert.equal(po.checked, pb.people);
+  assert.equal(po.expectedTotal, pb.expectedTotal);
+  assert.deepEqual(po.categories.find((c) => c.key === "missing")!.drill.lines.map((l) => l.ref).sort(), [...pb.missing!].sort(), "The two unpaid people");
+  assert.deepEqual(po.categories.find((c) => c.key === "wrong")!.drill.lines.map((l) => [l.ref, l.amount]), Object.entries(pb.wrongAmount!), "The one short payment");
+  assert.deepEqual(po.categories.find((c) => c.key === "duplicate")!.drill.lines.map((l) => l.ref), pb.duplicate, "The one double payment");
+  assert.equal(cat(po, "unknown"), pb.unknownPayees, "The payment to someone not owed pay");
+  assert.equal(cat(po, "ok"), po.checked - 2 - 1 - 1, "Everyone else was paid exactly");
+}
+
+// 32. Bad files: each mistake is reported on its own line and column
+const badSet = generateBadFiles();
+{
+  const good = { staff: gf["staff.csv"], products: gf["products.csv"] };
+  const check = (label: string, res: ReturnType<typeof importData>, expected: Record<number, string>) => {
+    assert.equal(res.ok, false, label + " must fail");
+    if (res.ok) return;
+    for (const [line, column] of Object.entries(expected)) {
+      assert.equal(
+        res.errors.some((e) => e.line === Number(line) && e.column === column),
+        true,
+        `${label}: expected an error on line ${line}, column ${column}; got ${JSON.stringify(res.errors.map((e) => [e.file, e.line, e.column]))}`,
+      );
+    }
+  };
+  check("orders", importData({ orders: badSet.files["orders_bad.csv"], ...good }), badSet.errorLines["orders_bad.csv"]);
+  check("staff", importData({ orders: gf["orders.csv"], products: good.products, staff: badSet.files["staff_bad.csv"] }), badSet.errorLines["staff_bad.csv"]);
+  check("products", importData({ orders: gf["orders.csv"], staff: good.staff, products: badSet.files["products_bad.csv"] }), badSet.errorLines["products_bad.csv"]);
+  check("ad spend", importData({ orders: gf["orders.csv"], ...good, adSpend: badSet.files["ad_spend_bad.csv"] }), badSet.errorLines["ad_spend_bad.csv"]);
+}
+
+// 33. Action dialogs: required notes, the permanent warning, and an impact preview that never touches live state
+{
+  for (const k of ["cancel", "fail", "return", "cash", "markPaid", "lockCycle", "price"] as const) {
+    assert.equal(NOTE_SPECS[k].required, true, `${k} must require a note`);
+    assert.equal(noteMissing({ note: NOTE_SPECS[k] }, ""), true);
+    assert.equal(noteMissing({ note: NOTE_SPECS[k] }, "   "), true, `${k}: spaces are not a reason`);
+    assert.equal(noteMissing({ note: NOTE_SPECS[k] }, "customer refused"), false);
+  }
+  assert.equal(noteMissing({}, ""), false, "an action with no note spec never blocks");
+  assert.match(PERMANENT_WARNING, /permanent and cannot be undone/);
+
+  const d = buildSeed();
+  const snapshot = JSON.stringify(d);
+  const delivered = d.orders.find((o) => o.stage === "delivered" && !o.creditedCycle);
+  assert.ok(delivered, "seed has an open-week delivered order");
+  const ret = {
+    simulate: (x: typeof d, choice: string | undefined) => transition(x, delivered!.id, "return", { condition: choice === "damaged" ? "damaged" : "resellable" }) ?? undefined,
+  };
+  const good = previewImpact(d, ret, "resellable", "founder", {});
+  const bad = previewImpact(d, ret, "damaged", "founder", {});
+  assert.equal(JSON.stringify(d), snapshot, "previewing must not change the live company");
+  assert.equal(good.blocked, null);
+  assert.ok(good.impact && !impactIsEmpty(good.impact), "a return moves pay, profit or stock");
+  assert.notEqual(JSON.stringify(good.impact), JSON.stringify(bad.impact), "damaged and resellable have different impact");
+  assert.ok(good.impact!.stock.some((x) => x.sku === delivered!.sku), "a resellable return restocks the SKU");
+  assert.equal(bad.impact!.stock.length, 0, "a damaged return does not restock");
+  // The warehouse sees stock but never pay; a refused action is reported, not applied.
+  assert.equal(previewImpact(d, ret, "resellable", "stock", {}).impact!.pay.length, 0);
+  assert.equal(previewImpact(d, { simulate: () => "Not enough stock" }, undefined, "founder", {}).blocked, "Not enough stock");
+  assert.deepEqual(previewImpact(d, {}, undefined, "founder", {}), { impact: null, blocked: null });
+}
+
+// 34. Tables: sorting and searching, and the faster calculations give exactly the answers the slow ones did
+{
+  // Sorting: numbers by size, text with numbers read as numbers, empty values last in both directions, ties keep their order.
+  assert.ok(compareValues(9, 10) < 0 && compareValues("SKU-2", "SKU-10") < 0 && compareValues("b", "A") > 0);
+  const rows = [{ n: "b", v: 5 }, { n: "a", v: null }, { n: "c", v: 5 }, { n: "d", v: 9 }, { n: "e", v: undefined }];
+  assert.deepEqual(sortRows(rows, (r) => r.v, "asc").map((r) => r.n), ["b", "c", "d", "a", "e"], "ascending: ties keep order, empties last");
+  assert.deepEqual(sortRows(rows, (r) => r.v, "desc").map((r) => r.n), ["d", "b", "c", "a", "e"], "descending: empties still last");
+  assert.deepEqual(rows.map((r) => r.n), ["b", "a", "c", "d", "e"], "sorting returns a copy");
+  let reads = 0;
+  sortRows(rows, (r) => (reads++, r.v), "asc");
+  assert.equal(reads, rows.length, "each row's value is read once");
+  assert.deepEqual(nextSort(null, "x"), { key: "x", dir: "asc" });
+  assert.deepEqual(nextSort({ key: "x", dir: "asc" }, "x"), { key: "x", dir: "desc" });
+  assert.equal(nextSort({ key: "x", dir: "desc" }, "x"), null, "a third click clears the sort");
+  assert.deepEqual(nextSort({ key: "x", dir: "desc" }, "y", "desc"), { key: "y", dir: "desc" }, "money columns start high to low");
+  assert.equal(matchesQuery("bello kano", "Musa Bello, Kano"), true);
+  assert.equal(matchesQuery("bello lagos", "Musa Bello, Kano"), false, "every word must match");
+  assert.equal(matchesQuery("  ", "anything"), true);
+
+  // skuEconomics: commission per product now comes from one pass; compare with the original per-product scan.
+  const reference = (st: typeof s) => {
+    const lines = openLines(st);
+    return st.products.map((p) => {
+      const ids = st.orders.filter((o) => o.sku === p.sku);
+      return sum(lines.filter((l) => l.orderId && ids.some((o) => o.id === l.orderId) && (l.kind === "commission" || l.kind === "clawback")).map((l) => l.amount));
+    });
+  };
+  const check = (st: typeof s, label: string) => {
+    const got = skuEconomics(st).map((e) => e.commission);
+    const want = reference(st);
+    got.forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 1e-6, `${label}: product ${i} commission ${v} should be ${want[i]}`));
+  };
+  check(s, "demo");
+  if (big.ok) check(big.state, "generated company");
+
+  // One payslip pass for everyone equals a payslip per person.
+  if (big.ok) {
+    const st = big.state;
+    const lines = openLines(st);
+    const ids = salesPeople(st).map((p) => p.id);
+    const all = payslipsFor(lines, ids);
+    for (const id of ids) assert.deepEqual(all.get(id), payslip(lines, id), `payslip for ${id}`);
+    // Closer stats still match a plain scan of that closer's orders (the orders are now grouped once).
+    for (const p of st.people.filter((x) => x.role === "closer").slice(0, 5)) {
+      const mine = st.orders.filter((o) => o.closer === p.id);
+      const del = mine.filter((o) => o.stage === "delivered").length;
+      const ret = mine.filter((o) => o.stage === "returned").length;
+      const cs = closerStats(st, p.id, lines);
+      assert.equal(cs.orders, mine.length);
+      assert.equal(cs.delivered, del);
+      assert.equal(cs.returnRate, del + ret ? ret / (del + ret) : 0);
+    }
+  }
+
+  // Import progress: told after every replayed week, in order, ending at the total.
+  const seen: [number, number][] = [];
+  const withProgress = importData({ orders: TEMPLATES.orders, staff: TEMPLATES.staff, products: TEMPLATES.products }, (d, t) => seen.push([d, t]));
+  assert.equal(withProgress.ok, true);
+  assert.ok(seen.length >= 1 && seen.every(([d, t], i) => d === i + 1 && t === seen[0][1]) && seen.at(-1)![0] === seen[0][1], "progress counts weeks 1..N");
+}
+
+console.log("ALL 34 ENGINE INVARIANTS PASSED.");
 

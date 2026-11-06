@@ -1,24 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Radio } from "lucide-react";
-import { adCost, campaignStats, canEditRules, openCycle, personOf } from "@/lib/engine";
+import { adCost, campaignStats, canEditRules, openCycle, openLines, personOf } from "@/lib/engine";
+import { linesOf } from "@/lib/derived";
 import { L } from "@/lib/labels";
 import { useData, useStore } from "@/lib/store";
+import { askSetMaxCost } from "@/lib/askActions";
 import { Avatar, Card, Fig, Tile, useMoney } from "./ui";
+import { ScrollTable, SortSelect, SortTh, useSortable, type Col } from "./table";
 
 /** Profit per order, plus each media buyer's ad cost per delivered order against the founder's cap.
  *  Ad spend comes from a simulated feed. Nothing here touches anyone's pay. */
 export function AdBudget() {
   const data = useData();
   const role = useStore((s) => s.role);
-  const setMax = useStore((s) => s.setMaxCostPerOrder);
+  const setMax = askSetMaxCost;
   const m = useMoney();
   const open = openCycle(data);
   const buyers = data.people.filter((p) => p.role === "buyer").map((p) => p.id);
   const editable = canEditRules(role);
+  const buyerRows = useMemo(() => buyers.map((id) => ({ id, p: personOf(data, id), c: adCost(data, id) })), [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const buyerCols: Col<(typeof buyerRows)[number]>[] = [
+    { key: "name", label: "Media buyer", get: (r) => r.p.name },
+    { key: "spend", label: `Ad spend (${open.id})`, get: (r) => r.c.spend, align: "r", first: "desc" },
+    { key: "delivered", label: "Delivered orders", get: (r) => r.c.delivered, align: "r", first: "desc" },
+    { key: "cost", label: L.costPerOrder, get: (r) => r.c.costPerOrder, align: "r", first: "desc" },
+    { key: "max", label: "Against your max", get: (r) => (r.c.spend === 0 ? 0 : r.c.overMax ? 2 : 1) },
+  ];
+  const buyerSort = useSortable(buyerRows, buyerCols);
   // Two totals for the week: what was spent on ads, and the delivered sales those ads produced.
-  const stats = buyers.map((id) => ({ id, name: personOf(data, id).name, c: campaignStats(data, id) }));
+  const lines = linesOf(data);
+  const stats = buyers.map((id) => ({ id, name: personOf(data, id).name, c: campaignStats(data, id, lines) }));
   const totalSpend = stats.reduce((a, x) => a + x.c.spend, 0);
   const totalRevenue = stats.reduce((a, x) => a + x.c.deliveredRev, 0);
 
@@ -27,7 +40,10 @@ export function AdBudget() {
   const commit = () => {
     const n = Number(draft);
     if (draft.trim() === "" || !Number.isFinite(n) || n < 0) setDraft(String(data.maxCostPerOrder));
-    else setMax(n);
+    else {
+      setMax(n);
+      setDraft(String(data.maxCostPerOrder)); // the limit only changes once confirmed
+    }
   };
 
   return (
@@ -89,21 +105,22 @@ export function AdBudget() {
 
       </div>
 
-      <div className="tbl-wrap">
+      {buyerRows.length > 4 && (
+        <div className="filters" style={{ padding: "0 20px 10px" }}>
+          <SortSelect s={buyerSort} />
+        </div>
+      )}
+      <ScrollTable rows={7}>
         <table className="tbl">
           <thead>
             <tr>
-              <th>Media buyer</th>
-              <th className="r">Ad spend ({open.id})</th>
-              <th className="r">Delivered orders</th>
-              <th className="r">{L.costPerOrder}</th>
-              <th>Against your max</th>
+              {buyerCols.map((c) => (
+                <SortTh key={c.key} s={buyerSort} col={c.key} />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {buyers.map((id) => {
-              const c = adCost(data, id);
-              const p = personOf(data, id);
+            {buyerSort.sorted.map(({ id, p, c }) => {
               return (
                 <tr key={id}>
                   <td>
@@ -127,7 +144,7 @@ export function AdBudget() {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollTable>
     </Card>
   );
 }

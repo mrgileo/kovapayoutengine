@@ -3,10 +3,11 @@
 import { create } from "zustand";
 import { persist, type PersistStorage } from "zustand/middleware";
 import type { DemoState, Drill, Role, RuleKey, Rules } from "./types";
+import { noteMissing, type AskRequest } from "./ask";
 import type { Currency } from "./format";
 import {
   ActionKey,
-  PERSONA,
+  viewerOf,
   canEditRules,
   canRecordCash,
   canSettle,
@@ -31,6 +32,7 @@ import {
   transition,
 } from "./engine";
 import { SEED_VERSION, buildSeed } from "./seed";
+import { idbDel, idbGet, idbSet } from "./idb";
 import { RULE_DEFS, ruleOptionLabel } from "./rules";
 import { L } from "./labels";
 import type { ImportSummary } from "./importer";
@@ -48,11 +50,15 @@ interface Store {
   ccy: Currency;
   drill: Drill | null;
   toasts: Toast[];
-  returnFor: number | null;
+  /** The action waiting on the person's "are you sure?" (see ActionDialog). */
+  asking: AskRequest | null;
   newOrderOpen: boolean;
   guideOpen: boolean;
   /** The pay rules drawer (founder edits, accountant reads). */
   rulesOpen: boolean;
+  /** Who each role is viewing as, when a company has several people in a role (several closers, say). */
+  viewers: Partial<Record<Role, string>>;
+  setViewer: (role: Role, personId: string) => void;
   setRulesOpen: (open: boolean) => void;
   /** "tour" = click through the six features; "demo" = the auto-playing story. */
   guideMode: "tour" | "demo";
@@ -67,14 +73,16 @@ interface Store {
   closeDrill: () => void;
   toast: (tone: Toast["tone"], text: string) => void;
   dismiss: (id: number) => void;
-  setReturnFor: (id: number | null) => void;
+  ask: (req: AskRequest) => void;
+  cancelAsk: () => void;
+  confirmAsk: (note: string, choice?: string) => void;
   setNewOrderOpen: (open: boolean) => void;
   setGuide: (open: boolean, mode?: "tour" | "demo") => void;
 
   setRule: <K extends RuleKey>(key: K, value: Rules[K]) => void;
   setMaxCostPerOrder: (amount: number) => void;
-  act: (orderId: number, action: ActionKey, opts?: { condition?: "resellable" | "damaged" }) => void;
-  setProductPrice: (sku: string, price: number) => void;
+  act: (orderId: number, action: ActionKey, opts?: { condition?: "resellable" | "damaged"; note?: string }) => void;
+  setProductPrice: (sku: string, price: number, note?: string) => void;
   createOrder: (input: {
     customer: string;
     city: string;
@@ -84,10 +92,10 @@ interface Store {
     closer: string;
     buyer: string;
   }) => void;
-  closeCycle: () => void;
-  markPaid: (cycleId: string) => void;
-  settleCash: (orderIds: number[]) => void;
-  lockCycle: (cycleId: string) => void;
+  closeCycle: (note?: string) => void;
+  markPaid: (cycleId: string, note?: string) => void;
+  settleCash: (orderIds: number[], note?: string) => void;
+  lockCycle: (cycleId: string, note?: string) => void;
   raisePO: (sku: string, qty: number) => void;
   receivePO: (poId: string) => void;
   reset: () => void;
@@ -100,8 +108,10 @@ interface Store {
 let toastSeq = 0;
 
 /**
- * localStorage, but written once things go quiet instead of on every change (turning a 5,000-order state into JSON takes ~130 ms), flushed when the page is hidden,
- * and loud about a full quota instead of failing silently.
+ * Saved state. Small things (role, currency, the demo company) live in localStorage as before. A company loaded from
+ * the person's own files can be tens of thousands of orders, far past localStorage's ~5 MB, so that goes to IndexedDB
+ * and localStorage keeps only a marker. Writes happen once things go quiet and when the page is hidden, and a failed
+ * save is said out loud instead of failing silently.
  */
 function savedStateStorage(): PersistStorage<unknown> {
   const ls = (() => {
@@ -111,23 +121,42 @@ function savedStateStorage(): PersistStorage<unknown> {
       return null;
     }
   })();
-  let pending: { name: string; value: unknown } | null = null;
+  let pending: { name: string; value: { state: Record<string, unknown>; version?: number } } | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let warned = false;
+  const warn = () => {
+    if (warned) return;
+    warned = true;
+    useStore.getState().toast("err", "Your browser could not save your latest changes, so they will not survive a reload. Back to demo data frees the space.");
+  };
 
   const flush = () => {
     clearTimeout(timer);
     if (!pending || !ls) return;
     const { name, value } = pending;
     pending = null;
+    const state = value.state;
+    if (state.dataSource === "imported" && state.data) {
+      // Big company data: IndexedDB for the data, a small marker in localStorage. The marker (role, currency…) is
+      // written straight away so a reload right after a click keeps it; the slow IndexedDB write finishes behind it.
+      // If that write fails, the marker points at nothing and getItem falls back to the demo, after the warning.
+      try {
+        ls.setItem(name, JSON.stringify({ ...value, state: { ...state, data: null, dataInIdb: true } }));
+      } catch {
+        warn();
+      }
+      void idbSet(`${name}:data`, state.data).then((ok) => {
+        if (!ok) return warn();
+        warned = false;
+      });
+      return;
+    }
     try {
       ls.setItem(name, JSON.stringify(value));
       warned = false;
+      void idbDel(`${name}:data`);
     } catch {
-      if (!warned) {
-        warned = true;
-        useStore.getState().toast("err", "Your browser's storage is full, so your latest changes will not survive a reload. Back to demo data frees the space.");
-      }
+      warn();
     }
   };
   if (typeof window !== "undefined") {
@@ -136,16 +165,23 @@ function savedStateStorage(): PersistStorage<unknown> {
   }
 
   return {
-    getItem: (name) => {
+    getItem: async (name) => {
       try {
         const raw = ls?.getItem(name);
-        return raw ? JSON.parse(raw) : null;
+        if (!raw) return null;
+        const value = JSON.parse(raw);
+        if (value?.state?.dataInIdb) {
+          const data = await idbGet<unknown>(`${name}:data`);
+          if (!data) return null; // the marker survived but the data did not: start from the demo
+          value.state = { ...value.state, data, dataInIdb: undefined };
+        }
+        return value;
       } catch {
         return null;
       }
     },
     setItem: (name, value) => {
-      pending = { name, value };
+      pending = { name, value: value as { state: Record<string, unknown>; version?: number } };
       clearTimeout(timer);
       timer = setTimeout(flush, 250);
     },
@@ -154,6 +190,7 @@ function savedStateStorage(): PersistStorage<unknown> {
       try {
         ls?.removeItem(name);
       } catch {}
+      void idbDel(`${name}:data`);
     },
   };
 }
@@ -185,7 +222,7 @@ export const useStore = create<Store>()(
         set({ data: d });
         return { before, after: d };
       };
-      const actor = () => PERSONA[get().role];
+      const actor = () => viewerOf(get().data, get().role, get().viewers);
 
       return {
         data: buildSeed(),
@@ -193,10 +230,12 @@ export const useStore = create<Store>()(
         ccy: "NGN",
         drill: null,
         toasts: [],
-        returnFor: null,
+        asking: null,
         newOrderOpen: false,
         guideOpen: false,
         rulesOpen: false,
+        viewers: {},
+        setViewer: (role, personId) => set((s) => ({ viewers: { ...s.viewers, [role]: personId } })),
         setRulesOpen: (rulesOpen) => set({ rulesOpen }),
         guideMode: "tour",
         dataSource: "demo",
@@ -213,11 +252,22 @@ export const useStore = create<Store>()(
           setTimeout(() => get().dismiss(id), tone === "err" ? 6500 : 4200);
         },
         dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-        setReturnFor: (returnFor) => set({ returnFor }),
+        ask: (req) => set({ asking: req }),
+        cancelAsk: () => set({ asking: null }),
+        confirmAsk: (note, choice) => {
+          const req = get().asking;
+          if (!req) return;
+          if (noteMissing(req, note)) {
+            get().toast("err", `${req.note!.label} Write it in before you confirm.`);
+            return;
+          }
+          set({ asking: null });
+          req.run(note.trim(), choice);
+        },
         setNewOrderOpen: (newOrderOpen) => set({ newOrderOpen }),
         setGuide: (guideOpen, mode = "tour") => set({ guideOpen, guideMode: mode }),
 
-        setProductPrice: (sku, price) => {
+        setProductPrice: (sku, price, note) => {
           if (!canEditRules(get().role)) {
             get().toast("err", "Only the founder can change prices.");
             return;
@@ -228,7 +278,7 @@ export const useStore = create<Store>()(
           const res = mutate((d) => {
             const err = setProductPriceFx(d, sku, next);
             if (err) return err;
-            log(d, { at: now(), actor: actor(), kind: "stock", text: `${sku} price: ₦${prev.toLocaleString()} → ₦${next.toLocaleString()} · applies to new orders only` });
+            log(d, { at: now(), actor: actor(), kind: "stock", text: `${sku} price: ₦${prev.toLocaleString()} → ₦${next.toLocaleString()} · applies to new orders only`, note: note || undefined });
           });
           if (res) get().toast("ok", `${sku} is now ₦${next.toLocaleString()}. New orders only.`);
         },
@@ -277,12 +327,13 @@ export const useStore = create<Store>()(
         },
 
         act: (orderId, action, opts = {}) => {
+          const { note, ...txOpts } = opts;
           const res = mutate((d) => {
             const o = d.orders.find((x) => x.id === orderId)!;
             // Enforced here as well as in the UI: a role can only do what actionsFor allows it on this order.
-            if (!actionsFor(get().data, get().role, o).includes(action)) return "You do not have permission to do that on this order.";
+            if (!actionsFor(get().data, get().role, o, actor()).includes(action)) return "You do not have permission to do that on this order.";
             const credited = o.creditedCycle ? cycleById(d, o.creditedCycle) : undefined;
-            const err = transition(d, orderId, action, opts);
+            const err = transition(d, orderId, action, txOpts);
             if (err) return err;
             const p = o.sku;
             let text = "";
@@ -317,7 +368,7 @@ export const useStore = create<Store>()(
                 break;
             }
             const before = get().data;
-            log(d, { at: now(), actor: actor(), kind: "order", text, orderId, deltas: peopleDeltas(before, d), impact: impactOf(before, d) });
+            log(d, { at: now(), actor: actor(), kind: "order", text, orderId, note: note || undefined, deltas: peopleDeltas(before, d), impact: impactOf(before, d) });
           });
           if (!res) return;
           const deltas = peopleDeltas(res.before, res.after);
@@ -328,18 +379,18 @@ export const useStore = create<Store>()(
           get().toast(deltas.some((x) => x.amount < 0) ? "warn" : "ok", `Order ${orderId}: ${summary}`);
         },
 
-        closeCycle: () => {
+        closeCycle: (note) => {
           if (get().role !== "founder") return;
           const id = openCycle(get().data).id;
           mutate((d) => {
             const at = now();
             closeCycleFx(d, actor(), at);
             const c = cycleById(d, id)!;
-            log(d, { at, actor: actor(), cycle: id, kind: "cycle", text: `Closed and approved ${id} · pay figures frozen`, deltas: [{ label: "Approved staff pay", amount: c.pnl!.payout }] });
+            log(d, { at, actor: actor(), cycle: id, kind: "cycle", text: `Closed and approved ${id} · pay figures frozen`, note: note || undefined, deltas: [{ label: "Approved staff pay", amount: c.pnl!.payout }] });
           });
           get().toast("ok", `${id} approved. ${openCycle(get().data).id} is now open.`);
         },
-        settleCash: (orderIds) => {
+        settleCash: (orderIds, note) => {
           if (!canRecordCash(get().role)) {
             get().toast("err", "Only the accountant or the founder can record courier cash.");
             return;
@@ -356,22 +407,22 @@ export const useStore = create<Store>()(
               transition(d, id, "cash");
             }
             if (done === 0) return "Nothing to record: those orders are already settled.";
-            log(d, { at: now(), actor: actor(), kind: "order", text: `Courier remitted cash for ${done} order${done === 1 ? "" : "s"} (₦${total.toLocaleString()})`, impact: impactOf(before, d) });
+            log(d, { at: now(), actor: actor(), kind: "order", text: `Courier remitted cash for ${done} order${done === 1 ? "" : "s"} (₦${total.toLocaleString()})`, note: note || undefined, impact: impactOf(before, d) });
           });
           if (res) get().toast("ok", `Recorded ₦${total.toLocaleString()} from the courier across ${done} order${done === 1 ? "" : "s"}.`);
         },
-        markPaid: (cycleId) => {
+        markPaid: (cycleId, note) => {
           if (!canSettle(get().role)) return;
           mutate((d) => {
             markPaidFx(d, cycleId, actor(), now());
-            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Marked ${cycleId} paid · bank file exported` });
+            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Marked ${cycleId} paid · bank file exported`, note: note || undefined });
           });
         },
-        lockCycle: (cycleId) => {
+        lockCycle: (cycleId, note) => {
           if (!canSettle(get().role)) return;
           mutate((d) => {
             lockFx(d, cycleId, actor(), now());
-            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, commission is final` });
+            log(d, { at: now(), actor: actor(), cycle: cycleId, kind: "cycle", text: `Locked ${cycleId} · return window closed, commission is final`, note: note || undefined });
           });
           get().toast("ok", `${cycleId} locked. Later returns no longer touch its payouts.`);
         },
@@ -415,7 +466,7 @@ export const useStore = create<Store>()(
           }
         },
         reset: () => {
-          set({ data: buildSeed(), dataSource: "demo", importSummary: null, drill: null, returnFor: null, newOrderOpen: false });
+          set({ data: buildSeed(), dataSource: "demo", importSummary: null, drill: null, asking: null, newOrderOpen: false });
           get().toast("ok", "Demo reset to the seed data.");
         },
         applyDeepLink: (link) => {
@@ -426,7 +477,7 @@ export const useStore = create<Store>()(
               get().toast("warn", "Rule links only apply to the demo data. Your imported data was left alone.");
             } else {
               // A shared link starts from the demo company so it shows what the post showed; each rule goes through the normal founder path (and the audit log).
-              set({ data: buildSeed(), importSummary: null, drill: null, returnFor: null, newOrderOpen: false, role: "founder" });
+              set({ data: buildSeed(), importSummary: null, drill: null, asking: null, newOrderOpen: false, role: "founder" });
               for (const k of keys) get().setRule(k, link.rules[k] as never);
               set({ role: before });
             }
@@ -445,7 +496,7 @@ export const useStore = create<Store>()(
             get().toast("err", "Only the founder can load your own data.");
             return;
           }
-          set({ data: state, dataSource: "imported", importSummary: summary, importOpen: false, drill: null, returnFor: null, newOrderOpen: false });
+          set({ viewers: {}, data: state, dataSource: "imported", importSummary: summary, importOpen: false, drill: null, asking: null, newOrderOpen: false });
           get().toast("ok", `Loaded ${summary.orders} of your orders across ${summary.weeks} week${summary.weeks === 1 ? "" : "s"}. Nothing left this browser.`);
         },
         backToDemo: () => {
@@ -453,7 +504,7 @@ export const useStore = create<Store>()(
             get().toast("err", "Only the founder can switch back to the demo data.");
             return;
           }
-          set({ data: buildSeed(), dataSource: "demo", importSummary: null, importOpen: false, drill: null, returnFor: null, newOrderOpen: false });
+          set({ viewers: {}, data: buildSeed(), dataSource: "demo", importSummary: null, importOpen: false, drill: null, asking: null, newOrderOpen: false });
           get().toast("ok", "Back to the demo data.");
         },
       };
@@ -462,12 +513,14 @@ export const useStore = create<Store>()(
       name: "kova-payout-engine",
       version: SEED_VERSION,
       storage: savedStateStorage(),
-      partialize: (s) => ({ data: s.data, role: s.role, ccy: s.ccy, dataSource: s.dataSource, importSummary: s.importSummary }),
+      partialize: (s) => ({ data: s.data, role: s.role, ccy: s.ccy, dataSource: s.dataSource, importSummary: s.importSummary, viewers: s.viewers }),
       migrate: () => ({ data: buildSeed(), role: "founder" as Role, ccy: "NGN" as Currency }),
     },
   ),
 );
 
 export const useData = () => useStore((s) => s.data);
+/** The person the current role is viewing as (a person id). */
+export const useMe = () => useStore((s) => viewerOf(s.data, s.role, s.viewers));
 export const actorName = (d: DemoState, id: string) => firstName(d, id);
 

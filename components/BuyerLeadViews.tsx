@@ -1,20 +1,23 @@
 "use client";
 
-import { PERSONA, SIM_FEED_NOTE, cycleLines, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
+import { useMemo } from "react";
+import { SIM_FEED_NOTE, cycleLines, openCycle, openLines, orderValue, payslip, personOf, sum } from "@/lib/engine";
+import { linesOf } from "@/lib/derived";
 import { shortDate } from "@/lib/format";
 import { L, PAY_LINE_TEXT } from "@/lib/labels";
-import { useData } from "@/lib/store";
+import { useData, useMe } from "@/lib/store";
 import { CloserScorecard } from "./CloserScorecard";
 import { Card, Fig, Tile } from "./ui";
+import { ScrollTable, SortSelect, SortTh, useSortable, type Col } from "./table";
 import type { Drill } from "@/lib/types";
 
 /** The media buyer sees only their own spend, the orders their ads brought in, and their own pay. No company accounting. */
 export function BuyerView() {
   const data = useData();
-  const me = PERSONA.buyer;
+  const me = useMe();
   const open = openCycle(data);
-  const ps = payslip(openLines(data), me);
-  const myOrders = data.orders.filter((o) => o.buyer === me);
+  const ps = payslip(linesOf(data), me);
+  const myOrders = useMemo(() => data.orders.filter((o) => o.buyer === me), [data.orders, me]);
   const thisWeek = myOrders.filter((o) => o.createdCycle === open.id);
   const spendNow = data.spend[open.id]?.[me] ?? 0;
 
@@ -32,16 +35,34 @@ export function BuyerView() {
   });
 
   // One row per week: what I spent, the orders my ads brought in, how many were delivered, and what I was paid.
-  const weeks = [...data.cycles].reverse().map((c) => {
-    const ords = myOrders.filter((o) => o.createdCycle === c.id);
-    return {
-      c,
-      ords,
-      delivered: ords.filter((o) => o.stage === "delivered").length,
-      spend: data.spend[c.id]?.[me] ?? 0,
-      slip: payslip(cycleLines(data, c.id), me),
-    };
-  });
+  const weeks = useMemo(() => {
+    // One pass over this buyer's orders, grouped by week, instead of one filter per week.
+    const byWeek = new Map<string, typeof myOrders>();
+    for (const o of myOrders) {
+      const list = byWeek.get(o.createdCycle);
+      if (list) list.push(o);
+      else byWeek.set(o.createdCycle, [o]);
+    }
+    return [...data.cycles].reverse().map((c) => {
+      const ords = byWeek.get(c.id) ?? [];
+      return {
+        c,
+        ords,
+        value: sum(ords.map(orderValue)),
+        delivered: ords.filter((o) => o.stage === "delivered").length,
+        spend: data.spend[c.id]?.[me] ?? 0,
+        slip: payslip(cycleLines(data, c.id), me),
+      };
+    });
+  }, [data, myOrders, me]);
+  const weekCols: Col<(typeof weeks)[number]>[] = [
+    { key: "week", label: "Week", get: (w) => w.c.id, first: "desc" },
+    { key: "spend", label: "Ad spend", get: (w) => w.spend, align: "r", first: "desc" },
+    { key: "orders", label: "Orders from your ads", get: (w) => w.value, align: "r", first: "desc" },
+    { key: "delivered", label: "Delivered", get: (w) => w.delivered, align: "r", first: "desc" },
+    { key: "pay", label: "Your pay", get: (w) => w.slip.payable, align: "r", first: "desc" },
+  ];
+  const weekSort = useSortable(weeks, weekCols);
 
   return (
     <div className="stack">
@@ -60,21 +81,23 @@ export function BuyerView() {
         </Tile>
       </dl>
 
-      <Card title="Your weeks" sub="What you spent, the orders your ads brought in, and what you were paid. Only your own numbers are shown." flush>
-        <div className="tbl-wrap">
+      <Card
+        title="Your weeks"
+        sub="What you spent, the orders your ads brought in, and what you were paid. Only your own numbers are shown."
+        actions={weeks.length > 4 ? <SortSelect s={weekSort} /> : undefined}
+        flush
+      >
+        <ScrollTable rows={8}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Week</th>
-                <th className="r">Ad spend</th>
-                <th className="r">Orders from your ads</th>
-                <th className="r">Delivered</th>
-                <th className="r">Your pay</th>
+                {weekCols.map((c) => (
+                  <SortTh key={c.key} s={weekSort} col={c.key} />
+                ))}
               </tr>
             </thead>
             <tbody>
-              {weeks.map(({ c, ords, delivered, spend, slip }) => {
-                const value = sum(ords.map(orderValue));
+              {weekSort.sorted.map(({ c, ords, value, delivered, spend, slip }) => {
                 return (
                   <tr key={c.id}>
                     <td>
@@ -87,11 +110,11 @@ export function BuyerView() {
                     <td className="r mono">
                       <Fig
                         amount={value}
-                        drill={{
+                        drill={() => ({
                           title: `${c.id} · Orders from your ads`,
                           lines: ords.map((o) => ({ ref: `#${o.id}`, label: `${o.customer} (${L.stage[o.stage] ?? o.stage})`, amount: orderValue(o) })),
                           total: value,
-                        }}
+                        })}
                       />
                       <span className="sub">
                         {ords.length} order{ords.length === 1 ? "" : "s"}
@@ -100,7 +123,7 @@ export function BuyerView() {
                     <td className="r mono">{delivered}</td>
                     <td className="r mono">
                       <b>
-                        <Fig amount={slip.payable} drill={{ title: `${c.id} · Your pay`, lines: payLines(slip), total: slip.gross }} />
+                        <Fig amount={slip.payable} drill={() => ({ title: `${c.id} · Your pay`, lines: payLines(slip), total: slip.gross })} />
                       </b>
                     </td>
                   </tr>
@@ -108,7 +131,7 @@ export function BuyerView() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
       </Card>
     </div>
   );
@@ -116,13 +139,15 @@ export function BuyerView() {
 
 export function LeadView() {
   const data = useData();
+  const me = useMe();
   const open = openCycle(data);
-  const lines = openLines(data);
-  const ps = payslip(lines, PERSONA.lead);
+  const lines = linesOf(data);
+  const ps = payslip(lines, me);
 
-  const teamDelivered = data.orders.filter((o) => o.deliveredCycle === open.id && o.stage === "delivered");
+  const myTeam = new Set(data.people.filter((p) => p.role === "closer" && p.reportsTo === me).map((p) => p.id));
+  const teamDelivered = data.orders.filter((o) => o.deliveredCycle === open.id && o.stage === "delivered" && myTeam.has(o.closer));
   const teamDelVal = sum(teamDelivered.map(orderValue));
-  const splitOrders = data.orders.filter((o) => o.openedBy !== o.closer);
+  const splitOrders = data.orders.filter((o) => o.openedBy !== o.closer && myTeam.has(o.closer));
 
   const payslipDrill: Drill = {
     title: `Ngozi Eze · ${open.id} Team Lead Payslip`,

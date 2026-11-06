@@ -2,7 +2,6 @@
 
 import { Smartphone, Lock, AlertTriangle } from "lucide-react";
 import {
-  PERSONA,
   closerStats,
   commissionLines,
   openCycle,
@@ -13,21 +12,23 @@ import {
   stockRow,
   sum,
 } from "@/lib/engine";
+import { linesOf } from "@/lib/derived";
 import { pct } from "@/lib/format";
 import { L, PAY_LINE_TEXT } from "@/lib/labels";
-import { useData } from "@/lib/store";
+import { useData, useMe } from "@/lib/store";
 import { Fig, Tile } from "./ui";
 import type { Drill } from "@/lib/types";
 
 export function CloserView() {
   const data = useData();
+  const me = useMe();
   const open = openCycle(data);
-  const lines = openLines(data);
-  const ps = payslip(lines, PERSONA.closer);
-  const st = closerStats(data, PERSONA.closer);
+  const lines = linesOf(data);
+  const ps = payslip(lines, me);
+  const st = closerStats(data, me);
 
   const mine = data.orders.filter(
-    (o) => (o.closer === PERSONA.closer || o.openedBy === PERSONA.closer) && o.createdCycle === open.id,
+    (o) => (o.closer === me || o.openedBy === me) && o.createdCycle === open.id,
   );
   const openOrders = mine.filter((o) => o.stage !== "delivered" && o.stage !== "returned" && o.stage !== "cancelled");
   const blocked = openOrders.filter((o) => stockRow(data, productOf(data, o.sku)).available <= 0);
@@ -35,7 +36,7 @@ export function CloserView() {
   // Potential commission if all open pipeline lands
   const potentialLines = openOrders.flatMap((o) =>
     commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
-      (l) => l.personId === PERSONA.closer,
+      (l) => l.personId === me,
     ),
   );
   const potentialTotal = sum(potentialLines.map((l) => l.amount));
@@ -57,7 +58,7 @@ export function CloserView() {
     subtitle: "If every open order is delivered and not returned",
     lines: openOrders.map((o) => {
       const ls = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
-        (l) => l.personId === PERSONA.closer,
+        (l) => l.personId === me,
       );
       const amt = sum(ls.map((l) => l.amount));
       return {

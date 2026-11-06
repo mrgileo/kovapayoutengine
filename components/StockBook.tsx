@@ -1,11 +1,16 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { PackagePlus, CheckCircle, AlertTriangle } from "lucide-react";
 import { STOCK_LABEL, needsAttention, personOf, skuEconomics, stockRows, sum } from "@/lib/engine";
+import { needsAttentionOf, skuEconomicsOf, stockRowsOf } from "@/lib/derived";
 import { dateTime, pct, shortDate, shortName } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
+import { askRaisePOs, askReceivePO } from "@/lib/askActions";
+import { matchesQuery } from "@/lib/sort";
 import { PriceBook } from "./PriceBook";
 import { Card, Fig, Tile, useMoney } from "./ui";
+import { NoMatches, ScrollTable, SortTh, TableTools, useSortable, type Col } from "./table";
 
 const TONE_MAP = {
   out: "neg",
@@ -18,13 +23,56 @@ const TONE_MAP = {
 export function StockBook() {
   const data = useData();
   const role = useStore((s) => s.role);
-  const raisePO = useStore((s) => s.raisePO);
-  const receivePO = useStore((s) => s.receivePO);
+  const raisePO = (sku: string, qty: number) => askRaisePOs([{ sku, qty }]);
+  const receivePO = askReceivePO;
   const m = useMoney();
 
-  const rows = stockRows(data);
-  const skuEcon = skuEconomics(data);
-  const alerts = needsAttention(data);
+  const rows = stockRowsOf(data);
+  const skuEcon = skuEconomicsOf(data);
+
+  // Each long table gets its own search and sort.
+  const [stockQ, setStockQ] = useState("");
+  const [poQ, setPoQ] = useState("");
+  const [econQ, setEconQ] = useState("");
+  const stockShown = useMemo(() => rows.filter((r) => matchesQuery(stockQ, `${r.product.sku} ${r.product.name} ${STOCK_LABEL[r.status]}`)), [rows, stockQ]);
+  const poShown = useMemo(() => data.pos.filter((po) => matchesQuery(poQ, `${po.id} ${po.sku} ${po.status === "received" ? "received" : "in transit"} ${personOf(data, po.raisedBy).name}`)), [data, poQ]);
+  const econShown = useMemo(() => skuEcon.filter((e) => matchesQuery(econQ, `${e.sku} ${e.name}`)), [skuEcon, econQ]);
+  const stockCols: Col<(typeof rows)[number]>[] = [
+    { key: "sku", label: "Code", get: (r) => r.product.sku },
+    { key: "name", label: "Product", get: (r) => r.product.name },
+    { key: "onHand", label: "On the shelf", get: (r) => r.onHand, align: "r", first: "desc" },
+    { key: "committed", label: "Set aside", get: (r) => r.committed, align: "r", first: "desc" },
+    { key: "available", label: "Available", get: (r) => r.available, align: "r" },
+    { key: "onOrder", label: "On order", get: (r) => r.onOrder, align: "r", first: "desc" },
+    { key: "projected", label: "Will have", get: (r) => r.projected, align: "r" },
+    { key: "reorder", label: "Reorder level", get: (r) => r.product.reorder, align: "r", first: "desc" },
+    { key: "status", label: "Status", get: (r) => STOCK_LABEL[r.status] },
+    { key: "worth", label: "Worth (at cost)", get: (r) => r.onHand * r.product.cost, align: "r", first: "desc" },
+  ];
+  const stockSort = useSortable(stockShown, stockCols);
+  const poCols: Col<(typeof data.pos)[number]>[] = [
+    { key: "id", label: "Purchase order", get: (po) => po.id, first: "desc" },
+    { key: "sku", label: "Code", get: (po) => po.sku },
+    { key: "qty", label: "Units", get: (po) => po.qty, align: "r", first: "desc" },
+    { key: "cost", label: "Cost", get: (po) => po.qty * po.unitCost, align: "r", first: "desc" },
+    { key: "raised", label: "Raised", get: (po) => po.raisedAt, first: "desc" },
+    { key: "eta", label: "Arrives", get: (po) => po.eta },
+    { key: "status", label: "Status", get: (po) => po.status },
+  ];
+  const poSort = useSortable(poShown, poCols);
+  const econCols: Col<(typeof skuEcon)[number]>[] = [
+    { key: "sku", label: "Code", get: (e) => e.sku },
+    { key: "name", label: "Product", get: (e) => e.name },
+    { key: "units", label: "Delivered units", get: (e) => e.deliveredQty, align: "r", first: "desc" },
+    { key: "rate", label: "Return rate", get: (e) => e.returnRate, align: "r", first: "desc" },
+    { key: "revenue", label: "Delivered revenue", get: (e) => e.revenue, align: "r", first: "desc" },
+    { key: "cogs", label: "Product cost", get: (e) => e.cogs, align: "r", first: "desc" },
+    { key: "fees", label: "Delivery fees & damaged stock", get: (e) => e.courierCost + e.damagedLoss, align: "r", first: "desc" },
+    { key: "commission", label: "Commission", get: (e) => e.commission, align: "r", first: "desc" },
+    { key: "profit", label: "Profit", get: (e) => e.netProfit, align: "r", first: "desc" },
+  ];
+  const econSort = useSortable(econShown, econCols);
+  const alerts = needsAttentionOf(data);
   const canManage = role === "stock" || role === "founder";
 
   const totalOnHandValue = sum(rows.map((r) => r.onHand * r.product.cost));
@@ -104,7 +152,7 @@ export function StockBook() {
               type="button"
               className="btn sm primary"
               style={{ marginLeft: "auto" }}
-              onClick={() => alerts.forEach((a) => raisePO(a.product.sku, a.suggested))}
+              onClick={() => askRaisePOs(alerts.map((a) => ({ sku: a.product.sku, qty: a.suggested })))}
             >
               <PackagePlus size={14} /> Order stock for all ({alerts.length})
             </button>
@@ -122,27 +170,22 @@ export function StockBook() {
       <Card
         title="Warehouse stock and reordering"
         sub="Available = on the shelf minus set aside for confirmed or sent-out orders. A purchase order puts units 'On order' and clears the reorder alert."
+        actions={rows.length > 5 ? <TableTools query={stockQ} onQuery={setStockQ} sorter={stockSort} label="Search products" placeholder="Search products…" /> : undefined}
         flush
       >
-        <div className="tbl-wrap">
+        {stockShown.length === 0 && stockQ.trim() ? <NoMatches query={stockQ} /> : null}
+        <ScrollTable rows={9}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Product</th>
-                <th className="r">On the shelf</th>
-                <th className="r">Set aside</th>
-                <th className="r">Available</th>
-                <th className="r">On order</th>
-                <th className="r">Will have</th>
-                <th className="r">Reorder level</th>
-                <th>Status</th>
-                <th className="r">Worth (at cost)</th>
+                {stockCols.map((c) => (
+                  <SortTh key={c.key} s={stockSort} col={c.key} />
+                ))}
                 <th className="r">Restock</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {stockSort.sorted.map((r) => {
                 const p = r.product;
                 const openSkuPOs = data.pos.filter((po) => po.sku === p.sku && po.status === "open");
                 return (
@@ -222,27 +265,29 @@ export function StockBook() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
       </Card>
 
       {data.pos.length > 0 && (
-        <Card title="Purchase Order Register" sub="Orders placed with suppliers: when they arrive and whether they have been received." flush>
-          <div className="tbl-wrap">
+        <Card
+          title="Purchase Order Register"
+          sub="Stock you ordered from suppliers: when it arrives and whether it has been received."
+          actions={data.pos.length > 5 ? <TableTools query={poQ} onQuery={setPoQ} sorter={poSort} label="Search purchase orders" placeholder="Search orders…" /> : undefined}
+          flush
+        >
+          {poShown.length === 0 && poQ.trim() ? <NoMatches query={poQ} /> : null}
+          <ScrollTable rows={8}>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Purchase order</th>
-                  <th>Code</th>
-                  <th className="r">Units</th>
-                  <th className="r">Cost</th>
-                  <th>Raised</th>
-                  <th>Arrives</th>
-                  <th>Status</th>
+                  {poCols.map((c) => (
+                    <SortTh key={c.key} s={poSort} col={c.key} />
+                  ))}
                   <th className="r">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {data.pos.map((po) => (
+                {poSort.sorted.map((po) => (
                   <tr key={po.id}>
                     <td className="mono">{po.id}</td>
                     <td className="sku">{po.sku}</td>
@@ -270,7 +315,7 @@ export function StockBook() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTable>
         </Card>
       )}
 
@@ -278,27 +323,23 @@ export function StockBook() {
       {role !== "stock" && <PriceBook />}
 
       {role !== "stock" && <Card
-        title="Profit by product, and what returns cost"
+        title="Profit by product"
         sub="Which products actually make money after product cost, delivery fees, damaged stock and commission?"
+        actions={skuEcon.length > 5 ? <TableTools query={econQ} onQuery={setEconQ} sorter={econSort} label="Search products" placeholder="Search products…" /> : undefined}
         flush
       >
-        <div className="tbl-wrap">
+        {econShown.length === 0 && econQ.trim() ? <NoMatches query={econQ} /> : null}
+        <ScrollTable rows={9}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Product</th>
-                <th className="r">Delivered units</th>
-                <th className="r">Return rate</th>
-                <th className="r">Delivered revenue</th>
-                <th className="r">Product cost</th>
-                <th className="r">Delivery fees &amp; damaged stock</th>
-                <th className="r">Commission</th>
-                <th className="r">Profit</th>
+                {econCols.map((c) => (
+                  <SortTh key={c.key} s={econSort} col={c.key} />
+                ))}
               </tr>
             </thead>
             <tbody>
-              {skuEcon.map((e) => (
+              {econSort.sorted.map((e) => (
                 <tr key={e.sku}>
                   <td className="sku">{e.sku}</td>
                   <td>
@@ -321,7 +362,7 @@ export function StockBook() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
       </Card>}
     </div>
   );

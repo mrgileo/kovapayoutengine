@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { GitFork, Lock, Plus, RotateCcw, Search } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { GitFork, Lock, Plus } from "lucide-react";
 import {
   ACTION_LABEL,
   ActionKey,
@@ -11,7 +11,6 @@ import {
   cycleById,
   firstName,
   isCredited,
-  PERSONA,
   canSeeAllPayouts,
   openCycle,
   orderValue,
@@ -21,16 +20,20 @@ import {
   stockRow,
   sum,
 } from "@/lib/engine";
-import { useData, useStore } from "@/lib/store";
+import { useData, useMe, useStore } from "@/lib/store";
+import { askOrder } from "@/lib/askActions";
 import { L } from "@/lib/labels";
+import { stockRowsOf } from "@/lib/derived";
+import { matchesQuery } from "@/lib/sort";
 import { Card, Fig, StagePill, useMoney } from "./ui";
+import { NoMatches, SearchBox, SortSelect, SortTh, useSortable, type Col } from "./table";
 import type { Drill, Order } from "@/lib/types";
+
+const STAGE_ORDER = ["new", "confirmed", "dispatched", "delivered", "returned", "cancelled"];
 
 export function OrderLedger() {
   const data = useData();
   const role = useStore((s) => s.role);
-  const act = useStore((s) => s.act);
-  const setReturnFor = useStore((s) => s.setReturnFor);
   const setNewOrderOpen = useStore((s) => s.setNewOrderOpen);
   const imported = useStore((s) => s.dataSource) === "imported";
   const m = useMoney();
@@ -39,24 +42,72 @@ export function OrderLedger() {
   const [cycleFilter, setCycleFilter] = useState<string>("OPEN");
   const [query, setQuery] = useState<string>("");
 
-  const q = query.trim().toLowerCase();
+  // Typing stays instant; the 20,000-row filter below runs on the deferred copy.
+  const deferredQuery = useDeferredValue(query);
+  const stockBySku = useMemo(() => new Map(stockRowsOf(data).map((r) => [r.product.sku, r])), [data]);
 
-  // Filter orders by cycle chip + live instant search
-  const mine = ordersFor(data, role);
-  const me = PERSONA[role];
-  const visible = mine.filter((o) => {
-    if (cycleFilter === "OPEN" && !(o.createdCycle === open.id || o.reversedCycle === open.id)) return false;
-    if (cycleFilter === "DELIVERED" && o.stage !== "delivered") return false;
-    if (cycleFilter === "RETURNED" && o.stage !== "returned") return false;
-    if (q) {
-      const p = productOf(data, o.sku);
-      const cName = personOf(data, o.closer).name.toLowerCase();
-      const oName = personOf(data, o.openedBy).name.toLowerCase();
-      const hay = `#${o.id} ${o.customer} ${o.city} ${o.sku} ${p.name} ${o.stage} ${cName} ${oName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  // Which orders this person sees, then the cycle chip, then the search.
+  const me = useMe();
+  const mine = useMemo(() => ordersFor(data, role, me), [data, role, me]);
+  const names = useMemo(
+    () => ({
+      product: new Map(data.products.map((p) => [p.sku, p.name])),
+      person: new Map(data.people.map((p) => [p.id, p.name])),
+    }),
+    [data.products, data.people],
+  );
+  const counts = useMemo(
+    () => ({
+      OPEN: mine.filter((o) => o.createdCycle === open.id || o.reversedCycle === open.id).length,
+      DELIVERED: mine.filter((o) => o.stage === "delivered").length,
+      RETURNED: mine.filter((o) => o.stage === "returned").length,
+      ALL: mine.length,
+    }),
+    [mine, open.id],
+  );
+  const visible = useMemo(
+    () =>
+      mine.filter((o) => {
+        if (cycleFilter === "OPEN" && !(o.createdCycle === open.id || o.reversedCycle === open.id)) return false;
+        if (cycleFilter === "DELIVERED" && o.stage !== "delivered") return false;
+        if (cycleFilter === "RETURNED" && o.stage !== "returned") return false;
+        if (deferredQuery.trim()) {
+          const hay = `#${o.id} ${o.customer} ${o.city} ${o.sku} ${names.product.get(o.sku) ?? ""} ${o.stage} ${names.person.get(o.closer) ?? ""} ${names.person.get(o.openedBy) ?? ""}`;
+          if (!matchesQuery(deferredQuery, hay)) return false;
+        }
+        return true;
+      }),
+    [mine, cycleFilter, deferredQuery, open.id, names],
+  );
+
+  // Closers can read their orders as cards or as a compact table; the choice is remembered for that person on this device.
+  const [viewPick, setViewPick] = useState<"cards" | "table" | null>(null);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(`kova.ordersView.${me}`);
+      if (v === "cards" || v === "table") setViewPick(v);
+    } catch {}
+  }, [me]);
+  const view = role === "closer" ? (viewPick ?? "cards") : "table";
+  function pickView(v: "cards" | "table") {
+    setViewPick(v);
+    try {
+      localStorage.setItem(`kova.ordersView.${me}`, v);
+    } catch {}
+  }
+
+  const cols: Col<Order>[] = [
+    { key: "id", label: "Order", get: (o) => o.id, first: "desc" },
+    { key: "customer", label: "Customer", get: (o) => o.customer },
+    { key: "item", label: "Item & stock", get: (o) => o.sku },
+    { key: "by", label: "Opened / closed by", get: (o) => names.person.get(o.closer) },
+    { key: "value", label: "Value", get: (o) => orderValue(o), align: "r", first: "desc" },
+    { key: "stage", label: "Stage", get: (o) => STAGE_ORDER.indexOf(o.stage) },
+    ...(role !== "stock"
+      ? [{ key: "commission", label: canSeeAllPayouts(role) ? "Commission" : "Your commission", get: (o: Order) => orderCommissionInfo(o).amount, align: "r" as const, first: "desc" as const }]
+      : []),
+  ];
+  const sorter = useSortable(visible, cols);
 
   /** "Confirmed by Amaka": the latest thing someone did to this order, from the audit log. */
   function lastAction(o: Order): string | null {
@@ -64,15 +115,18 @@ export function OrderLedger() {
     if (!e) return null;
     const verb = /^Order \d+ (\w+)/.exec(e.text)?.[1] ?? (e.text.includes("created") ? "created" : null);
     if (!verb) return null;
-    return `${verb.charAt(0).toUpperCase()}${verb.slice(1)} by ${firstName(data, e.actor)}`;
+    return `${verb.charAt(0).toUpperCase()}${verb.slice(1)} by ${firstName(data, e.actor)}${e.note ? ` · “${e.note}”` : ""}`;
   }
 
+  // A medium company has tens of thousands of orders: show one page at a time.
+  const PAGE = 50;
+  const [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [cycleFilter, deferredQuery, role, sorter.key, sorter.dir]);
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE));
+  const shown = sorter.sorted.slice(Math.min(page, pages - 1) * PAGE, Math.min(page, pages - 1) * PAGE + PAGE);
+
   function handleAction(o: Order, a: ActionKey) {
-    if (a === "return") {
-      setReturnFor(o.id);
-      return;
-    }
-    act(o.id, a);
+    askOrder(o.id, a);
   }
 
   function orderCommissionInfo(o: Order): { amount: number; label: string; tone: string; drill: Drill } {
@@ -174,21 +228,13 @@ export function OrderLedger() {
       }
       actions={
         <div className="filters" role="group" aria-label="Filter orders" style={{ alignItems: "center" }}>
-          <label className="search-box">
-            <Search size={12} />
-            <input
-              type="search"
-              placeholder="Search #id, customer, SKU…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search orders"
-            />
-          </label>
+          <SearchBox value={query} onChange={setQuery} label="Search orders" placeholder="Search #id, customer, SKU…" />
+          <SortSelect s={sorter} />
           {[
-            { id: "OPEN", label: `Current (${open.id})`, count: mine.filter((o) => o.createdCycle === open.id || o.reversedCycle === open.id).length },
-            { id: "DELIVERED", label: "Delivered", count: mine.filter((o) => o.stage === "delivered").length },
-            { id: "RETURNED", label: "Returned", count: mine.filter((o) => o.stage === "returned").length },
-            { id: "ALL", label: "All weeks", count: mine.length },
+            { id: "OPEN", label: `Current (${open.id})`, count: counts.OPEN },
+            { id: "DELIVERED", label: "Delivered", count: counts.DELIVERED },
+            { id: "RETURNED", label: "Returned", count: counts.RETURNED },
+            { id: "ALL", label: "All weeks", count: counts.ALL },
           ].map((f) => (
             <button
               key={f.id}
@@ -200,6 +246,16 @@ export function OrderLedger() {
               {f.label} <span className="n">{f.count}</span>
             </button>
           ))}
+          {role === "closer" && (
+            <span className="view-toggle" role="group" aria-label="How to show your orders">
+              <button type="button" className="chip" aria-pressed={view === "cards"} onClick={() => pickView("cards")}>
+                Cards
+              </button>
+              <button type="button" className="chip" aria-pressed={view === "table"} onClick={() => pickView("table")}>
+                Table
+              </button>
+            </span>
+          )}
           {(role === "founder" || role === "closer" || role === "lead") && (
             <button
               type="button"
@@ -214,14 +270,15 @@ export function OrderLedger() {
       }
       flush
     >
-      {role === "closer" ? (
+      {visible.length === 0 && query.trim() ? <NoMatches query={query} /> : null}
+      {view === "cards" ? (
         <div className="ocards">
-          {visible.map((o) => {
+          {shown.map((o) => {
             const val = orderValue(o);
             const p = productOf(data, o.sku);
-            const sr = stockRow(data, p);
+            const sr = stockBySku.get(o.sku) ?? stockRow(data, p);
             const thin = sr.available <= 0 && o.stage !== "delivered" && o.stage !== "returned" && o.stage !== "cancelled";
-            const acts = actionsFor(data, role, o);
+            const acts = actionsFor(data, role, o, me);
             const note = blockedNote(role, o);
             const comm = orderCommissionInfo(o);
             const myLines = commissionLines(data, { ...o, stage: "delivered", cashIn: true }, data.rules, open.id).filter(
@@ -300,23 +357,23 @@ export function OrderLedger() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Item &amp; stock</th>
-                <th>Opened / closed by</th>
-                <th className="r">Value</th>
-                <th>Stage</th>
-                {role !== "stock" && <th className="r">{canSeeAllPayouts(role) ? "Commission" : "Your commission"}</th>}
+                <SortTh s={sorter} col="id" />
+                <SortTh s={sorter} col="customer" />
+                <SortTh s={sorter} col="item" />
+                <SortTh s={sorter} col="by" />
+                <SortTh s={sorter} col="value" />
+                <SortTh s={sorter} col="stage" />
+                {role !== "stock" && <SortTh s={sorter} col="commission" />}
                 <th className="r">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {visible.map((o) => {
+              {shown.map((o) => {
                 const val = orderValue(o);
                 const p = productOf(data, o.sku);
-                const sr = stockRow(data, p);
+                const sr = stockBySku.get(o.sku) ?? stockRow(data, p);
                 const thin = sr.available <= 0 && o.stage !== "delivered" && o.stage !== "returned" && o.stage !== "cancelled";
-                const acts = actionsFor(data, role, o);
+                const acts = actionsFor(data, role, o, me);
                 const comm = orderCommissionInfo(o);
                 const isSplit = o.openedBy !== o.closer;
 
@@ -417,6 +474,21 @@ export function OrderLedger() {
             </tbody>
           </table>
         </div>
+      )}
+      {visible.length > PAGE && (
+        <nav className="pager" aria-label="Order pages">
+          <span>
+            Showing {(Math.min(page, pages - 1) * PAGE + 1).toLocaleString()}–{(Math.min(page, pages - 1) * PAGE + shown.length).toLocaleString()} of {visible.length.toLocaleString()}
+          </span>
+          <span className="pager-btns">
+            <button type="button" className="btn xs" disabled={page <= 0} onClick={() => setPage((x) => Math.max(0, x - 1))}>
+              Previous
+            </button>
+            <button type="button" className="btn xs" disabled={page >= pages - 1} onClick={() => setPage((x) => Math.min(pages - 1, x + 1))}>
+              Next
+            </button>
+          </span>
+        </nav>
       )}
     </Card>
   );

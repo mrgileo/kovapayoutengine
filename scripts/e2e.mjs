@@ -1,4 +1,6 @@
-import { spawn } from "node:child_process";
+﻿import { spawn } from "node:child_process";
+import { DATASETS, generateDataset } from "./data-gen.mjs";
+import { addBankStatement } from "./data-bank.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
@@ -87,7 +89,33 @@ try {
     if (r.exceptionDetails) {
       throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
     }
+    // Opening another role shows a page skeleton for one paint before the page itself. Wait for the page, as a person would.
+    if (/#tab-/.test(expr) && /\.click\(\)/.test(expr)) {
+      await sleep(90);
+      for (let i = 0; i < 100; i++) {
+        const q = await send("Runtime.evaluate", { expression: `Boolean(document.querySelector(".page-skel"))`, returnByValue: true });
+        if (!q.result.value) break;
+        await sleep(100);
+      }
+    }
     return r.result.value;
+  }
+
+  /** Every permanent action now opens the shared "are you sure?" dialog: fill the note if one is asked for, then confirm. */
+  async function confirmAsk(note = "e2e check") {
+    for (let i = 0; i < 40 && !(await evaluate(`return !!document.querySelector('[data-testid="action-dialog"]');`)); i++) await sleep(100);
+    await evaluate(`
+      const dlg = document.querySelector('[data-testid="action-dialog"]');
+      if (!dlg) throw new Error("No confirmation dialog appeared");
+      const ta = dlg.querySelector("textarea");
+      if (ta) { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, ${JSON.stringify(note)}); ta.dispatchEvent(new Event("input", { bubbles: true })); }
+    `);
+    // The impact preview fills in a moment after the dialog opens; Confirm unlocks once it has.
+    for (let i = 0; i < 100 && (await evaluate(`return document.querySelector('[data-testid="action-dialog"] .dialog-foot button:last-child').disabled;`)); i++) await sleep(60);
+    await evaluate(`const b = document.querySelector('[data-testid="action-dialog"] .dialog-foot button:last-child'); if (b.disabled) throw new Error("Confirm is disabled"); b.click();`);
+    // The confirm button shows a spinner for one paint before it acts; wait for the dialog to close, then let React settle.
+    for (let i = 0; i < 60 && (await evaluate(`return !!document.querySelector('[data-testid="action-dialog"]');`)); i++) await sleep(50);
+    await sleep(150);
   }
 
   await send("Runtime.enable");
@@ -181,7 +209,7 @@ try {
     const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Order booked"));
     btn.click();
   `);
-  await sleep(150);
+  await confirmAsk();
   const afterHeadline = await evaluate(`return document.querySelector(".headline h2")?.innerText;`);
   assert.notEqual(beforeHeadline, afterHeadline, "Switching trigger to Lead recalculates P&L headline");
   assert.ok(!(await evaluate(`return Array.from(document.querySelectorAll(".rules-drawer .seg button")).some(b => b.querySelector(".wi"))`)), "No figures under the rule options");
@@ -192,7 +220,7 @@ try {
     const btn = Array.from(document.querySelectorAll(".seg button")).find(b => b.innerText.startsWith("Delivered"));
     btn.click();
   `);
-  await sleep(100);
+  await confirmAsk();
   await closeRules();
 
   // 4. Switch to Closer role & verify rules are locked + stamp shown + phone cards rendered
@@ -263,6 +291,7 @@ try {
     const raiseAllBtn = Array.from(document.querySelectorAll(".alert button")).find(b => b.innerText.includes("Order stock for all"));
     if (raiseAllBtn) raiseAllBtn.click();
   `);
+  await confirmAsk();
   for (let i = 0; i < 20 && !String(await evaluate(`return document.querySelector(".alert")?.innerText;`)).includes("Stock loop closed"); i++) await sleep(150);
   const stockAfter = await evaluate(`return document.querySelector(".alert")?.innerText;`);
   assert.ok(stockAfter.includes("Stock loop closed"), `Raising POs should clear stock alert, got: ${stockAfter}`);
@@ -287,7 +316,7 @@ try {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.blur();
   `);
-  await sleep(250);
+  await confirmAsk();
   const overAfter = await evaluate(`return Array.from(document.querySelectorAll(".pill")).filter(p => p.innerText.includes("Over max")).length;`);
   assert.equal(overAfter, 0, "Raising the max clears the over-max flags");
   console.log("✓ [7b] Ad budget card: simulated feed label, profit per order, max cost per order flags update live");
@@ -305,7 +334,7 @@ try {
   `);
   assert.ok(flowInfo, "Revenue flow funnel should render on the founder view");
   assert.equal(flowInfo.rows, 6, "Six funnel steps");
-  assert.ok(flowInfo.text.includes("1,850,000") && flowInfo.text.includes("532,500"), "Funnel shows booked and kept values: " + flowInfo.text);
+  assert.ok(flowInfo.text.includes("18,500,000") && flowInfo.text.includes("5,325,000"), "Funnel shows booked and kept values: " + flowInfo.text);
   assert.ok(flowInfo.text.includes("equals the delivered revenue"), "Funnel ties to the delivered revenue in the P&L");
   assert.equal(flowInfo.table, true, "A table view of the funnel exists");
   assert.equal(flowInfo.leakRows, 6, "Six leak checks (courier cash is the hero card, not repeated here)");
@@ -344,6 +373,7 @@ try {
     if (btn) btn.click();
     return Boolean(btn);
   `);
+  await confirmAsk();
   assert.equal(placed, true, "Founder can mark #1043 delivered from the ledger");
   const founderStrip = await waitStrip("Order 1043 delivered");
   assert.ok(/Amaka\s*\+₦8,480/.test(founderStrip), "Founder sees the closer's pay move: " + founderStrip);
@@ -386,7 +416,8 @@ try {
   // 7e. Accountant: cash desk and role limits (the warehouse no longer records cash; the accountant does)
   const gotoTab = async (tab, needle) => {
     await evaluate(`document.querySelector('#tab-${tab}').click();`);
-    for (let i = 0; i < 30 && !(await evaluate(`return (document.querySelector("h1")?.innerText || "").includes(${JSON.stringify(needle)});`)); i++) await sleep(150);
+    // The page body appears one paint after the heading (a skeleton shows meanwhile), so wait for the skeleton to go too.
+    for (let i = 0; i < 40 && !(await evaluate(`return (document.querySelector("h1")?.innerText || "").includes(${JSON.stringify(needle)}) && !document.querySelector(".page-skel");`)); i++) await sleep(150);
   };
   const rowButtons = (id) => evaluate(`
     const row = Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#${id}") && tr.querySelectorAll("button").length);
@@ -418,6 +449,7 @@ try {
   assert.ok(acc.buttons.some((t) => /Bank file/.test(t)), "The accountant can export the bank file");
   assert.ok(acc.buttons.some((t) => /Record all as received \(3/.test(t)), "Bulk cash button shows three owed orders: " + acc.buttons.filter((t) => /Record/.test(t)));
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b => /Record all as received/.test(b.innerText)).click();`);
+  await confirmAsk("GIG-REF-1");
   for (let i = 0; i < 30 && !(await stripText()).includes("Cash with courier"); i++) await sleep(150);
   const accStrip = await stripText();
   assert.ok(/Cash with courier\s*−₦397,500/.test(accStrip), "Strip shows the courier cash cleared: " + accStrip);
@@ -456,7 +488,7 @@ try {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.blur();
   `);
-  await sleep(250);
+  await confirmAsk();
   const afterPrice = await evaluate(`return Array.from(document.querySelectorAll("tbody tr")).find(tr => tr.innerText.includes("#1043"))?.innerText || "";`);
   assert.ok(afterPrice.includes("212,000") && !afterPrice.includes("230,000"), "A price change must not re-price an existing order");
   console.log("✓ [8/10] No discounts, five rules visible, price change leaves existing orders alone");
@@ -475,14 +507,11 @@ try {
   await sleep(150);
   const retConsequence = await evaluate(`return document.querySelector(".dialog .calc .tot")?.innerText;`);
   assert.ok(retConsequence.includes("taken back"), `Return dialog should show the commission consequence: ${retConsequence}`);
-  assert.ok(await evaluate(`return Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Confirm return")).disabled`), "Confirm return is disabled until the tick is ticked");
-  await evaluate(`document.querySelector(".dialog .confirm-tick input").click();`);
-  await sleep(100);
-  await evaluate(`
-    const confirmRet = Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Confirm return"));
-    confirmRet.click();
-  `);
-  await sleep(150);
+  assert.ok(await evaluate(`return Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Confirm return")).disabled`), "Confirm return is disabled until a reason is written");
+  assert.ok(/permanent and cannot be undone/i.test(await evaluate(`return document.querySelector('[data-testid="action-dialog"]').innerText;`)), "The dialog warns that the action is permanent");
+  assert.ok(await evaluate(`return /what this will change/i.test(document.querySelector('[data-testid="action-dialog"]').innerText);`), "The return dialog previews its impact");
+  await confirmAsk("customer refused at the door");
+  assert.ok(await evaluate(`return document.body.innerText.includes("customer refused at the door");`), "The reason is shown in the order table");
   console.log("✓ [9/10] Processed post-close return on W43 Order #1033:", retConsequence.replace(/\s+/g, " "));
 
   // Close & approve W44
@@ -490,7 +519,7 @@ try {
     const closeBtn = Array.from(document.querySelectorAll("button")).find(b => b.innerText.includes("Close & approve W44"));
     closeBtn.click();
   `);
-  await sleep(200);
+  await confirmAsk();
   const newOpenCycle = await evaluate(`return document.querySelector(".side-cycle .pill")?.innerText;`);
   assert.ok(newOpenCycle.includes("W45"), `Closing W44 should open W45, got: ${newOpenCycle}`);
 
@@ -504,6 +533,7 @@ try {
   assert.ok(desk1.buttons.some((t) => /Mark paid/.test(t)), "The accountant can mark the approved week paid");
   assert.ok(!desk1.buttons.some((t) => /Close & approve/.test(t)), "The accountant cannot approve pay");
   await evaluate(`Array.from(document.querySelectorAll("button")).find(b => /Mark paid/.test(b.innerText)).click();`);
+  await confirmAsk("BANK-BATCH-44");
   for (let i = 0; i < 30 && !/W43 is paid/.test(await evaluate(`return Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Payout desk"))?.innerText || "";`)); i++) await sleep(150);
   const desk2 = await evaluate(`return Array.from(document.querySelectorAll("section")).find(s => s.innerText.includes("Payout desk"))?.innerText || "";`);
   assert.ok(/W43 is paid/.test(desk2), "After paying W44 the next job is locking W43: " + desk2.slice(0, 200));
@@ -551,8 +581,13 @@ try {
   assert.ok(dlg.includes("Your data never leaves this browser"), "Dialog must state that data never leaves the browser");
   assert.ok(dlg.includes("Orders template") && dlg.includes("Ad spend template"), "Template downloads must be offered");
 
+  // The check runs in a background worker after a short pause, so wait for its answer instead of a fixed time.
+  const waitChecked = async () => {
+    await sleep(300);
+    for (let i = 0; i < 100 && (await evaluate(`return /Checking your files/.test(document.body.innerText) || !(document.getElementById("import-ok") || document.getElementById("import-errors"));`)); i++) await sleep(150);
+  };
   await pickFile("import-orders", "bad.csv", BAD);
-  await sleep(400);
+  await waitChecked();
   const errText = await evaluate(`return document.getElementById("import-errors")?.innerText || "";`);
   assert.ok(/line 2/.test(errText) && /qty/.test(errText), "Errors must name the line and column: " + errText);
   assert.ok(/stage/.test(errText) && /date/.test(errText), "Every bad column is reported: " + errText);
@@ -561,11 +596,12 @@ try {
 
   await pickFile("import-orders", "orders.csv", GOOD);
   await pickFile("import-adspend", "ad.csv", AD);
-  await sleep(400);
+  await waitChecked();
   const okText = await evaluate(`return document.getElementById("import-ok")?.innerText || "";`);
   assert.ok(okText.includes("5 orders across 2 weeks"), "Summary should describe the data: " + okText);
   await evaluate(`Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Show my dashboard")).click();`);
-  await sleep(500);
+  await confirmAsk();
+  for (let i = 0; i < 60 && !(await evaluate(`return Boolean(document.getElementById("imported-banner")) && !document.querySelector(".page-skel");`)); i++) await sleep(150);
   const imported = await evaluate(`
     return {
       banner: document.getElementById("imported-banner")?.innerText || "",
@@ -598,7 +634,7 @@ try {
   // every role renders on imported data (the buyer, lead and warehouse views had demo-specific assumptions)
   for (const tab of ["buyer", "lead", "stock"]) {
     await evaluate(`document.querySelector('#tab-${tab}').click();`);
-    await sleep(300);
+    for (let i = 0; i < 40 && !(await evaluate(`return document.querySelectorAll(".tile").length > 0;`)); i++) await sleep(150);
     const shown = await evaluate(`return { tiles: document.querySelectorAll(".tile").length, ad: document.body.innerText.includes("Imported Ads") || ${JSON.stringify(tab)} !== "buyer" };`);
     assert.ok(shown.tiles > 0, tab + " view should render tiles on imported data");
     assert.ok(shown.ad, "Buyer view names the imported media buyer");
@@ -635,6 +671,7 @@ try {
   const tourText = () => evaluate(`return document.querySelector(".tour")?.innerText || ""`);
   for (let i = 0; i < 30 && !/guided demo 1 of 5/i.test(await tourText()); i++) await sleep(150);
   assert.ok(/guided demo 1 of 5/i.test(await tourText()), "The guided demo opens on step 1");
+  assert.ok(!(await evaluate(`return Array.from(document.querySelectorAll(".tour button")).some(b => /^(Pause|Resume)$/.test(b.innerText.trim()));`)), "The guided demo has no Pause button");
   const tourNext = () => evaluate(`Array.from(document.querySelectorAll(".tour button")).find(b => /Next|Finish/.test(b.innerText)).click();`);
   const hero = () => evaluate(`return document.querySelector("#cash-hero")?.innerText || ""`);
   for (let i = 0; i < 3; i++) { await tourNext(); await sleep(500); }
@@ -644,6 +681,119 @@ try {
   await tourNext();
   assert.equal(await tourText(), "", "Finish closes the guided demo");
   console.log("✓ [13] The guided demo books, delivers and settles an order while the hero numbers move");
+
+  // 13b. Tables and page chrome: search stays with the person who typed it, headers sort, closers can use a table, Quick Actions opens for everyone
+  const setInput = (sel, value) =>
+    evaluate(`const el = document.querySelector(${JSON.stringify(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event("input", { bubbles: true }));`);
+  const openTab = async (tab, ready) => {
+    await evaluate(`document.querySelector('#tab-${tab}').click();`);
+    // Wait for the switch itself (the page changes a moment after the click), then for the page body, then for what we need.
+    for (let i = 0; i < 60 && (await evaluate(`return document.querySelector('#tab-${tab}')?.getAttribute("aria-selected") !== "true";`)); i++) await sleep(100);
+    await sleep(250);
+    for (let i = 0; i < 60 && (await evaluate(`return Boolean(document.querySelector(".page-skel"));`)); i++) await sleep(100);
+    for (let i = 0; i < 40 && !(await evaluate(`return Boolean(${ready});`)); i++) await sleep(150);
+    assert.ok(await evaluate(`return Boolean(${ready});`), `The ${tab} page finished loading`);
+  };
+  const num = (t) => Number(String(t).replace("−", "-").replace(/[^0-9-]/g, ""));
+  const SEARCH = `input[aria-label="Search orders"]`;
+
+  // search typed as one person is not there for the next
+  await openTab("closer", `document.querySelectorAll(".ocard").length > 0`);
+  await setInput(SEARCH, "Bello");
+  await sleep(300);
+  await openTab("lead", `document.querySelector('${SEARCH}')`);
+  assert.equal(await evaluate(`return document.querySelector('${SEARCH}').value;`), "", "A search typed as the closer is not shown on the team lead's page");
+  await openTab("closer", `document.querySelectorAll(".ocard").length > 0`);
+  assert.equal(await evaluate(`return document.querySelector('${SEARCH}').value;`), "", "Coming back to a page starts with an empty search");
+
+  // closers can read their orders as a compact table, and the choice is remembered
+  await evaluate(`Array.from(document.querySelectorAll(".view-toggle .chip")).find(b => b.innerText.trim() === "Table").click();`);
+  await sleep(200);
+  assert.ok(await evaluate(`return !document.querySelector(".ocards") && Boolean(document.querySelector('section[aria-label="Your orders"] table.tbl tbody tr'));`), "The closer's Table view shows their orders as table rows");
+  await openTab("lead", `document.querySelector('${SEARCH}')`);
+  await openTab("closer", `document.querySelector('section[aria-label="Your orders"]')`);
+  assert.ok(await evaluate(`return Boolean(document.querySelector('section[aria-label="Your orders"] table.tbl'));`), "The closer's table choice is remembered");
+  await evaluate(`Array.from(document.querySelectorAll(".view-toggle .chip")).find(b => b.innerText.trim() === "Cards").click();`);
+  await sleep(200);
+  assert.ok(await evaluate(`return document.querySelectorAll(".ocard").length > 0;`), "Cards view is back");
+
+  // Quick Actions opens in a persona other than the founder (it used to crash with a hooks error)
+  await evaluate(`document.querySelector(".kbd-btn:not(.topbar-side-btn)").click();`);
+  for (let i = 0; i < 20 && !(await evaluate(`return Boolean(document.querySelector(".cmd-list"));`)); i++) await sleep(100);
+  assert.ok(await evaluate(`return Boolean(document.querySelector(".cmd-list"));`), "Quick Actions opens as a closer: " + errors.slice(0, 2).join(" || ").slice(0, 600) + " | " + (await evaluate(`return document.body.innerText.slice(0, 200);`)));
+  await evaluate(`window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));`);
+  await sleep(200);
+
+  // the label under the top bar says what it is
+  assert.ok(await evaluate(`return /what happened now/i.test(document.querySelector(".act-live")?.innerText || "");`), "The latest-event strip is labelled What happened now");
+
+  // clicking a header sorts; clicking again reverses; a third click clears it
+  await openTab("founder", `document.querySelector('section[aria-label="Manage Orders"] table.tbl tbody tr')`);
+  await evaluate(`Array.from(document.querySelectorAll('section[aria-label="Manage Orders"] .chip')).find(b => b.innerText.startsWith("All weeks")).click();`);
+  await sleep(300);
+  const sortBtn = (section, label) =>
+    evaluate(`const sec = document.querySelector('section[aria-label="${section}"]'); const th = Array.from(sec.querySelectorAll("th")).find(t => t.innerText.trim().toLowerCase().startsWith(${JSON.stringify(label.toLowerCase())})); th.querySelector("button").click(); return null;`);
+  const ariaSort = (section, label) =>
+    evaluate(`const sec = document.querySelector('section[aria-label="${section}"]'); return Array.from(sec.querySelectorAll("th")).find(t => t.innerText.trim().toLowerCase().startsWith(${JSON.stringify(label.toLowerCase())})).getAttribute("aria-sort");`);
+  const column = (section, index) =>
+    evaluate(`return Array.from(document.querySelectorAll('section[aria-label="${section}"] tbody tr')).map(tr => tr.children[${index}]?.innerText || "");`);
+  await sortBtn("Manage Orders", "Value");
+  await sleep(200);
+  assert.equal(await ariaSort("Manage Orders", "Value"), "descending", "First click on Value sorts biggest first");
+  const vDesc = (await column("Manage Orders", 4)).map(num);
+  assert.ok(vDesc.length > 2 && vDesc.every((v, i) => i === 0 || vDesc[i - 1] >= v), "Orders are sorted by value, biggest first: " + vDesc.slice(0, 6));
+  await sortBtn("Manage Orders", "Value");
+  await sleep(200);
+  assert.equal(await ariaSort("Manage Orders", "Value"), "ascending");
+  const vAsc = (await column("Manage Orders", 4)).map(num);
+  assert.ok(vAsc.every((v, i) => i === 0 || vAsc[i - 1] <= v), "A second click reverses it");
+  await sortBtn("Manage Orders", "Value");
+  await sleep(200);
+  assert.equal(await ariaSort("Manage Orders", "Value"), "none", "A third click clears the sort");
+
+  // the same works on Profit by product
+  await sortBtn("Profit by product", "Profit");
+  await sleep(200);
+  const profits = (await column("Profit by product", 8)).map(num);
+  assert.ok(profits.length > 1 && profits.every((v, i) => i === 0 || profits[i - 1] >= v), "Profit by product sorts by profit: " + profits);
+
+  console.log("✓ [13b] Search stays per person, headers sort, closers can switch to a table, Quick Actions opens for a closer, labels are plain");
+
+  // 14. A realistic company: upload all six starting files
+  const gen = generateDataset(DATASETS.small);
+  await addBankStatement(gen);
+  const gf = gen.files;
+  const pl = gen.expected.planted;
+  const pickBig = (inputId, name, text) => pickFile(inputId, name, text);
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(200);
+  await evaluate(`Array.from(document.querySelectorAll(".side-btn")).find(b => b.innerText.includes("Try it with your orders")).click();`);
+  for (let i = 0; i < 40 && !(await evaluate(`return Boolean(document.getElementById("import-orders"));`)); i++) await sleep(150);
+  for (const [id, file] of [["import-orders", "orders.csv"], ["import-staff", "staff.csv"], ["import-products", "products.csv"], ["import-leads", "leads.csv"], ["import-adspend", "ad_spend.csv"], ["import-pos", "purchase_orders.csv"]]) {
+    await pickBig(id, file, gf[file]);
+  }
+  for (let i = 0; i < 80 && !(await evaluate(`return Boolean(document.getElementById("import-ok"))`)); i++) await sleep(150);
+  const bigOk = await evaluate(`return document.getElementById("import-ok")?.innerText || document.getElementById("import-errors")?.innerText || "no result";`);
+  assert.ok(bigOk.includes(gen.expected.counts.orders.toLocaleString("en-US") + " orders"), "Generated files load: " + bigOk.slice(0, 300));
+  assert.ok(bigOk.includes(gen.expected.counts.staff + " staff"), "Staff are counted: " + bigOk.slice(0, 300));
+  await evaluate(`Array.from(document.querySelectorAll(".dialog-foot button")).find(b => b.innerText.includes("Show my dashboard")).click();`);
+  await confirmAsk();
+  for (let i = 0; i < 60 && !(await evaluate(`return Boolean(document.getElementById("imported-banner"))`)); i++) await sleep(200);
+
+  // several people in a role: pick which closer to be, and see only their orders
+  await evaluate(`document.querySelector('#tab-closer').click();`);
+  await sleep(300);
+  const closerOptions = await evaluate(`return document.querySelectorAll('select.viewer-pick option').length`);
+  assert.equal(closerOptions, 20, "Twenty closers to choose from, got " + closerOptions);
+  const totalOrders = gen.expected.counts.orders;
+  const mine = await evaluate(`return document.querySelector(".pager span")?.innerText || document.querySelectorAll(".ocard").length`);
+  assert.ok(String(mine).length > 0 && !String(mine).includes(String(totalOrders)), "A closer sees their own orders, not all " + totalOrders + ": " + mine);
+  // back to the demo
+  await evaluate(`document.querySelector('#tab-founder').click();`);
+  await sleep(300);
+  await evaluate(`Array.from(document.querySelectorAll("#imported-banner button")).find(b => b.innerText.includes("Back to demo data")).click();`);
+  await sleep(500);
+  console.log("✓ [14] Generated company (" + gen.expected.counts.orders.toLocaleString() + " orders, " + gen.expected.counts.staff + " staff): uploaded, counts match");
 
   // Reset back to clean seed so user gets fresh state if they open a new tab
   await evaluate(`

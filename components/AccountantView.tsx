@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, Lock, Wallet } from "lucide-react";
 import { canSettle, cashDesk, computePnl, cycleLines, orderValue, payoutCsv, payoutQueue, payslip, salesPeople, sum } from "@/lib/engine";
+import { cashDeskOf, payoutQueueOf, pnlOf } from "@/lib/derived";
 import { downloadText } from "@/lib/download";
 import { L } from "@/lib/labels";
 import { shortDate } from "@/lib/format";
 import { useData, useStore } from "@/lib/store";
+import { askLockCycle, askMarkPaid, askSettleCash } from "@/lib/askActions";
+import { matchesQuery } from "@/lib/sort";
 import { LeaksPanel } from "./RevenueFlow";
 import { Card, Fig, Tile, useMoney } from "./ui";
+import { NoMatches, ScrollTable, SearchBox, SortTh, TableTools, useSortable, type Col } from "./table";
 
 const STATUS_LABEL = { open: "Accruing", approved: "Approved, awaiting payment", paid: "Paid", locked: "Locked" } as const;
 const weeks = (n: number) => (n === 0 ? "This week" : `${n} week${n === 1 ? "" : "s"}`);
@@ -17,24 +21,54 @@ const weeks = (n: number) => (n === 0 ? "This week" : `${n} week${n === 1 ? "" :
 export function AccountantView() {
   const data = useData();
   const role = useStore((s) => s.role);
-  const settleCash = useStore((s) => s.settleCash);
-  const markPaid = useStore((s) => s.markPaid);
-  const lockCycle = useStore((s) => s.lockCycle);
+  const settleCash = askSettleCash;
+  const markPaid = askMarkPaid;
+  const lockCycle = askLockCycle;
   const toast = useStore((s) => s.toast);
   const m = useMoney();
 
-  const desk = cashDesk(data);
-  const queue = payoutQueue(data);
-  const pnl = computePnl(data);
+  const desk = cashDeskOf(data);
+  const queue = payoutQueueOf(data);
+  const pnl = pnlOf(data);
   const settle = canSettle(role);
 
   const defaultCycle = queue.next.kind === "wait" ? (data.cycles.filter((c) => c.status !== "open").at(-1)?.id ?? queue.next.cycleId) : queue.next.cycleId;
   const [picked, setPicked] = useState<string | null>(null);
   const cycleId = picked && data.cycles.some((c) => c.id === picked) ? picked : defaultCycle;
   const cycle = data.cycles.find((c) => c.id === cycleId)!;
-  const lines = cycleLines(data, cycleId);
-  const slips = salesPeople(data).map((p) => ({ p, ps: payslip(lines, p.id) }));
+  // Worked out once per week picked, not on every click or keystroke.
+  const slips = useMemo(() => {
+    const lines = cycleLines(data, cycleId);
+    return salesPeople(data).map((p) => ({ p, ps: payslip(lines, p.id) }));
+  }, [data, cycleId]);
   const payable = sum(slips.map((x) => x.ps.payable));
+
+  const [slipQ, setSlipQ] = useState("");
+  const slipsShown = useMemo(() => slips.filter(({ p }) => matchesQuery(slipQ, `${p.name} ${p.title}`)), [slips, slipQ]);
+  const slipCols: Col<(typeof slips)[number]>[] = [
+    { key: "name", label: `${cycleId} · ${shortDate(cycle.start)} – ${shortDate(cycle.end)}`, get: (x) => x.p.name },
+    { key: "base", label: L.fixedSalary, get: (x) => x.ps.base, align: "r", first: "desc" },
+    { key: "sales", label: L.salesPay, get: (x) => x.ps.commission, align: "r", first: "desc" },
+    { key: "back", label: L.payTakenBack, get: (x) => x.ps.adjustments, align: "r" },
+    { key: "carry", label: "Carried over", get: (x) => x.ps.carry, align: "r" },
+    { key: "net", label: "Net payable", get: (x) => x.ps.payable, align: "r", first: "desc" },
+  ];
+  const slipSort = useSortable(slipsShown, slipCols);
+
+  const cashCols: Col<(typeof desk.rows)[number]>[] = [
+    { key: "week", label: "Week", get: (r) => r.cycleId, first: "desc" },
+    { key: "orders", label: "Orders", get: (r) => r.orders, align: "r", first: "desc" },
+    { key: "delivered", label: "Delivered", get: (r) => r.delivered, align: "r", first: "desc" },
+    { key: "received", label: "Cash received", get: (r) => r.received, align: "r", first: "desc" },
+    { key: "owed", label: "Still owed", get: (r) => r.outstanding, align: "r", first: "desc" },
+    { key: "age", label: "Age", get: (r) => (r.outstanding > 0 ? r.ageWeeks : null), first: "desc" },
+  ];
+  const cashSort = useSortable(desk.rows, cashCols);
+
+  // Orders still owed can run to thousands: search them, and show them a page at a time.
+  const [owedQ, setOwedQ] = useState("");
+  const [owedMax, setOwedMax] = useState(50);
+  const owedShown = useMemo(() => desk.outstanding.filter((o) => matchesQuery(owedQ, `#${o.id} ${o.customer} ${o.city} ${o.deliveredCycle}`)), [desk.outstanding, owedQ]);
 
   const awaiting = sum(queue.awaitingPayment.map((x) => x.payable));
   const nextText =
@@ -90,20 +124,20 @@ export function AccountantView() {
         }
         flush
       >
-        <div className="tbl-wrap">
+        <ScrollTable rows={8}>
           <table className="tbl" aria-label="Cash by week">
             <thead>
               <tr>
-                <th>Week</th>
-                <th className="r hide-sm">Orders</th>
-                <th className="r hide-sm">Delivered</th>
-                <th className="r hide-sm">Cash received</th>
-                <th className="r">Still owed</th>
-                <th>Age</th>
+                <SortTh s={cashSort} col="week" />
+                <SortTh s={cashSort} col="orders" className="hide-sm" />
+                <SortTh s={cashSort} col="delivered" className="hide-sm" />
+                <SortTh s={cashSort} col="received" className="hide-sm" />
+                <SortTh s={cashSort} col="owed" />
+                <SortTh s={cashSort} col="age" />
               </tr>
             </thead>
             <tbody>
-              {desk.rows.map((r) => (
+              {cashSort.sorted.map((r) => (
                 <tr key={r.cycleId}>
                   <td className="mono">
                     <b>{r.cycleId}</b>
@@ -129,11 +163,18 @@ export function AccountantView() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
 
         {desk.outstanding.length > 0 && (
+          <div className="filters" style={{ padding: "10px 20px 0", alignItems: "center", justifyContent: "space-between" }}>
+            <b style={{ fontSize: 12.5 }}>Orders still owed ({desk.outstanding.length.toLocaleString()})</b>
+            <SearchBox value={owedQ} onChange={(v) => { setOwedQ(v); setOwedMax(50); }} label="Search orders still owed" placeholder="Search #id, customer, city…" />
+          </div>
+        )}
+        {owedShown.length === 0 && owedQ.trim() ? <NoMatches query={owedQ} /> : null}
+        {desk.outstanding.length > 0 && (
           <ul className="owed" aria-label="Orders still owed">
-            {desk.outstanding.map((o) => (
+            {owedShown.slice(0, owedMax).map((o) => (
               <li key={o.id} className="owed-row">
                 <div className="owed-main">
                   <b className="mono">#{o.id}</b> {o.customer}
@@ -150,6 +191,13 @@ export function AccountantView() {
               </li>
             ))}
           </ul>
+        )}
+        {owedShown.length > owedMax && (
+          <div style={{ padding: "8px 20px 4px" }}>
+            <button type="button" className="btn xs" onClick={() => setOwedMax((n) => n + 50)}>
+              Show 50 more ({(owedShown.length - owedMax).toLocaleString()} not shown)
+            </button>
+          </div>
         )}
 
         {desk.byCity.length > 0 && (
@@ -191,22 +239,23 @@ export function AccountantView() {
             </button>
           ))}
         </div>
-        <div className="tbl-wrap">
+        {slips.length > 5 && (
+          <div className="filters" style={{ padding: "10px 20px 0", alignItems: "center" }}>
+            <TableTools query={slipQ} onQuery={setSlipQ} sorter={slipSort} label="Search staff" placeholder="Search staff…" />
+          </div>
+        )}
+        {slipsShown.length === 0 && slipQ.trim() ? <NoMatches query={slipQ} /> : null}
+        <ScrollTable rows={9}>
           <table className="tbl" aria-label={`Payslips for ${cycleId}`}>
             <thead>
               <tr>
-                <th>
-                  {cycleId} · {shortDate(cycle.start)} – {shortDate(cycle.end)}
-                </th>
-                <th className="r">{L.fixedSalary}</th>
-                <th className="r">{L.salesPay}</th>
-                <th className="r">{L.payTakenBack}</th>
-                <th className="r">Carried over</th>
-                <th className="r">Net payable</th>
+                {slipCols.map((c) => (
+                  <SortTh key={c.key} s={slipSort} col={c.key} />
+                ))}
               </tr>
             </thead>
             <tbody>
-              {slips.map(({ p, ps }) => (
+              {slipSort.sorted.map(({ p, ps }) => (
                 <tr key={p.id}>
                   <td>
                     <b>{p.name}</b>
@@ -234,7 +283,7 @@ export function AccountantView() {
               </tr>
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
       </Card>
 
       <LeaksPanel />
